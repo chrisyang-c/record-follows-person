@@ -1,0 +1,42 @@
+%% Path B：日常 → 本地歷史 → 巡診
+%% 上半：每班跑一次；下半：巡診前 1–2 天跑一次
+flowchart TD
+    subgraph SHIFT[每班：照護者一句話]
+        s0([START]) --> s1[load_person_record]
+        s1 --> s2[intake_agent<br/>語音→八維度]
+        s2 --> s3[baseline_comparator]
+        s3 --> s4{red_flag_rules<br/>純程式}
+        s4 -- 命中 --> s5[notify_nurse_urgent] --> sA[→ 轉入 Path A]
+        s4 -- 未命中 --> s6[minimal_sbar_draft<br/>一行 S、一行 A<br/>status=draft]
+        s6 --> s7{{"◇ nurse_10s_confirm<br/>接受／改一句／退回"}}
+        s7 -- 退回 --> s2
+        s7 -- 確認 --> s8[(timeline_write<br/>Observation, confirmed_by=nurse)]
+        s8 --> s9[timeline_curator<br/>背景：去重、串事件]
+        s9 --> sEND([END])
+    end
+
+    subgraph ROUND[巡診前 1–2 天：全院一次]
+        r0([START]) --> r1[roster_agent<br/>掃全院住民的 delta]
+        r1 --> r2[trend_analyzer ×N<br/>subagent，每人八維度趨勢]
+        r2 --> r3[familiarization_writer ×N<br/>subagent，產 RoundPage 四段]
+        r3 --> r4{{"◇ head_nurse_edit_list<br/>增刪名單、掃每頁"}}
+        r4 --> r5[publish_round_pages<br/>醫師端唯讀]
+        r5 --> r6[doctor_round<br/>醫師看頁、看人、開醫囑<br/>系統不介入]
+        r6 --> r7[order_ingest<br/>護理師輸入醫囑]
+        r7 --> r8[order_to_caregiver_notes<br/>本月注意三件事，多語]
+        r7 --> r9[baseline_update_proposal]
+        r9 --> r10{{"◇ nurse_confirm_baseline"}}
+        r10 --> r11[(baseline_write<br/>set_by=doctor_ordered)]
+        r8 --> r12[(timeline_write<br/>Encounter + Order)]
+        r11 --> r12
+        r12 --> rEND([END])
+    end
+
+    classDef human fill:#EDE9FE,stroke:#6D5BD0,color:#2E1F7A
+    classDef ai fill:#DDF3EC,stroke:#1F8F6B,color:#0F4D3A
+    classDef red fill:#FBE3E0,stroke:#C7362B,color:#7A1E15
+    classDef db fill:#F1F5F9,stroke:#64748B,color:#1E293B
+    class s7,r4,r10,r6 human
+    class s2,s3,s6,s9,r1,r2,r3,r8,r9 ai
+    class s4,s5,sA red
+    class s1,s8,r5,r7,r11,r12 db

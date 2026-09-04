@@ -1,0 +1,26 @@
+# secrets
+.env
+.env.local
+# runtime records (one dir per resident)
+records/
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+apps/api/.venv/
+# node
+node_modules/
+.next/
+apps/web/.next/
+apps/web/out/
+*.tsbuildinfo
+pnpm-debug.log*
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+# local db / logs
+.pgdata/
+*.log

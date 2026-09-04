@@ -1,0 +1,42 @@
+%% Path A：急症（需看醫師，不到 119）
+%% 實線＝主流程，虛線＝條件分支，◇＝interrupt（人決定）
+flowchart TD
+    START([START]) --> load[load_person_record<br/>讀 profile / baseline / 近期 timeline]
+    load --> intake[intake_agent<br/>語音→文字→八維度<br/>最多 1–2 追問，永遠有「不知道」]
+    intake --> cmp[baseline_comparator<br/>算 delta：方向／幅度／持續天數]
+    cmp --> rf{red_flag_rules<br/>純程式，無 LLM}
+    rf -- 命中紅燈 --> alert[notify_nurse_urgent<br/>跳過草稿，直接推播]
+    alert --> onsite
+    rf -- 未命中 --> cg[caregiver_section_writer<br/>原話＋結構化，照護者口吻]
+    cg --> draft[sbar_draft<br/>status=draft, author=ai<br/>A 只寫變化，R 只提問]
+    draft --> push[push_to_nurse]
+    push --> review{{"◇ nurse_review<br/>interrupt：護理師審核"}}
+    review -- 超時 --> esc[escalate<br/>第二護理師／護理長]
+    esc --> review
+    review -- 退回 --> intake
+    review -- 接受／修改 --> onsite[nurse_onsite_assessment<br/>加生命徵象、意識、傷口<br/>改寫 A、R]
+    onsite --> final[sbar_final<br/>status=approved<br/>confirmed_by=nurse, ts]
+    final --> route{{"◇ nurse_route_choice<br/>interrupt：護理師決定路徑"}}
+    route -- 聯絡特約醫療機構 --> pack1[handoff_packager<br/>通話版 ISBAR]
+    route -- 在宅急症模式 B --> pack1
+    route -- 安排陪同就醫 --> pack2[handoff_packager<br/>VisitPage 陪診頁]
+    route -- 轉觀察 --> obs[to_routine_timeline]
+    pack1 --> inc
+    pack2 --> inc
+    obs --> inc
+    inc[incident_compiler<br/>IncidentFile：照護者區塊＋護理師區塊]
+    inc --> tl[(timeline_write<br/>唯一寫入點，需 status=approved)]
+    tl --> fam[family_notification_draft<br/>白話版]
+    fam --> famok{{"◇ nurse_approve_notification"}}
+    famok --> send[send_line]
+    send --> fu[schedule_follow_up<br/>指定時間再問照護者一次]
+    fu --> END([END])
+
+    classDef human fill:#EDE9FE,stroke:#6D5BD0,color:#2E1F7A
+    classDef ai fill:#DDF3EC,stroke:#1F8F6B,color:#0F4D3A
+    classDef red fill:#FBE3E0,stroke:#C7362B,color:#7A1E15
+    classDef db fill:#F1F5F9,stroke:#64748B,color:#1E293B
+    class review,route,famok,onsite human
+    class intake,cmp,cg,draft,pack1,pack2,inc,fam,fu ai
+    class rf,alert,esc red
+    class load,tl,obs,send db
