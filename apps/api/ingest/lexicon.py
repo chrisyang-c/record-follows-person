@@ -1,6 +1,6 @@
 """Deterministic caregiver-speech lexicon (mock extractor) for zh-TW / id / vi / en.
 
-Used by MockLLM (default) and as the safety net for AnthropicLLM. It is intentionally
+Used by MockLLM (default) and as the safety net for ChatModelLLM. It is intentionally
 conservative: a dimension is only produced when a keyword literally appears in the text,
 and raw_quote is always the clause that contained it — so hallucination is structurally
 impossible; omissions are the failure mode we measure in eval/.

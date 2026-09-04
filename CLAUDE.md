@@ -165,7 +165,7 @@ from deepagents.backends import FilesystemBackend
 from deepagents.middleware import FilesystemMiddleware
 
 agent = create_deep_agent(
-    model=settings.MODEL_PINNED,                      # 精確版本字串，見 .env.example
+    model=settings.get_model(),                       # ChatOpenAI(model=MODEL_PINNED, temperature=0)，見 .env.example
     backend=FilesystemBackend(root_dir=f"records/{patient_id}"),
     middleware=[FilesystemMiddleware(tools=["read_file", "ls", "glob", "grep"])],  # 唯讀
     subagents=[trend_analyzer, familiarization_writer, handoff_packager],

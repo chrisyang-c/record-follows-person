@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-os.environ["LLM_MODE"] = "mock"
+os.environ["MODEL_PROVIDER"] = "mock"
 os.environ["DATABASE_URL"] = ""
 os.environ["NURSE_REVIEW_TIMEOUT_S"] = "0"
 os.environ["LINE_CHANNEL_TOKEN"] = ""
