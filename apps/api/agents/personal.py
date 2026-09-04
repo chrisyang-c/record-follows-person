@@ -204,11 +204,11 @@ def make_tools(patient_id: str) -> list[Any]:
 
 WRITER_PROMPT = """你是 familiarization_writer，替這位住民寫巡診「熟悉頁」（RoundPage）
    給醫師。你要自己寫句子，不是抄結構。
-步驟（工具都要真的呼叫）：
-1. analyze_trends(since=<since>, until=<今天>)：自上次巡診的趨勢。
-2. analyze_trends(since=<今天-6 天>, until=<今天>)：近 7 天的趨勢。
-3. get_round_context(since=<since>)：profile、基線、changed_dimensions（有變化的維度）、
+步驟（工具都要真的呼叫；先讀紀錄，讀到的內容在後面每一步都不會變）：
+1. get_round_context(since=<since>)：profile、基線、changed_dimensions（有變化的維度）、
    evidence（每個維度的紀錄 id＋日期＋照護者原話）、incidents、last_orders。
+2. analyze_trends(since=<since>, until=<今天>)：自上次巡診的趨勢。
+3. analyze_trends(since=<今天-6 天>, until=<今天>)：近 7 天的趨勢。
 4. submit_round_page(...)。回 error 就依訊息修正後再送一次。
 寫法：
 ① who：一句話的人（誰、幾歲、慢性病、他的樣子），再加一句「這個月請特別看…」。
@@ -306,8 +306,9 @@ TASKS: dict[str, tuple[str, str, str]] = {
         "familiarization_writer",
         "submit_round_page",
         '請用 task 工具把這件事派給 subagent_type="familiarization_writer"：'
-        "寫自 {since} 起的 RoundPage（today={today}；子代理要依序呼叫 analyze_trends 兩次、"
-        'get_round_context(since="{since}")，最後 submit_round_page）。完成後回「完成」。',
+        "寫自 {since} 起的 RoundPage（today={today}；子代理要先呼叫 "
+        'get_round_context(since="{since}")，再 analyze_trends 兩次，最後 submit_round_page）。'
+        "完成後回「完成」。",
     ),
     "handoff": (
         "handoff_packager",

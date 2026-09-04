@@ -34,10 +34,11 @@ class ScriptedLLM(MockLLM):
                     )
             return NextQuestionOut(ask=False, reason="關鍵事實已足夠")
         unknown = [LABEL_TO_KEY[lbl] for lbl in ctx.get("unknown") or [] if lbl in LABEL_TO_KEY]
-        asked_dims = set()
-        if not unknown:
+        # never repeat a question (the planner validation rejects verbatim repeats)
+        asked_dims = {k for lbl, k in LABEL_TO_KEY.items() if any(a.startswith(lbl) for a in asked)}
+        dim = next((d for d in unknown if d not in asked_dims), None)
+        if dim is None:
             return NextQuestionOut(ask=False, reason="八維度已足夠")
-        dim = next((d for d in unknown if d not in asked_dims), unknown[0])
         return NextQuestionOut(
             ask=True,
             dimension=dim,

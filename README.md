@@ -65,7 +65,7 @@ flowchart TD
 
 原圖：[docs/langgraph_path_a_incident.mermaid](docs/langgraph_path_a_incident.mermaid)、[docs/langgraph_path_b_routine_round.mermaid](docs/langgraph_path_b_routine_round.mermaid)。
 
-**層級**：`apps/api/core/settings.py::get_model()`（唯一的模型工廠：`MODEL_PROVIDER=openai` → `ChatOpenAI(model=MODEL_PINNED, temperature=0)`；deep agent 與所有 graph 節點都經它）→ `apps/api/graphs`（LangGraph，PostgresSaver checkpointer，`interrupt()` + `Command(resume=…)`，APScheduler 超時 worker）→ `apps/api/agents`（每位住民一個 deepagents 實例，唯讀檔案系統；三個 subagent 只回結構化結果）→ `apps/api/record`（PersonRecord 讀寫層，`write_timeline` 是唯一寫入點）→ `records/{patient_id}/`（一人一個目錄，跟著人走）。
+**層級**：`apps/api/core/settings.py::get_model()`（唯一的模型工廠：`MODEL_PROVIDER=openai` → `ChatOpenAI(model=MODEL_PINNED, temperature=0)`，`MODEL_PINNED=gpt-5.6-luna`（gpt-5.x 另加 `reasoning_effort="none"`）；訊息順序固定「system → 住民紀錄區塊 → 本輪」以吃到 prompt caching，每次呼叫的 token 與成本估算在 trace `llm.usage`；deep agent 與所有 graph 節點都經它）→ `apps/api/graphs`（LangGraph，PostgresSaver checkpointer，`interrupt()` + `Command(resume=…)`，APScheduler 超時 worker）→ `apps/api/agents`（每位住民一個 deepagents 實例，唯讀檔案系統；三個 subagent 只回結構化結果）→ `apps/api/record`（PersonRecord 讀寫層，`write_timeline` 是唯一寫入點）→ `records/{patient_id}/`（一人一個目錄，跟著人走）。
 
 ---
 

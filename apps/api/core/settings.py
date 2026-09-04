@@ -20,12 +20,18 @@ class Settings(BaseSettings):
     )
 
     # ---- model provider ----------------------------------------------------------------
-    # openai    → ChatOpenAI(model=MODEL_PINNED, temperature=0)   (needs OPENAI_API_KEY)
+    # openai    → ChatOpenAI(model=MODEL_PINNED, temperature=0, reasoning_effort=none for gpt-5.x)
     # anthropic → ChatAnthropic(model=MODEL_PINNED, temperature=0) (needs ANTHROPIC_API_KEY)
     # mock      → deterministic lexicon/templates, no network (tests, CI)
     # A provider whose key is missing degrades to mock with a warning so the demo still runs.
     MODEL_PROVIDER: Literal["mock", "openai", "anthropic"] = "openai"
-    MODEL_PINNED: str = "gpt-4.1-2025-04-14"
+    MODEL_PINNED: str = "gpt-5.6-luna"
+    # USD per 1M tokens, used only for the cost estimate in trace / ACCEPTANCE (gpt-5.6-luna list
+    # price after the 2026-07-30 cut: input 0.20, cached input 0.02, cache write 0.25, output 1.20)
+    PRICE_INPUT_PER_M: float = 0.20
+    PRICE_CACHED_INPUT_PER_M: float = 0.02
+    PRICE_CACHE_WRITE_PER_M: float = 0.25
+    PRICE_OUTPUT_PER_M: float = 1.20
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 
@@ -56,6 +62,15 @@ class Settings(BaseSettings):
     def effective_provider(self) -> str:
         return self.MODEL_PROVIDER if self.llm_enabled else "mock"
 
+    @property
+    def prices(self) -> dict[str, float]:
+        return {
+            "input": self.PRICE_INPUT_PER_M,
+            "cached_input": self.PRICE_CACHED_INPUT_PER_M,
+            "cache_write": self.PRICE_CACHE_WRITE_PER_M,
+            "output": self.PRICE_OUTPUT_PER_M,
+        }
+
     def get_model(self) -> Any:
         """The one chat model factory. deep agents and every graph node go through here.
 
@@ -65,8 +80,20 @@ class Settings(BaseSettings):
         if self.MODEL_PROVIDER == "openai" and self.OPENAI_API_KEY:
             from langchain_openai import ChatOpenAI
 
+            from core.usage import UsageTrace
+
+            extra: dict[str, Any] = {}
+            if self.MODEL_PINNED.startswith("gpt-5"):
+                # gpt-5.x on /chat/completions: function tools need reasoning_effort="none", and
+                # temperature=0 is only accepted together with it (probed 2026-09-05).
+                extra["reasoning_effort"] = "none"
             return ChatOpenAI(
-                model=self.MODEL_PINNED, temperature=0, api_key=self.OPENAI_API_KEY, max_retries=6
+                model=self.MODEL_PINNED,
+                temperature=0,
+                api_key=self.OPENAI_API_KEY,
+                max_retries=6,
+                callbacks=[UsageTrace(self.MODEL_PINNED, self.prices)],
+                **extra,
             )
         if self.MODEL_PROVIDER == "anthropic" and self.ANTHROPIC_API_KEY:
             from langchain_anthropic import ChatAnthropic

@@ -158,6 +158,7 @@ class DimensionValue(BaseModel):
 - 所有 LLM 呼叫、追問決定（含 reason）、deep agent 派工與 subagent 工具呼叫都寫 trace（`core/trace.py`，`GET /trace`、`GET /debug/trace/{thread_id}`，`records/_trace/*.jsonl`）；ACCEPTANCE 需附實際 trace。
 - RoundPage 由 `familiarization_writer` subagent 寫：①②③④ 的句子由模型依 timeline 與 baseline 生成（`get_round_context` → `submit_round_page`，程式只驗證規則），② 只列有變化的維度、每句附可點的「N 筆紀錄」連結（不露 obs id），沒變化寫「本期八維度皆與基線一致」，圖表只畫有變化的兩個維度，頁底 footer 寫由哪個 subagent 產生、呼叫了什麼幾次。
 - 大檔（音檔、圖片、PDF）不進 state，只放物件儲存的 reference。
+- Prompt caching：每次呼叫的訊息順序固定為「system prompt（不變）＋ 住民紀錄區塊 `core/llm.py::record_prefix`（profile＋基線＋近 14 天 timeline，一天內不變，併在同一則 system 裡：實測此模型只快取 system 內的前綴）→ 本輪狀態（唯一的 human）」；system 與紀錄區塊裡不放時間戳或每輪變動的內容。subagent 先 `get_round_context` 再算趨勢，讓 timeline 讀取固定在對話最前面。每次呼叫的 token 與估算成本寫 trace（`llm.usage`）。
 
 ---
 
@@ -169,7 +170,7 @@ from deepagents.backends import FilesystemBackend
 from deepagents.middleware import FilesystemMiddleware
 
 agent = create_deep_agent(
-    model=settings.get_model(),                       # ChatOpenAI(model=MODEL_PINNED, temperature=0)，見 .env.example
+    model=settings.get_model(),                       # ChatOpenAI(model=MODEL_PINNED=gpt-5.6-luna, temperature=0, reasoning_effort="none")，見 .env.example
     backend=FilesystemBackend(root_dir=f"records/{patient_id}"),
     middleware=[FilesystemMiddleware(tools=["read_file", "ls", "glob", "grep"])],  # 唯讀
     subagents=[trend_analyzer, familiarization_writer, handoff_packager],

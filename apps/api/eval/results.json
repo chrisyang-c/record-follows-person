@@ -198,14 +198,18 @@
   "id": 11,
   "lang": "zh-TW",
   "leading": false,
-  "hallucinated": [],
+  "hallucinated": [
+   "cognition"
+  ],
   "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
-   "dims": [],
+   "dims": [
+    "cognition"
+   ],
    "flags": [],
    "incidents": [
     "behavior"
@@ -347,15 +351,16 @@
   "hallucinated": [
    "pain"
   ],
-  "omitted": [],
+  "omitted": [
+   "vitals"
+  ],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
    "dims": [
-    "pain",
-    "vitals"
+    "pain"
    ],
    "flags": [],
    "incidents": []
@@ -384,16 +389,15 @@
   "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
-  "omitted": [
-   "sleep"
-  ],
+  "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
    "dims": [
-    "cognition"
+    "cognition",
+    "sleep"
    ],
    "flags": [
     "new_confusion_or_drowsiness"
@@ -468,7 +472,7 @@
   "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
-  "seems_different_ok": true,
+  "seems_different_ok": false,
   "vitals_ok": true,
   "predicted": {
    "dims": [
@@ -614,7 +618,9 @@
   "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
-  "omitted": [],
+  "omitted": [
+   "no_urine_24h"
+  ],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
@@ -623,9 +629,7 @@
    "dims": [
     "elimination"
    ],
-   "flags": [
-    "no_urine_24h"
-   ],
+   "flags": [],
    "incidents": []
   }
  },
@@ -788,14 +792,18 @@
   "id": 42,
   "lang": "zh-TW",
   "leading": false,
-  "hallucinated": [],
+  "hallucinated": [
+   "cognition"
+  ],
   "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
-   "dims": [],
+   "dims": [
+    "cognition"
+   ],
    "flags": [],
    "incidents": []
   }

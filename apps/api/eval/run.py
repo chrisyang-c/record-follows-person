@@ -21,6 +21,7 @@ from pathlib import Path
 from record_schema import StructuredObservation
 
 from core.llm import BANNED_DIAGNOSTIC_TERMS, get_llm
+from core.settings import get_settings
 
 HERE = Path(__file__).resolve().parent
 
@@ -75,8 +76,16 @@ def evaluate_item(item: dict) -> dict:
 
 
 def main() -> int:
+    from datetime import UTC, datetime
+
+    from core.trace import for_ids, tagged
+    from core.usage import summarize
+
     data = json.loads((HERE / "sentences.json").read_text(encoding="utf-8"))
-    rows = [evaluate_item(it) for it in data["items"]]
+    run_id = f"eval_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}"
+    with tagged(dialog_id=run_id):
+        rows = [evaluate_item(it) for it in data["items"]]
+    usage = summarize(for_ids(dialog_id=run_id))
     n = len(rows)
     gold_total = sum(
         len(it["gold"]["dims"]) + len(it["gold"]["flags"]) + len(it["gold"]["incidents"])
@@ -133,6 +142,27 @@ def main() -> int:
             lines.append(
                 f"| {r['id']} | {r['lang']} | {', '.join(r['hallucinated']) or '—'} | "
                 f"{', '.join(r['omitted']) or '—'} |"
+            )
+    u = usage.get("all")
+    if u:
+        lines += [
+            "",
+            "## Token usage & estimated cost (this run, from `llm.usage` trace rows)",
+            "",
+            f"Model `{llm.name}`; prices USD/1M: "
+            + ", ".join(f"{k} {v}" for k, v in get_settings().prices.items())
+            + "; cost = fresh input × input + cached × cached_input + cache-write × cache_write "
+            "+ output × output.",
+            "",
+            "| caller | calls | avg prompt | avg cached | cache hit | avg output "
+            "| avg cost/call | total |",
+            "|---|---|---|---|---|---|---|---|",
+        ]
+        for name, s in sorted(usage.items(), key=lambda kv: (kv[0] != "all", kv[0])):
+            lines.append(
+                f"| {name} | {int(s['calls'])} | {s['avg_prompt']:.0f} | {s['avg_cached']:.0f} | "
+                f"{s['cache_hit_ratio']:.0%} | {s['avg_completion']:.0f} | "
+                f"${s['avg_cost_usd']:.5f} | ${s['total_cost_usd']:.4f} |"
             )
     out = "\n".join(lines) + "\n"
     (HERE / "results.md").write_text(out, encoding="utf-8")
