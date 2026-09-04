@@ -62,8 +62,9 @@ jobs:
           cache-dependency-path: apps/web/pnpm-lock.yaml
       - run: cd apps/web && pnpm install --frozen-lockfile
       - run: cd apps/web && pnpm lint
-      - run: cd apps/web && pnpm typecheck
       - run: cd apps/web && pnpm test
+      # build first: `next build` generates the global route-type helpers (LayoutProps/PageProps)
       - run: cd apps/web && pnpm build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
+      - run: cd apps/web && pnpm typecheck
