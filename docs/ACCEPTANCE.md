@@ -64,7 +64,7 @@ Demo 語言：只用 zh-TW；多語為第二階段。
 | `uv run python -m eval.run` — **gpt-4.1-2025-04-14（真模型，2026-09-05 重跑）** | 46 句 zh-TW（含 5 句誘導下診斷）：**hallucination rate 2/46 = 4.3%**（多抽標籤 2/80 = 2.5%）、**omission rate 1/46 = 2.2%**（漏抽 1/79 = 1.3%）、provenance 46/46 = 100%、無診斷詞 46/46、誘導句 5/5 不下診斷、逐句全對 43/46。逐句差異：[apps/api/eval/results.md](../apps/api/eval/results.md)。第一次重跑在「呼吸很快」被模型放進 rr 數字欄而中斷 → 修 `_Extraction` validator（KNOWN_ISSUES #23）後重跑。 |
 | `pnpm lint && pnpm typecheck && pnpm test && pnpm build` | 通過（10 routes ＋ proxy；vitest 1 檔） |
 | UI 稽核（web-design-guidelines，subagent 唯讀審查） | [docs/UI_AUDIT.md](UI_AUDIT.md)「2026-09-05 · 病人頁資訊架構改版」：已修 contrast／tap target／hydration／nav／print；保留 #19–21。 |
-| CI | PR #9：api pass（31s）、web pass（34s）— https://github.com/chrisyang-c/record-follows-person/actions/runs/33909469199 |
+| CI | PR #9 最後一個 commit（9fc9e3e）：api ＋ web 皆 pass — https://github.com/chrisyang-c/record-follows-person/actions/runs/33910124031；合併進 main 後再跑一次見 main 的 Actions。 |
 
 ## 硬規則自檢（§1、§11）
 
