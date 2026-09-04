@@ -1,21 +1,28 @@
-"""Multi-turn intake dialog (照護者聊天式引導).
+"""Multi-turn intake dialog — the Intake Agent's conversation.
 
-Rule-based turn planner on top of the extractor: after the caregiver's first sentence, ask one
-question at a time about what the eight dimensions still lack (dimensions already mentioned
-are never asked), 2–4 quick replies per question, always 「不知道」, at most MAX_TURNS
-follow-ups. A red-flag fact ends the dialog immediately (the nurse is notified; no summary
-confirmation — ARCHITECTURE §11).
+Turn 0 is the caregiver's own sentence. After that the agent (the model) decides EVERY
+follow-up: it receives the eight-dimension state, the person's profile and baseline, what has
+already been asked, the incident / red-flag facts and the remaining budget, and returns
+what to ask, how to word it and a `reason` (stored in the trace). There is no hard-coded
+question list, no quick replies and no rule fallback: when no model is configured or a call
+fails, LLMUnavailable propagates and the UI shows the error.
 
-The planner is deterministic; only the per-utterance extraction uses the model (or the
-lexicon in mock mode). Everything stays in the caregiver's own words.
+A red flag never ends the dialog: the program has already notified the nurse (Path A); the
+agent switches to phase "red" and asks the key facts the nurse needs before arriving; every
+answer is pushed into the caregiver section the nurse is watching.
+
+Every utterance is extracted by the same extractor (the model; the lexicon only under the
+MODEL_PROVIDER=mock test double).
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from functools import lru_cache
 
 from pydantic import BaseModel, Field
 from record_schema import (
+    DIMENSION_LABELS,
     DIMENSIONS,
     Baseline,
     DimensionValue,
@@ -26,87 +33,86 @@ from record_schema import (
     StructuredObservation,
 )
 
-from core.llm import get_llm
+from core.llm import LLMUnavailable, get_llm
+from core.trace import trace
+from record.store import get_store
 from red_flags.rules import RedFlagInput, evaluate, render_lines
 
-MAX_TURNS = 4
+MAX_LLM_TURNS = 4  # routine: 追問到八維度足夠，上限 4 題
+MAX_RED_TURNS = 6  # red: the key facts the nurse needs before arriving
 UNKNOWN = "不知道"
-ASK_ORDER = ["intake", "sleep", "cognition", "function", "pain", "vitals", "elimination", "skin"]
-
-# (question, quick replies) — everyday words; every reply parses on its own.
-QUESTIONS: dict[str, tuple[str, list[str]]] = {
-    "intake": ("{name}今天吃得怎樣？", ["吃完", "吃一半", "幾乎沒吃", UNKNOWN]),
-    "sleep": ("昨晚睡得怎樣？", ["睡得好", "晚上起來一兩次", "晚上起來三次以上", UNKNOWN]),
-    "cognition": ("精神、講話跟平常一樣嗎？", ["精神跟平常一樣", "反應變慢", "講話變少", UNKNOWN]),
-    "function": (
-        "走路、站起來跟平常比呢？",
-        ["走路跟平常一樣", "走路比較慢", "走路要人扶", UNKNOWN],
-    ),
-    "pain": ("有沒有哪裡痛？", ["沒有痛", "有點痛", "很痛", UNKNOWN]),
-    "vitals": ("有咳嗽、喘，或摸起來燙嗎？", ["都沒有", "有咳嗽", "摸起來燙", UNKNOWN]),
-    "elimination": ("大小便有什麼不一樣嗎？", ["大便正常", "沒大便", "拉肚子", UNKNOWN]),
-    "skin": ("皮膚有沒有紅或破皮？", ["皮膚沒事", "皮膚有紅", "有破皮", UNKNOWN]),
-}
-EVENT_QUESTIONS: dict[str, tuple[str, list[str]]] = {
-    "fall": ("有撞到頭嗎？能自己站起來嗎？", ["頭沒有撞到", "撞到頭", "站不起來", UNKNOWN]),
-    "medication_issue": (
-        "藥是不肯吃，還是吐出來了？",
-        ["不肯吃藥", "把藥吐出來", "漏吃一次", UNKNOWN],
-    ),
-    "choking": (
-        "是喝水還是吃東西嗆到？現在還在咳嗎？",
-        ["喝水嗆到", "吃東西嗆到", "現在還在咳", UNKNOWN],
-    ),
-    "behavior": (
-        "是想出去、動手，還是一直走來走去？",
-        ["一直想跑出去", "動手打人", "一直走來走去", UNKNOWN],
-    ),
-    "seems_different": ("哪裡跟平常不一樣？", ["吃得比較少", "比較安靜不講話", "一直睡", UNKNOWN]),
-}
-# replies that mean「跟平常一樣」for the asked dimension
-NORMAL_REPLIES = {
-    "睡得好",
-    "精神跟平常一樣",
-    "走路跟平常一樣",
-    "沒有痛",
-    "都沒有",
-    "大便正常",
-    "皮膚沒事",
-    "跟平常一樣",
-    "正常",
-    "沒有",
+RED_INTRO = "護理師馬上來，來之前先告訴我幾件事。"
+RED_CLOSING = "都記下來了，護理師到了會接手。有什麼變化再跟我說。"
+INCIDENT_LABEL = {
+    "fall": "跌倒",
+    "medication_issue": "拒藥／吐藥",
+    "choking": "嗆咳",
+    "behavior": "攻擊／遊走",
 }
 
 
 class Turn(BaseModel):
     text: str
-    dimension: str | None = None  # "intake"… or "event:fall" … or None for free text
-    quick: bool = False
+    question: str | None = None  # the agent's question this turn answers (None = free text)
+    dimension: str | None = None  # the dimension the agent said that question targeted
+    phase: str | None = None  # phase the question was asked in ("routine" | "red")
+    ts: str | None = None
 
 
 class NextQuestion(BaseModel):
     key: str
     text: str
-    quick_replies: list[str]
+    dimension: str | None = None
+    reason: str = ""
+
+
+class Report(BaseModel):
+    question: str
+    answer: str
+    key: str
+    ts: str
 
 
 class DialogResult(BaseModel):
     observation: StructuredObservation
     red_flags: RedFlagResult
-    red_flag_lines: list[str]
+    red_flag_lines: list[str] = Field(default_factory=list, description="nurse-side only")
     next_question: NextQuestion | None = None
+    asked: list[str] = Field(default_factory=list, description="questions already asked")
     asked_dimensions: list[str] = Field(default_factory=list)
     turn_count: int = 0
+    budget_left: int = 0
+    reports: list[Report] = Field(default_factory=list)
     done: bool = False
     red: bool = False
+    intro: str | None = None
+    closing: str | None = None
     summary: str = ""
     transcript: str = ""
+
+
+# --- extraction (cached per utterance; provenance re-stamped per turn) -------------------
+
+
+@lru_cache(maxsize=512)
+def _extract_cached(text: str, patient_id: str) -> str:
+    store = get_store()
+    profile = store.load_profile(patient_id) if patient_id and store.exists(patient_id) else None
+    baseline = store.load_baseline(patient_id) if profile else None
+    return get_llm().extract_observation(text, "zh-TW", profile, baseline).model_dump_json()
 
 
 def _extract(
     text: str, profile: Profile | None, baseline: Baseline | None
 ) -> StructuredObservation:
-    return get_llm().extract_observation(text, "zh-TW", profile, baseline)
+    pid = profile.patient_id if profile else ""
+    obs = StructuredObservation.model_validate_json(_extract_cached(text, pid))
+    ts = datetime.now(UTC)
+    for dv in obs.domains.values():
+        dv.provenance = Provenance(
+            source="ai_extracted", author="intake_agent", ts=ts, language_original="zh-TW"
+        )
+    return obs
 
 
 def _merge(base: StructuredObservation, extra: StructuredObservation, override: bool) -> None:
@@ -126,47 +132,61 @@ def _merge(base: StructuredObservation, extra: StructuredObservation, override: 
 
 def _apply_answer(
     obs: StructuredObservation,
-    key: str,
-    question: str,
-    text: str,
+    turn: Turn,
     profile: Profile | None,
     baseline: Baseline | None,
     ts: datetime,
 ) -> None:
-    if text.strip() == UNKNOWN:
+    text = turn.text.strip()
+    question = turn.question or "（照護者補充）"
+    if text == UNKNOWN:
         obs.followups.append(FollowupQA(question=question, answer=None, answered_unknown=True))
         return
     extra = _extract(text, profile, baseline)
     _merge(obs, extra, override=True)
-    dim = key if key in DIMENSIONS else None
-    normal = text.strip() in NORMAL_REPLIES or "跟平常一樣" in text or "正常" in text
+    dim = turn.dimension if turn.dimension in DIMENSIONS else None
+    normal = (
+        "跟平常一樣" in text or "正常" in text or text in {"沒有", "都沒有", "沒有痛", "睡得好"}
+    )
     if dim and (dim not in extra.domains or normal):
-        prov = Provenance(
-            source="ai_extracted", author="intake_agent", ts=ts, language_original="zh-TW"
-        )
+        # the agent asked about this dimension; keep the caregiver's words under it
         obs.domains[dim] = DimensionValue(
-            value=0.0 if (normal and dim == "pain") else None,
-            raw_quote=text.strip(),
-            provenance=prov,
+            value=0.0
+            if (normal and dim == "pain")
+            else obs.domains.get(
+                dim,
+                DimensionValue(
+                    raw_quote=text,
+                    provenance=Provenance(source="ai_extracted", author="intake_agent", ts=ts),
+                    confidence=0.6,
+                    lang="zh-TW",
+                ),
+            ).value,
+            raw_quote=text,
+            provenance=Provenance(
+                source="ai_extracted", author="intake_agent", ts=ts, language_original="zh-TW"
+            ),
             confidence=0.9 if normal else 0.6,
             lang="zh-TW",
-            direction="same" if normal else "unknown",
+            direction="same"
+            if normal
+            else (extra.domains[dim].direction if dim in extra.domains else "unknown"),
         )
     obs.followups.append(FollowupQA(question=question, answer=text))
+
+
+# --- summary in the caregiver's own words -----------------------------------------------
 
 
 def _phrase(dim: str, dv: DimensionValue) -> str:
     if dim == "intake" and isinstance(dv.value, int | float):
         v = float(dv.value)
-        return (
-            "吃完"
-            if v >= 0.95
-            else "吃一半"
-            if 0.4 <= v <= 0.6
-            else "幾乎沒吃"
-            if v <= 0.2
-            else dv.raw_quote
-        )
+        if v >= 0.95:
+            return "吃完"
+        if 0.4 <= v <= 0.6:
+            return "吃一半"
+        if v <= 0.2:
+            return "幾乎沒吃"
     if dim == "sleep" and isinstance(dv.value, int | float):
         n = int(dv.value)
         return "睡得好" if n == 0 else f"晚上起來 {n} 次"
@@ -185,7 +205,7 @@ def _phrase(dim: str, dv: DimensionValue) -> str:
 
 
 def summarize(obs: StructuredObservation, name: str) -> str:
-    parts = [_phrase(d, obs.domains[d]) for d in ASK_ORDER if d in obs.domains]
+    parts = [_phrase(d, obs.domains[d]) for d in DIMENSIONS if d in obs.domains]
     ev = {
         "fall": "有跌倒",
         "medication_issue": "藥沒有吃好",
@@ -208,30 +228,148 @@ def summarize(obs: StructuredObservation, name: str) -> str:
     return f"我聽到的是：{name}今天{body}{tail}。對嗎？"
 
 
-def _next(obs: StructuredObservation, asked: list[str], name: str) -> NextQuestion | None:
-    f = obs.flags
-    # event follow-ups first (only if the answer is not already known from the words)
-    for inc in obs.incident_flags:
-        key = f"event:{inc}"
-        if key in asked:
+# --- the agent's context ----------------------------------------------------------------------
+
+
+def _context(
+    obs: StructuredObservation,
+    profile: Profile | None,
+    baseline: Baseline | None,
+    asked: list[tuple[str, str]],
+    red: RedFlagResult,
+    phase: str,
+    budget: int,
+) -> dict:
+    label = lambda d: DIMENSION_LABELS[d]["zh-TW"]  # noqa: E731
+    prof = "（無 profile）"
+    base = "（無基線）"
+    if profile:
+        age = datetime.now(UTC).year - profile.birth_year
+        meds = "、".join(
+            f"{m.name}{'（抗凝血）' if m.is_anticoagulant else ''}" for m in profile.medications
+        )
+        prof = (
+            f"{profile.code_name}，{age} 歲；"
+            f"慢性病：{'、'.join(c.display for c in profile.conditions) or '無'}；"
+            f"用藥：{meds or '無'}；{profile.one_liner}"
+        )
+    if baseline:
+        base = "；".join(
+            f"{label(e.dimension)}：{e.description}" for e in baseline.entries if e.valid_to is None
+        )
+    known = "；".join(
+        f"{label(d)}：「{dv.raw_quote}」({dv.direction})" for d, dv in obs.domains.items()
+    )
+    facts = [f for h in red.hits for f in h.facts]
+    facts += [INCIDENT_LABEL.get(i, i) for i in obs.incident_flags]
+    facts += [k for k, v in obs.flags.model_dump().items() if v]
+    if obs.seems_different:
+        facts.append("照護者說跟平常不一樣")
+    return {
+        "phase": phase,
+        "profile": prof,
+        "baseline": base,
+        "said": obs.raw_text.split("。")[0],
+        "known": known,
+        "unknown": [label(d) for d in DIMENSIONS if d not in obs.domains],
+        "facts": facts,
+        "asked": [f"{q}→{a}" for q, a in asked],
+        "budget": budget,
+    }
+
+
+def _plan(ctx: dict, known_dims: set[str], phase: str, n: int) -> NextQuestion | None:
+    llm = get_llm()
+    out = llm.next_question(ctx)
+    if out.ask and phase != "red" and out.dimension in known_dims:
+        # one retry with the constraint restated; an invalid decision is an error, not a fallback
+        out = llm.next_question(
+            {
+                **ctx,
+                "note": (
+                    f"「{DIMENSION_LABELS[out.dimension]['zh-TW']}」已知，不要再問，"
+                    "換一個未知維度或 ask=false"
+                ),
+            }
+        )
+    if not out.ask:
+        return None
+    if not out.question.strip() or (phase != "red" and out.dimension in known_dims):
+        raise LLMUnavailable("agent 回傳無效的追問決定（見 /trace）")
+    dim = out.dimension if out.dimension in DIMENSIONS else None
+    return NextQuestion(key=f"q{n}", text=out.question.strip(), dimension=dim, reason=out.reason)
+
+
+def build_observation(
+    turns: list[Turn],
+    profile: Profile | None,
+    baseline: Baseline | None,
+    seems_different: bool = False,
+    incidents: list[str] | None = None,
+) -> tuple[StructuredObservation, list[tuple[str, str]], list[str], list[Report]]:
+    """Merge the caregiver's turns into one observation (each utterance extracted by the model)."""
+    ts = datetime.now(UTC)
+    if not turns:
+        raise ValueError("dialog needs at least the caregiver's first sentence")
+    obs = _extract(turns[0].text.strip(), profile, baseline)
+    if seems_different:
+        obs.seems_different = True
+    for inc in incidents or []:
+        if inc not in obs.incident_flags and inc in INCIDENT_LABEL:
+            obs.incident_flags.append(inc)  # type: ignore[arg-type]
+    asked: list[tuple[str, str]] = []
+    asked_dims: list[str] = []
+    reports: list[Report] = []
+    for i, t in enumerate(turns[1:], start=1):
+        text = t.text.strip()
+        if not text:
             continue
-        if inc == "fall" and (f.fall_head_strike or f.cannot_get_up_after_fall):
-            continue
-        q, quick = EVENT_QUESTIONS[inc]
-        return NextQuestion(key=key, text=q, quick_replies=quick)
-    if obs.seems_different and not obs.domains and "event:seems_different" not in asked:
-        q, quick = EVENT_QUESTIONS["seems_different"]
-        return NextQuestion(key="event:seems_different", text=q, quick_replies=quick)
-    # intake mentioned but without an amount → ask the amount once
-    if "intake" in obs.domains and obs.domains["intake"].value is None and "intake" not in asked:
-        q, quick = QUESTIONS["intake"]
-        return NextQuestion(key="intake", text=q.format(name=name), quick_replies=quick)
-    for dim in ASK_ORDER:
-        if dim in obs.domains or dim in asked:
-            continue
-        q, quick = QUESTIONS[dim]
-        return NextQuestion(key=dim, text=q.format(name=name), quick_replies=quick)
-    return None
+        _apply_answer(obs, t, profile, baseline, ts)
+        if t.question:
+            asked.append((t.question, text))
+            if t.dimension:
+                asked_dims.append(t.dimension)
+        reports.append(
+            Report(
+                question=t.question or "（照護者補充）",
+                answer=text,
+                key=f"q{i}",
+                ts=t.ts or ts.isoformat(),
+            )
+        )
+    obs.raw_text = "。".join(t.text.strip() for t in turns if t.text.strip())
+    obs.unknown = [d for d in DIMENSIONS if d not in obs.domains]
+    return obs, asked, asked_dims, reports
+
+
+def evaluate_red(
+    obs: StructuredObservation, profile: Profile | None, baseline: Baseline | None
+) -> RedFlagResult:
+    return evaluate(
+        RedFlagInput(
+            observation=obs,
+            baseline_vitals=baseline.vitals_usual if baseline else None,
+            on_anticoagulant=profile.on_anticoagulant if profile else False,
+        )
+    )
+
+
+def plan_question(
+    obs: StructuredObservation,
+    profile: Profile | None,
+    baseline: Baseline | None,
+    asked: list[tuple[str, str]],
+    rf: RedFlagResult,
+) -> tuple[NextQuestion | None, int]:
+    """Ask the model what to ask next (or nothing). Returns (question, budget_left)."""
+    red = rf.notify_now
+    phase = "red" if red else "routine"
+    budget = (MAX_RED_TURNS if red else MAX_LLM_TURNS) - len(asked)
+    nq = None
+    if budget > 0:
+        ctx = _context(obs, profile, baseline, asked, rf, phase, budget)
+        nq = _plan(ctx, set(obs.domains), phase, len(asked) + 1)
+    return nq, max(budget - (1 if nq else 0), 0)
 
 
 def run_dialog(
@@ -240,60 +378,47 @@ def run_dialog(
     baseline: Baseline | None,
     seems_different: bool = False,
     incidents: list[str] | None = None,
+    plan_next: bool = True,
 ) -> DialogResult:
-    ts = datetime.now(UTC)
     name = profile.code_name if profile else "他"
-    if not turns:
-        raise ValueError("dialog needs at least the caregiver's first sentence")
-    first = turns[0].text.strip()
-    obs = _extract(first, profile, baseline)
-    if seems_different:
-        obs.seems_different = True
-    for inc in incidents or []:
-        if inc not in obs.incident_flags and inc in (
-            "fall",
-            "medication_issue",
-            "choking",
-            "behavior",
-        ):
-            obs.incident_flags.append(inc)  # type: ignore[arg-type]
-    asked: list[str] = []
-    for t in turns[1:]:
-        text = t.text.strip()
-        if not text:
-            continue
-        if t.dimension:
-            asked.append(t.dimension)
-            key = t.dimension
-            if key.startswith("event:"):
-                q = EVENT_QUESTIONS.get(key[6:], ("", []))[0]
-            else:
-                q = QUESTIONS.get(key, ("", []))[0].format(name=name)
-            _apply_answer(obs, key, q, text, profile, baseline, ts)
-        else:
-            _merge(obs, _extract(text, profile, baseline), override=False)
-    obs.raw_text = "。".join(t.text.strip() for t in turns if t.text.strip())
-    obs.unknown = [d for d in DIMENSIONS if d not in obs.domains]
-
-    rf = evaluate(
-        RedFlagInput(
-            observation=obs,
-            baseline_vitals=baseline.vitals_usual if baseline else None,
-            on_anticoagulant=profile.on_anticoagulant if profile else False,
-        )
+    obs, asked, asked_dims, reports = build_observation(
+        turns, profile, baseline, seems_different, incidents
     )
+    rf = evaluate_red(obs, profile, baseline)
     red = rf.notify_now
-    turn_count = len(asked)
-    nq = None if (red or turn_count >= MAX_TURNS) else _next(obs, asked, name)
+    phase = "red" if red else "routine"
+    nq: NextQuestion | None = None
+    budget_left = (MAX_RED_TURNS if red else MAX_LLM_TURNS) - len(asked)
+    if plan_next:
+        nq, budget_left = plan_question(obs, profile, baseline, asked, rf)
+    was_red = any(t.phase == "red" for t in turns[1:])
+    intro = RED_INTRO if (red and nq is not None and not was_red) else None
+    closing = RED_CLOSING if (red and nq is None) else None
+    trace(
+        "intake.turn",
+        patient_id=profile.patient_id if profile else None,
+        turns=len(turns),
+        phase=phase,
+        red=red,
+        asked=[q for q, _ in asked],
+        next=nq.model_dump() if nq else None,
+        domains=list(obs.domains),
+        budget_left=budget_left,
+    )
     return DialogResult(
         observation=obs,
         red_flags=rf,
         red_flag_lines=render_lines(rf),
         next_question=nq,
-        asked_dimensions=asked,
-        turn_count=turn_count,
-        done=red or nq is None,
+        asked=[q for q, _ in asked],
+        asked_dimensions=asked_dims,
+        turn_count=len(asked),
+        budget_left=max(budget_left, 0),
+        reports=reports,
+        done=nq is None,
         red=red,
+        intro=intro,
+        closing=closing,
         summary=summarize(obs, name),
         transcript=obs.raw_text,
     )

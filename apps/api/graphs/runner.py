@@ -9,6 +9,7 @@ from typing import Any
 
 from langgraph.types import Command
 
+from core.trace import tagged
 from graphs import registry
 from graphs.checkpointer import get_checkpointer
 from graphs.path_a import build_path_a
@@ -41,6 +42,9 @@ def compiled(graph: str):
 
 
 def _config(thread_id: str) -> dict[str, Any]:
+    # No ``max_concurrency`` here: combined with ``stream_mode="custom"`` it deadlocks LangGraph
+    # (the stream consumer shares the executor). Deep-agent runs are serialised in
+    # ``agents.personal.run_task`` with a lock instead (same TPM protection, streams still flow).
     return {"configurable": {"thread_id": thread_id}}
 
 
@@ -118,10 +122,128 @@ def resume(thread_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     snap = snapshot(thread_id)
     itype = (snap["interrupt"] or {}).get("type") if snap["interrupt"] else None
     validate_resume(itype, payload)
-    compiled(graph_of(thread_id)).invoke(Command(resume=payload), _config(thread_id))
+    dialog_id = (snap["values"].get("raw_input") or {}).get("dialog_id")
+    with tagged(thread_id=thread_id, dialog_id=dialog_id):
+        compiled(graph_of(thread_id)).invoke(Command(resume=payload), _config(thread_id))
     return snapshot(thread_id)
 
 
 def reset_for_tests() -> None:
     compiled.cache_clear()
     registry.reset_for_tests()
+
+
+LIVE_REPORT_NODES = {
+    "nurse_onsite_assessment": "notify_nurse_urgent",
+    "nurse_review": "push_to_nurse",
+}
+
+
+def update_caregiver(
+    thread_id: str, turns: list[dict[str, Any]], incidents: list[str], seems_different: bool
+) -> dict[str, Any]:
+    """Caregiver keeps answering while the nurse is on the way: merge the answers into the
+    interrupted Path A thread (update_state as the node before the interrupt, then re-arm it)."""
+    from datetime import UTC, datetime
+
+    from record_schema import Baseline, Observation, Profile
+
+    from agents.comparator import compare
+    from graphs.common import build_caregiver_section, now_iso
+    from ingest.intake_dialog import Turn, run_dialog
+    from record.store import get_store
+    from red_flags.rules import RedFlagInput, evaluate
+
+    snap = snapshot(thread_id)
+    itype = (snap["interrupt"] or {}).get("type") if snap["interrupt"] else None
+    if snap["status"] != "interrupted" or itype not in LIVE_REPORT_NODES:
+        raise ValueError("護理師已接手")
+    g = compiled(graph_of(thread_id))
+    values = snap["values"]
+    store = get_store()
+    pid = values["patient_id"]
+    profile = store.load_profile(pid)
+    baseline = store.load_baseline(pid)
+    dialog_id = (values.get("raw_input") or {}).get("dialog_id")
+    res = run_dialog(
+        [Turn.model_validate(x) for x in turns],
+        profile,
+        baseline,
+        seems_different=seems_different,
+        incidents=incidents,
+        plan_next=False,  # the talk graph plans the next question itself; no second LLM call here
+    )
+    obs = res.observation
+    recent = [Observation.model_validate(o) for o in values.get("recent_observations", [])]
+    deltas = compare(obs, baseline, recent, datetime.now(UTC).date())
+    rf = evaluate(
+        RedFlagInput(
+            observation=obs,
+            vitals=None,
+            baseline_vitals=baseline.vitals_usual,
+            on_anticoagulant=profile.on_anticoagulant,
+        )
+    )
+    raw = {
+        **values.get("raw_input", {}),
+        "turns": turns,
+        "incidents": incidents,
+        "seems_different": seems_different,
+        "text": res.transcript,
+    }
+    new_state = {
+        "raw_input": raw,
+        "structured_observation": obs.model_dump(mode="json"),
+        "baseline_delta": [d.model_dump(mode="json") for d in deltas],
+        "red_flags": rf.model_dump(mode="json"),
+        "asked_dimensions": res.asked_dimensions,
+        "turn_count": res.turn_count,
+        "caregiver_reports": [r.model_dump(mode="json") for r in res.reports],
+        "updated_at": now_iso(),
+    }
+    new_state["caregiver_section"] = build_caregiver_section({**values, **new_state})
+    with tagged(thread_id=thread_id, dialog_id=dialog_id):
+        g.update_state(_config(thread_id), new_state, as_node=LIVE_REPORT_NODES[itype])
+        g.invoke(
+            None, _config(thread_id)
+        )  # re-runs the interrupt node so the nurse sees fresh data
+    _ = Profile, Baseline
+    return {"dialog": res.model_dump(mode="json"), "snapshot": snapshot(thread_id)}
+
+
+def start_stream(graph: str, patient_id: str, input_values: dict[str, Any]):
+    """Like start(), but yields ('event', {...}) per node/agent step, then ('done', snapshot)."""
+    from core.trace import run_in_thread
+
+    yield from run_in_thread(lambda: _start_stream(graph, patient_id, input_values))
+
+
+def _start_stream(graph: str, patient_id: str, input_values: dict[str, Any]):
+    tid = new_thread_id(graph, patient_id)
+    registry.upsert(tid, graph=graph, patient_id=patient_id, status="running")
+    dialog_id = (input_values.get("raw_input") or {}).get("dialog_id")
+    with tagged(thread_id=tid, dialog_id=dialog_id):
+        for mode, chunk in compiled(graph).stream(
+            {**input_values, "patient_id": patient_id, "thread_id": tid},
+            _config(tid),
+            stream_mode=["custom", "updates"],
+        ):
+            if mode == "custom":
+                yield "event", chunk
+            else:
+                for node, upd in chunk.items():
+                    if node == "__interrupt__":
+                        continue
+                    yield (
+                        "event",
+                        {
+                            "type": "node_end",
+                            "name": node,
+                            "summary": node,
+                            "plain": node,
+                            "patient_id": (upd or {}).get("patient_id")
+                            if isinstance(upd, dict)
+                            else None,
+                        },
+                    )
+    yield "done", snapshot(tid)

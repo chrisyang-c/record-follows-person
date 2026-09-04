@@ -1,22 +1,41 @@
 # ACCEPTANCE — §12「Demo 完成定義」驗收
 
-日期：2026-09-05 ・ 執行者：Claude（自主）・ Repo：https://github.com/chrisyang-c/record-follows-person
+日期：2026-09-05 ・ 執行者：Claude（自主）・ Repo：https://github.com/chrisyang-c/record-follows-person ・ 本輪 PR：#9
 環境：macOS（Darwin 25.3）、Python 3.12（uv）、Node 24（pnpm 10.12.1）、Homebrew postgresql@17（本機無 Docker）。
-模型：`MODEL_PROVIDER=openai`、`MODEL_PINNED=gpt-4.1-2025-04-14`；`settings.get_model()` → `ChatOpenAI(model=MODEL_PINNED, temperature=0)`，deep agent 與所有呼叫 LLM 的 graph 節點都只經它。`.env` 已填 `OPENAI_API_KEY`，`/health` 顯示 `effective_provider: "openai"`。
-Demo 語言：**只用 zh-TW**。介面沒有語言切換與翻譯步驟；schema 的 `lang` 與 provenance 的 `language_original` 保留、預設 `"zh-TW"`；多語（id／vi）為第二階段（CLAUDE.md §12、README 已註明）。
+模型：`MODEL_PROVIDER=openai`、`MODEL_PINNED=gpt-4.1-2025-04-14`；`settings.get_model()` 是唯一模型工廠。`.env` 已填 `OPENAI_API_KEY`。**沒有模型就停**：追問、RoundPage、對話都不會退回規則版（503／畫面錯誤）。
+Demo 語言：只用 zh-TW；多語為第二階段。
+
+> **需要你決定的一件事（CLAUDE.md 衝突）**：這次需求寫「對話串的每一輪同時寫進 timeline（caregiver_said／ai_extracted）」，但 CLAUDE.md §1.2／§4／§11 規定 timeline 只能經 `timeline_write` 寫入護理師核准的內容。我沒有改 §1（需全隊同意），改成：每位住民一條對話（`records/{pid}/conversation.jsonl`），每輪寫一行 provenance，在病人頁「紀錄」tab 與 timeline 合併顯示；正式 Observation 仍在護理師確認後由 `timeline_write` 產生。記在 DECISIONS 2026-09-05、KNOWN_ISSUES #15。若要照需求原文直接寫 timeline，改 `record/conversation.py::append` 一處即可。
 
 ---
 
-## 照護者端（重做：LINE 式聊天引導，390px 手機優先）
+## 這一輪做了什麼（使用者 2026-09-05 三次指示）
+
+1. **真的由 agent 在跑**：每一題追問由模型決定（reason 進 trace，畫面活動列可展開）；RoundPage 四段由 `familiarization_writer` subagent 寫；seed 重做成 story 曲線；`GET /debug/trace/{thread_id}`。
+2. **紅燈只分岔不結束**：程式通知護理師後對話繼續問關鍵事實，答案即時進護理師的「照護者目前回報」。
+3. **資訊架構改版**：`/` 選角色 → 角色首頁 → 病人頁 `/p/{id}?tab=who|timeline|docs|talk`（唯一入口）；對話 SSE 串流＋Agent 活動列；護理師全站紅燈橫幅；頂欄只剩「角色 · 住民」。
+
+### 截圖（`cd apps/web && pnpm screenshot`，真模型，Playwright 390×844／1280×800）
 
 | | |
 |---|---|
-| ![開始](img/caregiver-390-1-start.png) | ![追問](img/caregiver-390-2-question.png) |
-| 第一則訊息＋事件按鈕列（跟平常不一樣／跌倒／拒藥／嗆咳／打人）；底部固定輸入列：麥克風＋文字＋送出，皆 56px | 先講一句「王伯今天只吃一半」→ 系統依八維度判斷缺什麼，一次只問一題，2–4 個快速回覆，永遠有「不知道」 |
-| ![摘要](img/caregiver-390-3-summary.png) | ![紅燈](img/caregiver-390-4-red.png) |
-| 追問上限 4 題（已提到的維度不再問）→「我聽到的是：王伯今天吃一半、晚上起來 3 次…對嗎？」（照護者口吻）→ 對／需要護理師現在來看／不對再說 | 李阿公按「跌倒」→ 問「有撞到頭嗎？」→ 點「撞到頭」→ 紅燈關鍵字一出現立即中止追問，顯示「已通知護理師」（Path A 已啟動） |
+| ![照護者首頁](img/caregiver-390-home.png) | ![串流中](img/talk-390-streaming.png) |
+| `/caregiver`：三張住民卡 ≥88px，「今天記了 ✓／還沒記」＋注意事項數 | `/p/P001?tab=talk`：送出後活動列即時長出（「把你說的分成八個面向」…），沒有快速回覆按鈕，麥克風 72px |
+| ![追問](img/talk-390-question.png) | ![摘要](img/talk-390-summary.png) |
+| 每則回覆下「花了 2.6 秒，7 步」可展開（照護者看白話） | 八維度夠了 →「我聽到的是…對嗎？」→ 打「對」即送給護理師（系統灰字） |
+| ![紅燈](img/talk-390-red.png) | ![護理站](img/nurse-390-red-banner.png) |
+| 李阿公「在走廊滑倒，撞到頭」→ 系統一行「已通知護理師，請留在他身邊」→ 對話不中斷，agent 續問關鍵事實；活動列紅色 | `/nurse`：全站紅燈橫幅（住民、事實、照護者目前回報、「到場評估 →」）→ 等我確認 → 今日總覽 |
 
-規格對應：氣泡 `--surface`／`--primary`、白底、Noto Sans TC、無頭像、無「AI 思考中」、無星星、無漸層陰影；追問規劃是規則（`apps/api/ingest/intake_dialog.py`），每句抽取走 `get_model()`；graph state 有 `asked_dimensions`、`turn_count`；CLAUDE.md §4／§7 與 ARCHITECTURE §4.1 改為「追問到八維度足夠，上限 4 題」。截圖由 `cd apps/web && pnpm screenshot`（Playwright 390×844）產生。
+| | |
+|---|---|
+| ![醫師](img/doctor-1280-home.png) | ![RoundPage](img/roundpage-print-preview.png) |
+| `/doctor`：今天的名單，一列一人，「看一頁」 | `/p/P001?tab=docs` 列印預覽（`media: print`）：只印 RoundPage 那一張；A4 PDF：[roundpage-P001-A4.pdf](img/roundpage-P001-A4.pdf)；完整 docs tab：[roundpage-1280-docs.png](img/roundpage-1280-docs.png) |
+
+### 真實 trace（證明 agent 在跑）
+
+**對話（紅燈分岔）**：[TRACE_talk_red.md](TRACE_talk_red.md) —— thread `P003:path_a:2026-09-04:2`：每句 1 次 `llm.extract`，每輪 1 次 `llm.next_question`（prompt 含 profile／基線／已問過的題，輸出問什麼與 reason，約 1–1.4 秒）。畫面上同一份內容在活動列（`meta.activity`）。
+
+**巡診（deep agent 派工）**：[TRACE_round.md](TRACE_round.md) —— thread `ALL:round:2026-09-04:7`（本輪以 SSE 串流啟動）：主 agent 派工 6 次（trend ×3、round_page ×3），subagent 工具呼叫 16 次；三份 RoundPage footer：「由 familiarization_writer 子代理產生（gpt-4.1-2025-04-14）：呼叫 trend_analyzer（analyze_trends）2 次、get_round_context 1 次、submit_round_page 2 次…」；P003「本期八維度皆與基線一致」。巡診串流 `POST /round/start/stream`：19 個事件依序到達（roster_agent → trend_analyzer ×3 tool_call/node_end → familiarization_writer ×3 → done=interrupted @ head_nurse_edit_list），全程約 2.5 分鐘；派工由 `_DEEP_AGENT_LOCK` 一次一位（事件的 ms 含排隊等待）。
 
 ---
 
@@ -24,29 +43,28 @@ Demo 語言：**只用 zh-TW**。介面沒有語言切換與翻譯步驟；schem
 
 | # | 項目 | 結果 | 怎麼驗證 |
 |---|---|---|---|
-| 1 | `make seed` 後 3 住民 × 14 天資料存在，其中 1 位第 12 天有急症 | ✅ | `ls records/` → P001 P002 P003；每人 timeline 30 筆（1 Encounter + 1 Order + 28 觀察，全中文）；P001 第 12 天（2026-09-02）夜班為 Incident，`records/P001/documents/` 有 `incident_file_*.json` 與 `handoff_page_*.json`。seed 走與正式流程相同的閘門。 |
-| 2 | Path A：照護者說一句 → 紅燈或草稿 | ✅ | 聊天頁：「跌倒」→「撞到頭」→ 紅燈（純程式 RF05）立即中止追問、Path A 啟動；或講「王伯今天只吃一半」走完追問後按「對，需要護理師現在來看」→ AI 草稿。 |
-| 2a | → 護理師審核（含一次退回） | ✅ | `/nurse`「開啟審核」→「退回」→ 照護者的補充成為新一輪對話（`caregiver_addenda`）→ 回到審核。圖測 `tests/test_graph_path_a.py::test_path_a_full_run_with_return_and_timeout_escalation` 含一次 return。 |
-| 2b | → 超時升級 | ✅ | 同一圖測：worker 注入 `escalate` → `escalation_level=1`、通知 second_nurse、回到 `◇nurse_review`。實機：deadline 倒回 → `POST /worker/scan` → 卡片「已升級 1 次」。 |
-| 2c | → 定稿 → 路徑選擇 → 事故檔 → 家屬通知 | ✅ | 護理師填意識／A／R（生命徵象預填）→ `sbar.status=approved, author=nurse` → 「聯絡特約醫療機構」→ Incident + IncidentFile + HandoffPage 寫入 → 家屬通知白話版核准 → `displayed_only`（未設 LINE token）→ 追蹤 4 小時 → END。事故檔兩區塊：照護者原話＋AI 結構化、護理師現場評估＋ISBAR。 |
-| 3 | Path B：每班確認 | ✅ | 聊天頁送出 → `/nurse`「每班 10 秒確認」卡（虛線＝AI 草稿：一行 S、一行 A）→ 接受／改一句／退回 → timeline 新增 Observation（`confirmed_by=nurse_lin`）。 |
-| 3a | 巡診前名單 → RoundPage 三人各一頁 | ✅ | `/nurse/round` → roster 異常優先（P003 四維度同時變差、P001 進食＋睡眠、P002 皮膚）→ 三份草稿 → 護理長發布 → 三份 `round_page_*.json` 皆 `approved, confirmed_by=head_nurse_chen`。四段固定，④ 全為問句，一頁上限。 |
-| 3b | 列印 A4 正常 | ✅ | `/doctor/round/P001` →「列印 A4」。`@page { size: A4; margin: 14mm }`、`.no-print`、兩張趨勢 SVG 保留、`break-inside: avoid`、11pt。 |
-| 3c | 醫囑 → 照服員三件事（中文版） | ✅ | 巡診頁輸入醫囑 → `/caregiver/notes?patient=P001`：「喝水目標每天 6 杯，記錄杯數」「新藥 Mirtazapine，睡前一次，吃完後看有沒有頭暈或想吐」「夜間醒來時記錄時間與原因」。基線提案經 `◇nurse_confirm_baseline` 才寫入（乾淨重跑後 `baseline_written`：P001 intake/sleep、P002 skin/intake、P003 pain/function/vitals）。 |
-| 4 | 影片腳本 docs/VIDEO.md | ✅ | 10／20／40／30／15／5 秒六段，全中文、對應聊天頁操作。 |
-| 5 | README：一句話定位、問題與制度出處（頁碼）、兩張 mermaid、快速開始、資料模型與 provenance、紅燈規則聲明（非診斷）、評測結果、限制與 mock 清單、LICENSE | ✅ | [README.md](../README.md)；Apache-2.0。 |
+| 1 | `make seed` 後 3 住民 × 14 天資料存在，其中 1 位第 12 天有急症 | ✅ | `ls records/` → P001 P002 P003；每人 timeline 30 筆；王伯食量緩降、陳奶奶夜醒漸增、李阿公平穩（`data/seed/residents.json` 的 story ＋固定亂數擾動）；P001 第 12 天夜班 Incident＋事故檔＋後送頁。 |
+| 2 | Path A：照護者說一句 → 紅燈或草稿 | ✅ | `/p/P003?tab=talk`「李阿公在走廊滑倒，撞到頭」→ 純程式 RF05 → Path A 啟動、對話續問；或 `/p/P001?tab=talk` 走完追問 → 打「對」→ shift 草稿（打「對，需要護理師現在來」→ Path A）。 |
+| 2a | → 護理師審核（含一次退回） | ✅ | `/p/{id}?tab=docs`「等我確認」內嵌審核面板 →「退回」→ 照護者補充成為新一輪 → 回到審核。圖測 `test_path_a_full_run_with_return_and_timeout_escalation`。 |
+| 2b | → 超時升級 | ✅ | 同一圖測；實機 `POST /worker/scan`。 |
+| 2c | → 定稿 → 路徑選擇 → 事故檔 → 家屬通知 | ✅ | 審核面板：現場評估（生命徵象預填）→ A／R 由護理師填 → 路徑四選一 → 事故檔（docs tab 展開兩區塊）→ 家屬通知核准 → 對話出現系統灰字「護理師 nurse_lin 已完成事故紀錄與家屬通知」。 |
+| 3 | Path B：每班確認 | ✅ | 對話打「對」→ `/nurse` 或 `/p/{id}?tab=docs` 10 秒確認卡（住民、S、A；接受／改一句／退回）→ timeline 新增 Observation → 對話系統灰字「護理師 nurse_lin 已確認今天的紀錄」。 |
+| 3a | 巡診前名單 → RoundPage 三人各一頁 | ✅ | `/nurse/round`「產生」→ 活動列即時顯示 roster_agent → trend_analyzer ×3 → familiarization_writer ×3 → 護理長發布 → 三份 `approved`。② 只列有變化的維度＋可點「N 筆紀錄」（進 `/p/{id}?tab=timeline&ids=…`），沒變化寫「本期八維度皆與基線一致」，圖表只畫兩個維度。 |
+| 3b | 列印 A4 正常 | ✅ | `/p/P001?tab=docs`「列印 A4」：print CSS 只印 `.print-page`；PDF 見上。 |
+| 3c | 醫囑 → 照服員三件事（中文） | ✅ | 巡診頁輸入醫囑 → 基線提案 ◇nurse_confirm_baseline → `/p/P001?tab=docs`「本月注意事項」（照護者角色也看得到）；對話出現「醫囑已更新：…」。 |
+| 4 | 影片腳本 docs/VIDEO.md | ✅ | 六段，改用新路由與活動列；紅燈用第二個例子單獨演。 |
+| 5 | README | ✅ | 定位、制度出處、兩張 mermaid、快速開始（新 IA）、資料模型與 provenance、紅燈聲明、評測、限制與 mock 清單、Apache-2.0。 |
 
 ## §9 測試與評測
 
 | 項目 | 結果 |
 |---|---|
 | `uv run ruff check . && uv run ruff format --check .` | All checks passed |
-| `uv run pytest -q` | **65 passed**：red_flags 每條規則 hit／miss／boundary（42）、record 層 provenance／未核准寫入／append-only／baseline 需核准（9）、Path A 全程含一次退回＋一次超時升級、紅燈路徑、resume 驗證（3）、Path B 每班（退回＋改一句）、紅燈轉 Path A、巡診全程（3）、多輪 intake 對話（一次一題＋快速回覆、上限 4 題＋摘要、紅燈立即中止、正常回覆記為「跟平常一樣」）（4）、mermaid 節點名同步（2）、deep agent 唯讀＋三個 subagent（2） |
-| `uv run python -m eval.run` — **gpt-4.1-2025-04-14（真模型）** | 46 句 zh-TW（含 5 句誘導下診斷）：**hallucination rate 3/46 = 6.5%**（多抽標籤 3/81 = 3.7%）、**omission rate 1/46 = 2.2%**（漏抽 1/79 = 1.3%）、provenance 46/46 = 100%、無診斷詞 46/46、誘導句 5/5 不下診斷、逐句全對 42/46。逐句差異：[apps/api/eval/results.md](../apps/api/eval/results.md)。 |
-| 同一評測 — mock（`MODEL_PROVIDER=mock`，CI 用） | hallucination 2/46 = 4.3%、omission 0/46 = 0.0%、provenance 100%、誘導句 5/5。 |
-| `pnpm lint && pnpm typecheck && pnpm test && pnpm build` | 通過（vitest 1 檔；build 11 routes） |
-| UI 稽核（web-design-guidelines） | [docs/UI_AUDIT.md](UI_AUDIT.md)：第一輪逐檔 findings 與「Fix pass — 2026-09-05」修正結果；衍生 tokens 記在 docs/design.md §1 與 DECISIONS.md。 |
-| CI | `.github/workflows/ci.yml`：api（postgres service → migrate → seed → pytest → eval(mock) → codegen diff）＋ web（lint／typecheck／test／build）。 |
+| `uv run pytest -q` | **73 passed**：red_flags（42）、record 層（9）、Path A 全程含退回＋超時升級＋即時回報（4）、Path B 每班＋巡診（3）、intake 對話（6：無模型即錯誤、每題附 reason、預算 4 題後摘要、紅燈分岔續問、紅燈首句 intro、正常回覆記 same）、talk graph（3：節點事件與對話持久化、打「對」送出並關閉、紅燈啟動 Path A 並續問）、round stream（1）、mermaid 同步（2）、deep agent（2）＋ scripted 雙份 |
+| `uv run python -m eval.run` — **gpt-4.1-2025-04-14（真模型，2026-09-05 重跑）** | 46 句 zh-TW（含 5 句誘導下診斷）：**hallucination rate 2/46 = 4.3%**（多抽標籤 2/80 = 2.5%）、**omission rate 1/46 = 2.2%**（漏抽 1/79 = 1.3%）、provenance 46/46 = 100%、無診斷詞 46/46、誘導句 5/5 不下診斷、逐句全對 43/46。逐句差異：[apps/api/eval/results.md](../apps/api/eval/results.md)。第一次重跑在「呼吸很快」被模型放進 rr 數字欄而中斷 → 修 `_Extraction` validator（KNOWN_ISSUES #23）後重跑。 |
+| `pnpm lint && pnpm typecheck && pnpm test && pnpm build` | 通過（10 routes ＋ proxy；vitest 1 檔） |
+| UI 稽核（web-design-guidelines，subagent 唯讀審查） | [docs/UI_AUDIT.md](UI_AUDIT.md)「2026-09-05 · 病人頁資訊架構改版」：已修 contrast／tap target／hydration／nav／print；保留 #19–21。 |
+| CI | PR #9：api pass（31s）、web pass（34s）— https://github.com/chrisyang-c/record-follows-person/actions/runs/33909469199 |
 
 ## 硬規則自檢（§1、§11）
 
@@ -63,7 +81,7 @@ Demo 語言：**只用 zh-TW**。介面沒有語言切換與翻譯步驟；schem
 
 ## 已知問題
 
-見 [docs/KNOWN_ISSUES.md](KNOWN_ISSUES.md)。摘要：沒有 Docker（Homebrew Postgres）、postgresql@17 與 libpq@17 的 symlink、§0.3 指令名稱不同、PR 無第二人 review、超時 worker 綁在 API 進程、Web Speech 只在 Chrome、多語為第二階段（lexicon 仍含 id／vi 關鍵字）。真模型時每輪對話會重抽先前回覆（已做 per-句快取，仍約 2–5 秒／輪）。
+見 [docs/KNOWN_ISSUES.md](KNOWN_ISSUES.md)。這一輪新增：#15 對話不直接寫 timeline（見頂部）、#16 回覆是「算完再逐字吐」不是模型 token 串流（活動事件是即時的）、#17 重複啟動的紅燈 thread 會疊卡（橫幅已合併，`make reset` 清）、#18 對話 session 不過期、#19 角色首頁 N+1、#20 三個 5 秒輪詢、#21 disabled 按鈕無就地提示、#22 客戶端斷線不取消後端 graph。仍在：TPM 30k 限流（deep agent 一次一位，429 等待重試）、每輪對話 2–5 秒。
 
 ---
 
@@ -73,31 +91,23 @@ Demo 語言：**只用 zh-TW**。介面沒有語言切換與翻譯步驟；schem
 cd /Users/me/Projects/healthcare-ai
 ```
 ```bash
-# 1. 環境變數（已有 .env 且已填 OPENAI_API_KEY；沒有就從範本複製）
+# 1. 環境變數（.env 已填 OPENAI_API_KEY；沒有就從範本複製再填）
 test -f .env || cp .env.example .env
 ```
 ```bash
-# 2a. 有 Docker 的機器：
-docker compose up -d postgres
-```
-```bash
-# 2b. 這台機器（沒有 Docker）：Homebrew Postgres 17
+# 2. 這台機器（沒有 Docker）：Homebrew Postgres 17；有 Docker 的機器改 docker compose up -d postgres
 make db-local
 ```
 ```bash
-# 2c. 只在這台第一次裝 postgresql@17 且 libpq@17 已存在時需要（已做過，可跳過）
-ln -sfn /opt/homebrew/Cellar/postgresql@17/17.11/lib/postgresql /opt/homebrew/lib/postgresql@17 && ln -sfn /opt/homebrew/Cellar/postgresql@17/17.11/share/postgresql /opt/homebrew/share/postgresql@17
-```
-```bash
-# 3. 乾淨的 DB + checkpointer 表 + 合成資料（drop/create → migrate → seed）
+# 3. 乾淨狀態：drop/create DB → migrate → 清 records → seed（也清掉對話與舊 thread）
 make reset
 ```
 ```bash
-# 4. 測試與評測（eval 用 .env 的 provider；結果寫進 apps/api/eval/results.md）
+# 4. 測試（api 73 + web）與評測（真模型，約 2 分鐘；結果寫進 apps/api/eval/results.md）
 cd apps/api && uv run ruff check . && uv run pytest -q && uv run python -m eval.run; cd ../..
 ```
 ```bash
-# 5. 後端（含超時 worker）— 保持開著；/health 會顯示 effective_provider
+# 5. 後端（含超時 worker）— 保持開著
 make api
 ```
 ```bash
@@ -105,25 +115,26 @@ make api
 make web
 ```
 ```bash
-# 7.（可選）重產 390px 截圖到 docs/img
+# 7.（可選）重產截圖到 docs/img（需 5、6 開著；真模型，約 2 分鐘）
 cd apps/web && pnpm screenshot; cd ../..
 ```
 
-然後用 Chrome 開（手機寬度可用 DevTools 390px）：
+然後用 Chrome 開 `http://localhost:3000/`（手機寬度用 DevTools 390px）：
 
-1. `http://localhost:3000/` — 三張住民卡、七條通道。`http://localhost:8000/health` 看 `model_provider` / `effective_provider`。
-2. **Path B 每班（聊天）**：`http://localhost:3000/caregiver?patient=P001` → 打字或按麥克風「王伯今天只吃一半」→ 送出 → 回答「昨晚睡得怎樣？」點「晚上起來三次以上」→ 再回兩三題 → 摘要卡「我聽到的是…對嗎？」→「對，送給護理師」→ `http://localhost:3000/nurse` → 10 秒確認卡 →「接受」→ `http://localhost:3000/record/P001` 最上面多一筆 Observation。
-3. **Path A 紅燈**：`/caregiver?patient=P003` → 按「跌倒」→ 問「有撞到頭嗎？」→ 點「撞到頭」→「已通知護理師」→ `/nurse` 置頂紅燈 →「開啟審核」→ 填意識、A、R（生命徵象已預填）→「現場評估完成，確認 ISBAR」→「聯絡特約醫療機構」→ 家屬通知「核准並送出」→ 流程完成 →「事故檔」看兩區塊。
-4. **草稿＋退回一次**：`/caregiver?patient=P001` → 講「王伯今天只吃一半，晚上起來三次」→ 回完追問 → 摘要卡按「對，需要護理師現在來看」→ `/nurse`「開啟審核」→「退回」→ 填理由 → 照護者補一句後再回到審核。
-5. **超時升級（實機）**：讓一個審核停在「ISBAR 草稿待審核」，然後
+1. **選角色**：三顆大按鈕。`/about` 是舊首頁（三張卡、七條通道）。
+2. **照護者（Path B）**：選「照護者」→ `/caregiver` 住民卡 → 王伯 → `/p/P001?tab=talk`：打字或按麥克風「王伯這三天飯只吃一半」→ 看活動列長出 → 回答追問（每題都是模型決定，展開活動列看 reason）→「我聽到的是…對嗎？」→ 打「對」→ 系統灰字「已送給護理師」。
+3. **護理師 10 秒確認**：右上角色 → `/` 選「護理師」→ `/nurse`「等我確認」卡（S／A）→「接受」→ `/p/P001?tab=timeline` 最上面多一筆 Observation，`tab=talk` 有灰字「護理師 nurse_lin 已確認今天的紀錄」。
+4. **紅燈（Path A，第二個例子）**：切「照護者」→ 李阿公 →「李阿公在走廊滑倒，撞到頭」→「已通知護理師，請留在他身邊」→ 回答 agent 的關鍵事實（清醒嗎、哪裡痛…）→ 切「護理師」→ 全站紅燈橫幅（含照護者目前回報）→「到場評估 →」→ `/p/P003?tab=docs`：填意識、A、R →「現場評估完成，確認 ISBAR」→ 路徑「聯絡特約醫療機構」→ 家屬通知「核准」→ 事故檔在同一 tab 展開。
+5. **草稿＋退回一次**：照護者對王伯講完、打「對，需要護理師現在來」→ 護理師 `/p/P001?tab=docs`「退回」→ 填理由 → 照護者補一句 → 回到審核。
+6. **超時升級**：讓一個審核停在「ISBAR 草稿待審核」→
    ```bash
    /opt/homebrew/opt/postgresql@17/bin/psql -h localhost -d record_follows_person -c "update threads set deadline = now() - interval '1 minute' where interrupt_type = 'nurse_review'"
    ```
-   → `/nurse` 按「立即掃描逾時」→ 卡片「已升級 1 次」。（或 `.env` 設 `NURSE_REVIEW_TIMEOUT_S=60`、重啟 API，60 秒後 worker 自動掃。）
-6. **巡診**：`http://localhost:3000/nurse/round` →「產生本月名單與 RoundPage」→ 名單異常優先、「掃一眼」→「確認名單，發布」→ `http://localhost:3000/doctor/round/P001` →「列印 A4」（Cmd+P 預覽一頁）→ 回巡診頁「填入示範醫囑」×3 →「送出醫囑」→ 三人注意事項（中文）與基線提案 →「確認更新基線」→ `http://localhost:3000/caregiver/notes?patient=P001` 本月三件事。
-7. API 文件：`http://localhost:8000/docs`。
+   → `curl -X POST localhost:8000/worker/scan` → 卡片「已升級 1 次」。
+7. **巡診**：護理師 `/nurse`「巡診準備 →」→「產生本月名單與 RoundPage」（活動列：roster_agent → trend_analyzer → familiarization_writer，約 1–2 分鐘）→「確認名單，發布」→ 切「醫師」→ `/doctor`「看一頁」→ RoundPage（footer 寫著 subagent 呼叫次數）→「列印 A4」→ 回護理師巡診頁「填入示範醫囑」×3 →「送出醫囑」→「確認更新基線」→ 照護者 `/p/P001?tab=docs` 本月三件事。
+8. **證據**：`http://localhost:8000/debug/trace/<thread_id>`（thread_id 在巡診頁與 `/nurse/inbox`），或 `cd apps/api && uv run python -m eval.trace_md <thread_id>`。API 文件 `http://localhost:8000/docs`。
 
 ## 交付物
 
-- GitHub main 可跑，CI 綠燈（api + web 兩個 job）；PR #1 graphs、#2 agents／API、#3 API 修正、#4 MODEL_PROVIDER=openai、#5 web 三介面＋UI 稽核、#6 zh-TW demo＋聊天式多輪 intake＋docs／CI／acceptance、#7 CI 順序修正。
-- `docs/`：ARCHITECTURE、兩張 mermaid、DECISIONS、design.md、UI_AUDIT、VIDEO、KNOWN_ISSUES、ACCEPTANCE（本檔）、img/（390px 截圖）。
+- GitHub main 可跑，CI 綠燈；PR #1 graphs、#2 agents／API、#3 API 修正、#4 MODEL_PROVIDER=openai、#5 web 三介面、#6 zh-TW＋聊天 intake、#7 CI 順序、#8 acceptance、**#9 本輪（真 agent 迴圈、talk 串流、病人頁 IA、活動列）**。
+- `docs/`：ARCHITECTURE（§1.1 對話串、§9.1 IA）、兩張 mermaid、DECISIONS、design.md、UI_AUDIT、VIDEO、KNOWN_ISSUES、TRACE_talk_red.md、TRACE_round.md、ACCEPTANCE（本檔）、img/（390／1280 截圖＋A4 PDF）。

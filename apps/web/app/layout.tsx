@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Noto_Sans_TC } from "next/font/google";
-import Link from "next/link";
+import { cookies } from "next/headers";
+import { Nav } from "@/components/nav";
+import { RedBannerGlobal } from "@/components/red-banner-global";
+import { isRole } from "@/lib/role";
 import "./globals.css";
 
 const noto = Noto_Sans_TC({ variable: "--font-noto", subsets: ["latin"], weight: ["400", "500", "700"], display: "swap" });
@@ -14,33 +17,17 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width", initialScale: 1 };
 
-const NAV = [
-  { href: "/caregiver", label: "照護者" },
-  { href: "/nurse", label: "護理師" },
-  { href: "/doctor", label: "醫師" },
-];
-
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const raw = (await cookies()).get("role")?.value;
+  const role = isRole(raw) ? raw : null;
   return (
     <html lang="zh-TW" className={`${noto.variable} ${inter.variable} ${mono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-bg text-ink">
         <a href="#main" className="skip-link">跳到主要內容</a>
         <header className="no-print border-b border-line bg-bg">
-          <nav aria-label="主要" className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2">
-            <Link href="/" className="mr-auto min-w-0 truncate text-sm font-medium text-ink hover:text-primary sm:text-base" translate="no">
-              一份能跟著人走的紀錄
-            </Link>
-            {NAV.map((n) => (
-              <Link
-                key={n.href}
-                href={n.href}
-                className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-2 text-sm text-ink-2 hover:bg-surface hover:text-ink sm:px-3"
-              >
-                {n.label}
-              </Link>
-            ))}
-          </nav>
+          <Nav role={role} />
         </header>
+        {role === "nurse" && <RedBannerGlobal />}
         <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
           {children}
         </main>

@@ -234,3 +234,16 @@ Scope: apps/web only (+ docs/design.md §1 note, docs/DECISIONS.md row). API pay
 ### Left / notes
 - Night-theme values for the four `*-hover` tokens were not specified; only the three `*-ink` night variants were added. Night theme has no toggle yet, so no visible effect today.
 - `TenSecondConfirm` "修改並確認" / "退回照護者" and review-page "退回照護者" keep their `disabled` gating on empty text — not in the original findings; unchanged.
+
+## 2026-09-05 · 病人頁資訊架構改版（web-design-guidelines 稽核，subagent 唯讀審查）
+
+範圍：`app/page.tsx`、`app/layout.tsx`、`components/nav.tsx`、`red-banner-global.tsx`、角色首頁三頁、`app/p/[id]` 與 `components/patient/*`、`components/nurse/*`、`incident-file-view.tsx`、`round-page-view.tsx`、`globals.css`。
+
+| 類別 | 結果 |
+|---|---|
+| Focus states、Layout/390px、Animation/reduced motion、Locale | PASS |
+| Accessibility、Forms、Touch targets、Contrast、Print、Performance | 初審 FAIL → 依下表修正 |
+
+**已修**：`aria-current` 誤用（nav）；`readRole()`／`window.location.hash` 在 render 讀 → 改 `useSyncExternalStore`／effect（避免 hydration 不一致）；維度篩選「全部」補 `aria-pressed`；活動列切換鈕 32px → 44px、篩選 chips 36px → 44px、RoundPage「N 筆紀錄」24px → 44px；紅燈橫幅 CTA `bg-danger` 白字 4.40:1 → `bg-danger-ink`（≥6:1），移除 `hover:opacity-90`；placeholder `text-ink-2/70`（2.97:1）→ `text-ink-2`（5.4:1）；活動列虛線框 `primary/40` → `primary`（非文字 ≥3:1）；聊天輸入補 `inputMode`／`enterKeyHint`，串流中仍可打字（只鎖送出）；`aria-live` 只包正在串流的區塊；print 選擇器改為 `body:has(.print-page) main section:not(:has(.print-page)):not(.print-page section)`；`scroll-padding-bottom` 給 sticky 動作列；文件 tab 死碼；照護者／醫師首頁空狀態；頂欄只剩「角色 · 住民」（切換角色移到角色首頁頁尾）。
+
+**保留（記 KNOWN_ISSUES）**：#19 角色首頁每位住民各打一次 `/patients/{id}/summary`／`/trends`（N+1，三人可接受）；#20 護理師病人頁同時有三個 5 秒輪詢、未在分頁隱藏時暫停；#21 「改一句／退回」按鈕在文字為空時 disabled 而非就地提示（與 review-panel 的確認鍵作法不一致）。

@@ -7,17 +7,22 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from record_schema import DIMENSION_LABELS, DIMENSIONS, FollowupQA
 
+from agents.personal import AgentDidNotDeliver
+from core.llm import LLMUnavailable
 from core.settings import get_settings
+from core.trace import for_ids, tagged
 from graphs import registry, runner, worker
 from graphs.checkpointer import is_postgres
 from ingest import discharge_pdf, doctor_order
 from ingest import vitals as vitals_ingest
 from ingest.caregiver_speech import ingest as ingest_speech
+from record import conversation as conv
 from record.store import get_store
 from red_flags.rules import RULES, render_lines
 
@@ -35,6 +40,23 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="一份能跟著人走的紀錄 API", version="0.1.0", lifespan=lifespan)
+
+
+@app.exception_handler(LLMUnavailable)
+async def _llm_unavailable(_req, exc: LLMUnavailable):
+    """No model / model call failed → visible error, never a rule fallback."""
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=503, content={"detail": f"LLM 未設定或呼叫失敗：{exc}"})
+
+
+@app.exception_handler(AgentDidNotDeliver)
+async def _agent_failed(_req, exc: AgentDidNotDeliver):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=503, content={"detail": f"agent 沒有產出：{exc}"})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -164,6 +186,200 @@ def latest_caregiver_notes(patient_id: str) -> dict[str, Any]:
     return notes[-1].model_dump(mode="json")
 
 
+class RoundStartIn(BaseModel):
+    round_date: str | None = None
+
+
+# --- patient page: one load for who / timeline / docs / talk ---------------------------------
+
+
+def _pending_for(patient_id: str) -> list[dict[str, Any]]:
+    items = []
+    for row in registry.list_threads(status="interrupted"):
+        if row.get("patient_id") != patient_id:
+            continue
+        snap = runner.snapshot(row["thread_id"])
+        vals = snap["values"]
+        items.append(
+            {
+                "thread_id": row["thread_id"],
+                "graph": snap["graph"],
+                "interrupt_type": (snap["interrupt"] or {}).get("type"),
+                "red_flag": bool((vals.get("red_flags") or {}).get("notify_now")),
+                "red_flag_lines": render_lines(
+                    __import__("record_schema").RedFlagResult.model_validate(vals["red_flags"])
+                )
+                if vals.get("red_flags")
+                else [],
+                "minimal_sbar": vals.get("minimal_sbar"),
+                "sbar": vals.get("sbar"),
+                "caregiver_reports": (vals.get("caregiver_reports") or [])[-5:],
+                "deadline": vals.get("deadline"),
+                "escalation_level": vals.get("escalation_level", 0),
+                "updated_at": vals.get("updated_at"),
+            }
+        )
+    return items
+
+
+@app.get("/patients/{patient_id}/summary")
+def patient_summary(patient_id: str, x_role: str | None = Header(default=None)) -> dict[str, Any]:
+    """who / timeline / docs / talk in one call. Caregivers only see what they recorded."""
+    from datetime import date, timedelta
+
+    from agents.subagents import trend_analyzer
+
+    store = get_store()
+    if not store.exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    role = (x_role or "nurse").lower()
+    profile = store.load_profile(patient_id)
+    baseline = store.load_baseline(patient_id)
+    timeline = store.load_timeline(patient_id)
+    if role == "caregiver":
+        cg = profile.caregiver_code_name
+        timeline = [
+            e
+            for e in timeline
+            if e.kind == "observation"
+            and (
+                e.observation.domains
+                and any(
+                    dv.provenance.author in (cg, "intake_agent")
+                    for dv in e.observation.domains.values()
+                )
+                or True
+            )
+        ]
+        timeline = [e for e in timeline if e.kind == "observation"]
+    docs = store.load_documents(patient_id)
+    if role == "caregiver":
+        docs = [d for d in docs if d.doc_type == "caregiver_notes"]
+    until = datetime.now(UTC).date()
+    since = until - timedelta(days=14)
+    obs = store.load_timeline(patient_id, since=since, kinds={"observation"})
+    trend = trend_analyzer.analyze(patient_id, obs, [], since, until, baseline=baseline)  # type: ignore[arg-type]
+    msgs = conv.messages(patient_id)
+    today = date.today().isoformat()
+    return {
+        "role": role,
+        "profile": profile.model_dump(mode="json"),
+        "baseline": baseline.model_dump(mode="json"),
+        "timeline": [e.model_dump(mode="json") for e in timeline],
+        "documents": [d.model_dump(mode="json") for d in docs],
+        "conversation": [m.model_dump(mode="json") for m in msgs],
+        "session": (conv.session(patient_id).model_dump() if conv.session(patient_id) else None),
+        "pending": _pending_for(patient_id) if role != "caregiver" else [],
+        "changed_dimensions": [line.dimension for line in trend.lines if line.is_abnormal],
+        "trend_lines": [line.model_dump(mode="json") for line in trend.lines],
+        "recorded_today": any(m.role == "caregiver" and m.ts[:10] == today for m in msgs)
+        or any(e.kind == "observation" and e.ts.date().isoformat() == today for e in timeline),
+        "notes_count": len(
+            next(
+                (d.items for d in reversed(store.load_documents(patient_id, "caregiver_notes"))), []
+            )
+        ),
+    }
+
+
+@app.get("/patients/{patient_id}/conversation")
+def patient_conversation(patient_id: str, limit: int = 200) -> dict[str, Any]:
+    return {
+        "messages": [m.model_dump(mode="json") for m in conv.messages(patient_id, limit)],
+        "session": (conv.session(patient_id).model_dump() if conv.session(patient_id) else None),
+    }
+
+
+class TalkIn(BaseModel):
+    text: str
+    role_view: str = "caregiver"
+
+
+def _sse(event: str, data: Any) -> str:
+    import json as _json
+
+    return f"event: {event}\ndata: {_json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+
+@app.post("/patients/{patient_id}/talk")
+def patient_talk(patient_id: str, body: TalkIn) -> StreamingResponse:
+    """One caregiver message → SSE: activity events (node/llm/tool/red), streamed reply, done."""
+    from graphs.talk import run_turn
+
+    if not get_store().exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    if not body.text.strip():
+        raise HTTPException(400, "empty message")
+
+    def gen():
+        import time as _time
+
+        final: dict[str, Any] | None = None
+        try:
+            for kind, data in run_turn(patient_id, body.text, body.role_view):
+                if kind == "event":
+                    yield _sse("event", data)
+                elif kind == "error":
+                    yield _sse("error", data)
+                    return
+                else:
+                    final = data
+        except Exception as e:  # noqa: BLE001 - surface to the UI, never fall back
+            log.exception("talk turn failed")
+            yield _sse("error", {"detail": f"{type(e).__name__}: {e}"})
+            return
+        if final is None:
+            yield _sse("error", {"detail": "no result"})
+            return
+        for line in final.get("system_lines") or []:
+            yield _sse("system", {"text": line})
+        text = final.get("reply") or ""
+        for i in range(0, len(text), 3):  # 逐字串流
+            yield _sse("token", {"text": text[i : i + 3]})
+            _time.sleep(0.02)
+        events = final.get("events") or []
+        yield _sse(
+            "done",
+            {
+                "reply": text,
+                "kind": final.get("reply_kind"),
+                "meta": final.get("reply_meta"),
+                "phase": final.get("phase"),
+                "red": final.get("red"),
+                "thread_id": final.get("thread_id"),
+                "sent": final.get("sent"),
+                "steps": len(events),
+                "ms": sum(e.get("ms", 0) for e in events if e.get("type") == "node_end"),
+                "session": (
+                    conv.session(patient_id).model_dump() if conv.session(patient_id) else None
+                ),
+            },
+        )
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/round/start/stream")
+def round_start_stream(body: RoundStartIn) -> StreamingResponse:
+    """Round prep with live agent activity (node / subagent events), then the interrupt snapshot."""
+
+    def gen():
+        for kind, data in runner.start_stream(
+            "round", "ALL", {"round_date": body.round_date or datetime.now(UTC).date().isoformat()}
+        ):
+            yield _sse(kind, data)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 # --- trends (nurse dashboard sparklines) -----------------------------------------------------
 
 
@@ -229,6 +445,7 @@ class TurnIn(BaseModel):
     turns: list[dict[str, Any]]
     seems_different: bool = False
     incidents: list[str] = Field(default_factory=list)
+    dialog_id: str | None = None
 
 
 @app.post("/intake/turn")
@@ -241,13 +458,14 @@ def intake_turn(body: TurnIn) -> dict[str, Any]:
         raise HTTPException(404, "unknown patient")
     if not body.turns:
         raise HTTPException(400, "turns must contain the caregiver's first sentence")
-    res = run_dialog(
-        [Turn.model_validate(x) for x in body.turns],
-        store.load_profile(body.patient_id),
-        store.load_baseline(body.patient_id),
-        seems_different=body.seems_different,
-        incidents=body.incidents,
-    )
+    with tagged(dialog_id=body.dialog_id):
+        res = run_dialog(
+            [Turn.model_validate(x) for x in body.turns],
+            store.load_profile(body.patient_id),
+            store.load_baseline(body.patient_id),
+            seems_different=body.seems_different,
+            incidents=body.incidents,
+        )
     return res.model_dump(mode="json")
 
 
@@ -256,6 +474,7 @@ def intake_turn(body: TurnIn) -> dict[str, Any]:
 
 class StartIn(BaseModel):
     patient_id: str
+    dialog_id: str | None = None
     text: str = ""
     language: str = "zh-TW"
     turns: list[dict[str, Any]] = Field(default_factory=list)
@@ -272,6 +491,7 @@ def _raw(body: StartIn) -> dict[str, Any]:
     text = body.text or "。".join(str(x.get("text", "")) for x in body.turns if x.get("text"))
     return {
         "text": text,
+        "dialog_id": body.dialog_id,
         "turns": body.turns,
         "incidents": body.incidents,
         "language": body.language,
@@ -303,10 +523,6 @@ def shift_start(body: StartIn) -> dict[str, Any]:
     return snap
 
 
-class RoundStartIn(BaseModel):
-    round_date: str | None = None
-
-
 @app.post("/round/start")
 def round_start(body: RoundStartIn) -> dict[str, Any]:
     return runner.start(
@@ -336,14 +552,136 @@ def thread_state(thread_id: str) -> dict[str, Any]:
         raise HTTPException(404, f"unknown thread: {e}") from e
 
 
+def _system_events_after(snap: dict[str, Any], payload: dict[str, Any]) -> None:
+    """Nurse / round actions show up in the resident's conversation as centered system lines."""
+    vals = snap.get("values", {})
+    who = payload.get("nurse_id") or payload.get("head_nurse") or "護理師"
+    try:
+        if snap["graph"] == "shift" and snap["status"] == "done":
+            conv.system_event(
+                vals["patient_id"],
+                f"護理師 {who} 已確認今天的紀錄。",
+                {"thread_id": snap["thread_id"]},
+            )
+        elif snap["graph"] == "path_a" and snap["status"] == "done":
+            conv.system_event(
+                vals["patient_id"],
+                f"護理師 {who} 已完成事故紀錄與家屬通知。",
+                {"thread_id": snap["thread_id"]},
+            )
+        elif snap["graph"] == "round" and snap["status"] == "done":
+            for o in vals.get("orders", []):
+                conv.system_event(
+                    o["patient_id"],
+                    f"醫囑已更新：{o['raw_text'][:60]}",
+                    {"thread_id": snap["thread_id"]},
+                )
+    except Exception as e:  # noqa: BLE001
+        log.warning("system event failed: %s", e)
+
+
 @app.post("/threads/{thread_id:path}/resume")
 def thread_resume(thread_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        return runner.resume(thread_id, payload)
+        snap = runner.resume(thread_id, payload)
+        _system_events_after(snap, payload)
+        return snap
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except AssertionError as e:
         raise HTTPException(422, str(e)) from e
+
+
+class CaregiverReportIn(BaseModel):
+    turns: list[dict[str, Any]]
+    incidents: list[str] = Field(default_factory=list)
+    seems_different: bool = False
+
+
+@app.post("/threads/{thread_id:path}/caregiver-report")
+def caregiver_report(thread_id: str, body: CaregiverReportIn) -> dict[str, Any]:
+    """紅燈後對話不結束：照護者的每個回答即時寫進 caregiver_section，護理師端同步更新。"""
+    try:
+        return runner.update_caregiver(thread_id, body.turns, body.incidents, body.seems_different)
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
+
+
+@app.get("/debug/trace/{thread_id:path}")
+def debug_trace(thread_id: str) -> dict[str, Any]:
+    """One conversation's agent calls: per-turn prompt summary, output, reason, duration."""
+    try:
+        snap = runner.snapshot(thread_id)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(404, f"unknown thread: {e}") from e
+    vals = snap["values"]
+    dialog_id = (vals.get("raw_input") or {}).get("dialog_id")
+    run_ids = {m.get("run_id") for m in vals.get("agent_runs", []) if m.get("run_id")}
+    hr = ((vals.get("documents") or {}).get("handoff_agent_run") or {}).get("run_id")
+    if hr:
+        run_ids.add(hr)
+    entries = for_ids(thread_id=thread_id, dialog_id=dialog_id, run_ids=run_ids or None)
+    turns = [
+        {
+            "ts": e["ts"],
+            "prompt_summary": (e.get("input") or "")[:400],
+            "output": e.get("output"),
+            "reason": e.get("reason"),
+            "duration_ms": e.get("duration_ms"),
+            "error": e.get("error"),
+            "provider": e.get("provider"),
+        }
+        for e in entries
+        if e["kind"] == "llm.next_question"
+    ]
+    llm_calls = [
+        {
+            "ts": e["ts"],
+            "kind": e["kind"],
+            "provider": e.get("provider"),
+            "duration_ms": e.get("duration_ms"),
+            "prompt_summary": (e.get("input") or e.get("prompt") or "")[:300],
+            "output": e.get("output"),
+            "reason": e.get("reason"),
+            "error": e.get("error"),
+        }
+        for e in entries
+        if e["kind"].startswith("llm.")
+    ]
+    agent_runs = [e for e in entries if e["kind"] == "deep_agent.run"]
+    tool_calls = [e for e in entries if e["kind"] == "subagent.tool"]
+    return {
+        "thread_id": thread_id,
+        "dialog_id": dialog_id,
+        "graph": snap["graph"],
+        "status": snap["status"],
+        "turns": turns,
+        "llm_calls": llm_calls,
+        "agent_runs": agent_runs,
+        "subagent_tool_calls": tool_calls,
+        "counts": {
+            "llm_calls": len(llm_calls),
+            "agent_runs": len(agent_runs),
+            "subagent_tool_calls": len(tool_calls),
+        },
+    }
+
+
+@app.get("/trace")
+def get_trace(
+    kind: str | None = None, limit: int = 100, contains: str | None = None
+) -> list[dict[str, Any]]:
+    """Agent / LLM call trace (also written to records/_trace/*.jsonl)."""
+    from core.trace import recent
+
+    return recent(kind=kind, limit=min(limit, 500), contains=contains)
+
+
+def _code_name(pid: str | None) -> str | None:
+    store = get_store()
+    if not pid or not store.exists(pid):
+        return None
+    return store.load_profile(pid).code_name
 
 
 @app.get("/nurse/inbox")
@@ -360,6 +698,9 @@ def nurse_inbox() -> dict[str, Any]:
                 "thread_id": row["thread_id"],
                 "graph": row["graph"],
                 "patient_id": vals.get("patient_id", "ALL"),
+                "code_name": _code_name(vals.get("patient_id")),
+                "caregiver_reports": (vals.get("caregiver_reports") or [])[-5:],
+                "turn_count": len(vals.get("caregiver_reports") or []),
                 "interrupt_type": itype,
                 "red_flag": red,
                 "red_flag_lines": render_lines(

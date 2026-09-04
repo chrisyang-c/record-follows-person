@@ -8,6 +8,7 @@ rules, and written only via record.write_timeline as approved + confirmed_by nur
 from __future__ import annotations
 
 import json
+import random
 import shutil
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -21,7 +22,7 @@ sys.path.insert(0, str(REPO / "apps" / "api"))
 
 from agents.comparator import compare  # noqa: E402
 from core.ids import new_id  # noqa: E402
-from core.llm import get_llm  # noqa: E402
+from core.llm import MockLLM  # noqa: E402  (seed fixtures use the deterministic template double)
 from core.settings import get_settings  # noqa: E402
 from graphs.path_a import ROUTE_LABELS, compile_incident  # noqa: E402
 from ingest import doctor_order, vitals as vitals_ingest  # noqa: E402
@@ -52,6 +53,55 @@ from record_schema import (  # noqa: E402
     Vitals,
 )
 from red_flags.rules import RedFlagInput, evaluate  # noqa: E402
+
+
+_ZH_NUM = ["零", "一", "兩", "三", "四", "五", "六", "七", "八", "九", "十"]
+
+
+def _intake_phrase(rng: random.Random, v: float) -> str:
+    n = max(0, min(10, round(v * 10)))
+    table = {
+        10: ["飯都吃完", "三餐都吃完", "吃得很好，都吃完"],
+        9: ["吃了九分", "差不多都吃完，剩一點"],
+        8: ["吃了八分", "吃八分左右"],
+        7: ["吃了七分", "吃七分左右"],
+        6: ["吃六分", "吃了六分"],
+        5: ["只吃一半", "吃一半"],
+        4: ["吃四分", "吃不到一半"],
+        3: ["吃三分", "只吃三分"],
+    }
+    return rng.choice(table.get(n, ["只吃幾口"]))
+
+
+def _sleep_phrase(rng: random.Random, n: int) -> str:
+    table = {
+        0: ["睡得好，沒起來", "一覺到天亮"],
+        1: ["晚上起來一次上廁所", "晚上起來一次"],
+        2: ["晚上起來兩次", "晚上起來兩次上廁所"],
+        3: ["晚上起來三次", "晚上起來三次，說睡不著"],
+        4: ["晚上起來四次，睡不好", "晚上起來四次"],
+    }
+    return rng.choice(table.get(min(n, 5), ["晚上起來五次，幾乎沒睡"]))
+
+
+def generate_days(story: dict, n_days: int, seed: int) -> list[list[str]]:
+    """Realistic 14-day curves with seeded jitter (no two-value alternation)."""
+    rng = random.Random(seed)
+    i0, i1 = story["intake"]
+    s0, s1 = story["sleep"]
+    w0, w1 = story["water"]
+    days: list[list[str]] = []
+    for i in range(n_days):
+        f = i / max(n_days - 1, 1)
+        intake = max(0.1, min(1.0, i0 + (i1 - i0) * f + rng.gauss(0, 0.06)))
+        sleep = max(0, min(5, round(s0 + (s1 - s0) * f + rng.gauss(0, 0.55))))
+        water = rng.randint(w0, w1)
+        day = f"{_intake_phrase(rng, intake)}，喝了{_ZH_NUM[water]}杯水"
+        if rng.random() < 0.6:
+            day += f"，{rng.choice(story['extras'])}"
+        night = _sleep_phrase(rng, sleep)
+        days.append([day, night])
+    return days
 
 
 def _dt(d: date, hhmm: str) -> datetime:
@@ -134,7 +184,10 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
         # --- 14 days × 2 shifts -----------------------------------------------------------------
         recent: list[Observation] = []
         incident_cfg = r.get("incident")
-        for i, (day_text, night_text) in enumerate(r["days"], start=1):
+        days = generate_days(r["story"], 14, seed={"P001": 41, "P002": 42, "P003": 43}[pid])
+        if incident_cfg:
+            days[incident_cfg["day"] - 1][1] = "INCIDENT"
+        for i, (day_text, night_text) in enumerate(days, start=1):
             d = day1 + timedelta(days=i - 1)
             for shift, text, hhmm in (("day", day_text, "08:30"), ("night", night_text, "20:30")):
                 if text == "INCIDENT":
@@ -148,7 +201,7 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
                                  on_anticoagulant=profile.on_anticoagulant)
                 )
                 assert not rf.notify_now, f"seed sentence unexpectedly red: {text}"
-                sbar = get_llm().minimal_sbar(obs, deltas)
+                sbar = MockLLM().minimal_sbar(obs, deltas)
                 sbar.status, sbar.confirmed_by = "approved", nurse
                 entry = Observation(
                     id=new_id("obs", ts), patient_id=pid, ts=ts, status="approved", confirmed_by=nurse,
@@ -183,7 +236,7 @@ def _seed_incident(store, profile, baseline, recent, cfg, d, nurses, lang) -> No
     rf = evaluate(RedFlagInput(observation=obs, vitals=oa.vitals, baseline_vitals=baseline.vitals_usual,
                                on_anticoagulant=profile.on_anticoagulant))
     recent_lines = [f"{o.ts.date()} {o.minimal_sbar.s[:50] if o.minimal_sbar else o.observation.raw_text[:50]}" for o in recent[-4:]]
-    isbar: ISBAR = get_llm().draft_isbar(profile, baseline, obs, deltas, recent_lines)
+    isbar: ISBAR = MockLLM().draft_isbar(profile, baseline, obs, deltas, recent_lines)
     isbar.author = "nurse"
     isbar.nurse_assessment = cfg["nurse_assessment"]
     isbar.nurse_recommendation = cfg["nurse_recommendation"]

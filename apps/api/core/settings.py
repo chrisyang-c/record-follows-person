@@ -65,7 +65,9 @@ class Settings(BaseSettings):
         if self.MODEL_PROVIDER == "openai" and self.OPENAI_API_KEY:
             from langchain_openai import ChatOpenAI
 
-            return ChatOpenAI(model=self.MODEL_PINNED, temperature=0, api_key=self.OPENAI_API_KEY)
+            return ChatOpenAI(
+                model=self.MODEL_PINNED, temperature=0, api_key=self.OPENAI_API_KEY, max_retries=6
+            )
         if self.MODEL_PROVIDER == "anthropic" and self.ANTHROPIC_API_KEY:
             from langchain_anthropic import ChatAnthropic
 

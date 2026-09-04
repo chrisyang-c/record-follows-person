@@ -47,6 +47,10 @@ PersonRecord（一人一份，跟著人走）
 
 ---
 
+### 1.1 對話串（conversation）與 timeline 的關係
+
+每位住民一條持續的對話（`records/{pid}/conversation.jsonl`），每一輪（照護者原話 `caregiver_said`、agent 的追問／摘要 `ai_extracted`、系統事件 `system_derived`）在寫入時同時寫一行 provenance，並在病人頁「紀錄」tab 與 timeline 一起顯示。**但它不是 timeline**：CLAUDE.md §1.2／§4／§11 規定 timeline 只能經 `timeline_write` 寫入 `status="approved"` 且有 `confirmed_by` 的內容，所以對話串放在 timeline 旁邊、以 provenance 連結，護理師確認後才由 Path A／B 的 `timeline_write` 產生正式的 Observation／Incident。Agent 活動列（每輪的節點／LLM／subagent 事件）存在 agent 訊息的 `meta.activity`，同一份內容也是 `GET /debug/trace/{thread_id}` 的來源。
+
 ## 2. 輸入通道：他的紀錄從哪裡來
 
 | 通道 | 來源 | 進來的形式 | 誰確認 | 狀態 |
@@ -60,7 +64,7 @@ PersonRecord（一人一份，跟著人走）
 | 6 | 健保雲端藥歷／健康存摺 | 授權匯入 | 系統 | 第二階段 |
 | 7 | 感測器（離床、跌倒偵測） | 事件流 | 自動 | 第三階段 |
 
-每條通道各有一個 **Ingest 子 agent**，工作只有一個：把來源的格式翻成八維度＋provenance，寫進 timeline。它們不判斷、不寫文章。
+每條通道各有一個 **Ingest 子 agent**，工作只有一個：把來源的格式翻成八維度＋provenance，寫進 timeline。它們不判斷、不寫文章。所有 agent／LLM 呼叫都留 trace（`core/trace.py`）。
 
 ---
 
@@ -99,7 +103,7 @@ Timeline Curator 整理、Baseline Comparator 比對、Trend Analyzer 找變化�
 **輸入端**
 1. **Intake Agent（對話式引導）**
    輸入：照護者語音／文字／圖片，任何語言。
-   做：轉文字、拆成八維度、依八維度判斷缺什麼就問：一次只問一題、每題 2–4 個快速回覆、一定有「不知道」；追問到八維度足夠，上限 4 題；已提到的維度不再問；紅燈關鍵字一出現立即中止追問。結束時出「我理解的是這樣」摘要卡（照護者口吻）。state 記 `asked_dimensions`、`turn_count`。（demo 語言 zh-TW；翻譯／多語為第二階段）
+   做：轉文字、拆成八維度；每一題都由 LLM 依「八維度目前狀態、profile、基線、已問過的題、事件／紅燈事實、預算」決定問什麼、怎麼問並附 reason（進 trace）；沒有寫死的題目清單、沒有快速回覆；追問到八維度足夠，上限 4 題；已提到的維度不再問；沒有模型或呼叫失敗就報錯停止，不退回規則。紅燈不結束對話、只分岔：程式先通知護理師，agent 接著問跌倒等關鍵資訊，答案即時同步到護理師端。非紅燈結束時出「我理解的是這樣」摘要卡（照護者口吻）。state 記 `asked_dimensions`、`turn_count`。（demo 語言 zh-TW；翻譯／多語為第二階段）
    出：`StructuredObservation`，保留原話 `raw_text` 與 `language`。
    規則：不改照護者的口吻，不加判斷。
 
@@ -140,7 +144,7 @@ Timeline Curator 整理、Baseline Comparator 比對、Trend Analyzer 找變化�
    ② 自上次巡診以來變了什麼（異常優先，附趨勢圖，每條指回 timeline）
    ③ 上次醫囑做了沒、有效嗎
    ④ 請醫師確認的事（提問式）
-   一頁上限。護理長可增刪，不需醫師輸入。
+   一頁上限。護理長可增刪，不需醫師輸入。①②③④ 的句子由這個 subagent（模型）依 timeline 與 baseline 寫（工具：analyze_trends、get_round_context、submit_round_page；程式只驗證「② 只寫有變化的維度」「④ 只提問」等規則），每句附可點的「N 筆紀錄」連結，圖表只畫有變化的兩個維度，頁底寫由誰產生、呼叫了什麼幾次。
 
 **周邊**
 - **Roster Agent**：巡診前掃全部住民的 Trend，排出「這個月該看誰」名單與排序。
@@ -158,7 +162,7 @@ START
  → Intake Agent（對話式，多輪追問，上限 4 題）
  → Baseline Comparator
  → Triage Agent
-     ├─ 紅燈 → 推播護理師 → 護理師到場 → 後送 or 119 → Handoff Packager → END（緊急）
+     ├─ 紅燈 → 推播護理師（程式）→ Intake 繼續問規則必問題，答案即時進 caregiver_section → 護理師到場 → 後送 or 119 → Handoff Packager → END（緊急）
      └─ urgent → 續
  → Caregiver Section Writer → 照護者區塊定稿（照護者看一眼「是這個意思」）
  → 推播當班護理師
@@ -265,6 +269,10 @@ Demo 資料：3 位住民、各 14 天觀察、其中 1 位有一次急症。這
 這樣評審看到的是「一個人的紀錄和替他說話的 agent」，照護者流程是它第一次開口的樣子。
 
 ---
+
+### 9.1 畫面資訊架構（2026-09-05）
+
+`/` 選角色（cookie）→ 角色首頁（照護者：住民卡；護理師：紅燈橫幅 → 等我確認 → 今日總覽 ＋ 巡診準備；醫師：巡診名單）→ 病人頁 `/p/{id}?tab=who|timeline|docs|talk`。病人頁是這份紀錄的唯一入口；`talk` 是 `graphs/talk.py`（每句一個小 LangGraph：load_person_record → record_caregiver_message → intake_agent → baseline_comparator → red_flag_rules → notify_nurse → decide_next → reply），節點以 `get_stream_writer()` 發自訂事件，API 以 SSE（`POST /patients/{id}/talk`）轉給畫面：活動事件 → 逐字回覆 → done。紅燈時 `notify_nurse` 直接 `runner.start("path_a")`／`update_caregiver`，對話不中斷。巡診 `POST /round/start/stream` 同樣串流 roster_agent → trend_analyzer → familiarization_writer 的每一步。
 
 ## 10. 評審會問的三題
 

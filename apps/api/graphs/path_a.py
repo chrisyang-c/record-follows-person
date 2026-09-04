@@ -31,12 +31,12 @@ from record_schema import (
     Vitals,
 )
 
-from agents.subagents import handoff_packager as handoff_packager_mod
 from core.ids import new_id
 from core.llm import get_llm
 from core.settings import get_settings
 from graphs.common import (
     baseline_comparator,
+    build_caregiver_section,
     deadline_iso,
     guarded_timeline_write,
     intake_agent,
@@ -69,6 +69,7 @@ class PathAState(TypedDict, total=False):
     caregiver_addenda: Annotated[list[str], operator.add]
     asked_dimensions: list[str]
     turn_count: int
+    caregiver_reports: list[dict[str, Any]]
     profile: dict[str, Any]
     baseline: dict[str, Any]
     recent_lines: list[str]
@@ -187,32 +188,12 @@ def compile_incident(
 
 
 def caregiver_section_writer(state: PathAState) -> dict[str, Any]:
-    obs = _obs(state)
-    raw = state["raw_input"]
-    profile = Profile.model_validate(state["profile"])
-    cs = CaregiverSection(
-        raw_text=obs.raw_text,
-        language=obs.language,
-        translation_zh=obs.translation_zh,
-        domains=obs.domains,
-        seems_different=obs.seems_different,
-        incident_flags=obs.incident_flags,
-        followups=obs.followups,
-        unknown=obs.unknown,
-        image_summary="影像摘要（固定 mock）：已附照片，請護理師現場確認。"
-        if raw.get("media_refs")
-        else None,
-        caregiver_confirmed_meaning=raw.get("caregiver_confirmed_meaning"),
-        provenance=Provenance(
-            source="caregiver_said",
-            author=raw.get("caregiver_id") or profile.caregiver_code_name,
-            ts=datetime.now(UTC),
-            language_original=obs.language,
-        ),
-    )
+    cs = build_caregiver_section(state)
     return {
-        "caregiver_section": cs.model_dump(mode="json"),
-        "provenance": [_prov_line("caregiver_section", "caregiver_said", cs.provenance.author)],
+        "caregiver_section": cs,
+        "provenance": [
+            _prov_line("caregiver_section", "caregiver_said", cs["provenance"]["author"])
+        ],
         "status": "caregiver_section_ready",
         "updated_at": now_iso(),
     }
@@ -441,27 +422,23 @@ def _generated_from(state: PathAState) -> list[str]:
 
 
 def handoff_packager(state: PathAState) -> dict[str, Any]:
-    profile = Profile.model_validate(state["profile"])
-    baseline = Baseline.model_validate(state["baseline"])
+    """The personal deep agent delegates to its handoff_packager subagent (traced)."""
+    from agents import personal
+
+    pid = state["patient_id"]
     sbar = ISBAR.model_validate(state["sbar"])
     nurse_id = sbar.confirmed_by or "nurse"
-    page = handoff_packager_pkg(
-        profile, baseline, sbar, _generated_from(state), state["route_decision"], nurse_id
+    personal.PENDING[(pid, "handoff")] = {
+        "isbar": sbar.model_dump(mode="json"),
+        "generated_from": _generated_from(state),
+    }
+    artifact, meta = personal.run_task(
+        "handoff", pid, route=state["route_decision"], confirmed_by=nurse_id
     )
     docs = dict(state.get("documents") or {})
-    docs["handoff_page"] = page.model_dump(mode="json")
+    docs["handoff_page"] = artifact
+    docs["handoff_agent_run"] = meta
     return {"documents": docs, "status": "handoff_packaged", "updated_at": now_iso()}
-
-
-def handoff_packager_pkg(profile, baseline, sbar, generated_from, route, nurse_id):
-    return handoff_packager_mod.package(
-        profile,
-        baseline,
-        sbar,
-        generated_from,
-        route,
-        nurse_id,  # type: ignore[arg-type]
-    )
 
 
 def to_routine_timeline(state: PathAState) -> dict[str, Any]:
@@ -479,7 +456,7 @@ def incident_compiler(state: PathAState) -> dict[str, Any]:
         else None
     )
     if cs is None:  # red-flag path skipped caregiver_section_writer; compile it from facts now
-        cs = CaregiverSection.model_validate(caregiver_section_writer(state)["caregiver_section"])
+        cs = CaregiverSection.model_validate(build_caregiver_section(state))
     ns = NurseSection.model_validate(state["nurse_section"])
     rf = RedFlagResult.model_validate(state["red_flags"]) if state.get("red_flags") else None
     nurse_id = ns.confirmed_by or "nurse"

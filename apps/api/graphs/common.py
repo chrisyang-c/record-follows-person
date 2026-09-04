@@ -11,6 +11,7 @@ from record_schema import (
     FollowupQA,
     Observation,
     Profile,
+    Provenance,
     RedFlagResult,
     StructuredObservation,
 )
@@ -99,6 +100,7 @@ def intake_agent(state: dict[str, Any]) -> dict[str, Any]:
         baseline,
         seems_different=bool(raw.get("seems_different")),
         incidents=list(raw.get("incidents") or []),
+        plan_next=False,
     )
     obs = result.observation
     if raw.get("media_refs"):
@@ -113,9 +115,41 @@ def intake_agent(state: dict[str, Any]) -> dict[str, Any]:
         "structured_observation": obs.model_dump(mode="json"),
         "asked_dimensions": result.asked_dimensions,
         "turn_count": result.turn_count,
+        "caregiver_reports": [r.model_dump(mode="json") for r in result.reports],
         "status": "intake_done",
         "updated_at": now_iso(),
     }
+
+
+def build_caregiver_section(state: dict[str, Any]) -> dict[str, Any]:
+    """CaregiverSection from the current observation (used by caregiver_section_writer, by the
+    red path at incident_compiler, and by live caregiver reports while the nurse is on the way)."""
+    from record_schema import CaregiverSection
+
+    obs = StructuredObservation.model_validate(state["structured_observation"])
+    raw = state.get("raw_input", {})
+    profile = Profile.model_validate(state["profile"])
+    cs = CaregiverSection(
+        raw_text=obs.raw_text,
+        language=obs.language,
+        translation_zh=obs.translation_zh,
+        domains=obs.domains,
+        seems_different=obs.seems_different,
+        incident_flags=obs.incident_flags,
+        followups=obs.followups,
+        unknown=obs.unknown,
+        image_summary="影像摘要（固定 mock）：已附照片，請護理師現場確認。"
+        if raw.get("media_refs")
+        else None,
+        caregiver_confirmed_meaning=raw.get("caregiver_confirmed_meaning"),
+        provenance=Provenance(
+            source="caregiver_said",
+            author=raw.get("caregiver_id") or profile.caregiver_code_name,
+            ts=datetime.now(UTC),
+            language_original=obs.language,
+        ),
+    )
+    return cs.model_dump(mode="json")
 
 
 def baseline_comparator(state: dict[str, Any]) -> dict[str, Any]:
