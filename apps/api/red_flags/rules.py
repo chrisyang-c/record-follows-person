@@ -189,7 +189,9 @@ def render_lines(result: RedFlagResult) -> list[str]:
     """Human-facing lines: observed facts + suggested action. No level, no score."""
     lines: list[str] = []
     for h in result.hits:
-        suggestion = "建議立即聯絡護理師" if h.action == "notify_now" else "記錄並持續觀察，交班時告知護理師"
+        suggestion = (
+            "建議立即聯絡護理師" if h.action == "notify_now" else "記錄並持續觀察，交班時告知護理師"
+        )
         lines.append(f"觀察到：{'；'.join(h.facts)} → {suggestion}")
     if result.hits:
         lines.append(DISCLAIMER)

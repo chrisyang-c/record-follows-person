@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "FastAPI + LangGraph + deepagents backend for 一份能跟著人走的紀錄"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "fastapi>=0.141.1",
+    "fastapi[standard]>=0.141.1",
     "uvicorn[standard]>=0.34",
     "pydantic>=2.11,<3",
     "pydantic-settings>=2.6",
