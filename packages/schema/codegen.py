@@ -84,10 +84,11 @@ def ts_type(schema: dict[str, Any], defs: dict[str, Any]) -> str:
 
 
 def prop_lines(schema: dict[str, Any], defs: dict[str, Any]) -> list[str]:
-    required = set(schema.get("required", []))
+    # Serialization mode: pydantic always emits every field, so nothing is optional in TS.
+    # `| null` still appears for Optional fields.
     lines = []
     for name, prop in schema.get("properties", {}).items():
-        opt = "" if name in required else "?"
+        opt = ""
         desc = prop.get("description")
         comment = f"/** {desc} */ " if desc else ""
         lines.append(f"{comment}{name}{opt}: {ts_type(prop, defs)}")

@@ -24,51 +24,51 @@ export type Document = IncidentFile | HandoffPage | VisitPage | RoundPage | Care
 export interface Provenance {
   source: "caregiver_said" | "ai_extracted" | "nurse_assessed" | "nurse_confirmed" | "doctor_ordered" | "system_derived";
   author: string;
-  confirmed_by?: string | null;
+  confirmed_by: string | null;
   ts: string;
-  language_original?: "zh-TW" | "id" | "vi" | "en";
+  language_original: "zh-TW" | "id" | "vi" | "en";
 }
 
 export interface DimensionValue {
-  value?: string | number | null;
+  value: string | number | null;
   /** 照護者原話片段 */ raw_quote: string;
   provenance: Provenance;
   confidence: number;
   lang: "zh-TW" | "id" | "vi" | "en";
-  direction?: "up" | "down" | "same" | "unknown";
+  direction: "up" | "down" | "same" | "unknown";
 }
 
 export interface FollowupQA {
   question: string;
-  answer?: string | null;
-  answered_unknown?: boolean;
-  lang?: "zh-TW" | "id" | "vi" | "en";
+  answer: string | null;
+  answered_unknown: boolean;
+  lang: "zh-TW" | "id" | "vi" | "en";
 }
 
 /** Boolean facts a caregiver can report without instruments.
 
 Consumed by red_flags/rules.py. These are observations, not diagnoses. */
 export interface ObservationFlags {
-  consciousness_change?: boolean;
-  new_confusion_or_drowsiness?: boolean;
-  breathing_difficulty?: boolean;
-  chest_pain?: boolean;
-  fall_head_strike?: boolean;
-  cannot_get_up_after_fall?: boolean;
-  no_urine_24h?: boolean;
-  intake_sudden_drop?: boolean;
-  fever_feel?: boolean;
+  consciousness_change: boolean;
+  new_confusion_or_drowsiness: boolean;
+  breathing_difficulty: boolean;
+  chest_pain: boolean;
+  fall_head_strike: boolean;
+  cannot_get_up_after_fall: boolean;
+  no_urine_24h: boolean;
+  intake_sudden_drop: boolean;
+  fever_feel: boolean;
 }
 
 export interface Vitals {
-  temp_c?: number | null;
-  sbp?: number | null;
-  dbp?: number | null;
-  hr?: number | null;
-  rr?: number | null;
-  spo2?: number | null;
-  measured_by?: string | null;
-  ts?: string | null;
+  temp_c: number | null;
+  sbp: number | null;
+  dbp: number | null;
+  hr: number | null;
+  rr: number | null;
+  spo2: number | null;
+  measured_by: string | null;
+  ts: string | null;
 }
 
 export interface RedFlagHit {
@@ -76,105 +76,105 @@ export interface RedFlagHit {
   description: string;
   facts: string[];
   action: "notify_now" | "observe";
-  requires_validation?: boolean;
+  requires_validation: boolean;
 }
 
 export interface AllergyIntolerance {
   substance: string;
-  reaction?: string | null;
-  severity?: "mild" | "moderate" | "severe" | null;
+  reaction: string | null;
+  severity: "mild" | "moderate" | "severe" | null;
 }
 
 export interface Condition {
   display: string;
-  code?: string | null;
-  onset?: string | null;
+  code: string | null;
+  onset: string | null;
 }
 
 export interface Contact {
   name: string;
   relation: string;
   phone: string;
-  line_user_id?: string | null;
-  notify_first?: boolean;
+  line_user_id: string | null;
+  notify_first: boolean;
 }
 
 export interface Facility {
   name: string;
   phone: string;
-  contract_type?: string;
+  contract_type: string;
 }
 
 export interface MedicationStatement {
   name: string;
   dose: string;
   schedule: string;
-  is_anticoagulant?: boolean;
-  started?: string | null;
-  ordered_by?: string | null;
+  is_anticoagulant: boolean;
+  started: string | null;
+  ordered_by: string | null;
 }
 
 export interface BaselineEntry {
   dimension: "intake" | "elimination" | "function" | "cognition" | "sleep" | "skin" | "pain" | "vitals";
-  value?: string | number | null;
+  value: string | number | null;
   description: string;
   valid_from: string;
-  valid_to?: string | null;
+  valid_to: string | null;
   set_by: "caregiver_said" | "ai_extracted" | "nurse_assessed" | "nurse_confirmed" | "doctor_ordered" | "system_derived";
-  confirmed_by?: string | null;
+  confirmed_by: string | null;
   provenance: Provenance;
 }
 
 export interface BaselineDelta {
   domain: "intake" | "elimination" | "function" | "cognition" | "sleep" | "skin" | "pain" | "vitals";
   direction: "up" | "down" | "same" | "unknown";
-  magnitude?: number | null;
-  days?: number;
-  note?: string;
-  evidence_refs?: string[];
+  magnitude: number | null;
+  days: number;
+  note: string;
+  evidence_refs: string[];
 }
 
 export interface MinimalSBAR {
   /** 一行 S：現況（引用照護者） */ s: string;
   /** 一行 A：只寫與基線比的變化 */ a_change_vs_baseline: string;
-  status?: "draft" | "approved";
-  author?: "ai" | "nurse";
-  confirmed_by?: string | null;
-  nurse_edit?: string | null;
+  status: "draft" | "approved";
+  author: "ai" | "nurse";
+  confirmed_by: string | null;
+  nurse_edit: string | null;
 }
 
 export interface RedFlagResult {
-  hits?: RedFlagHit[];
-  notify_now?: boolean;
-  observe?: boolean;
-  disclaimer?: string;
+  hits: RedFlagHit[];
+  notify_now: boolean;
+  observe: boolean;
+  disclaimer: string;
 }
 
 export interface StructuredObservation {
   raw_text: string;
   language: "zh-TW" | "id" | "vi" | "en";
-  translation_zh?: string | null;
-  domains?: Record<string, DimensionValue>;
-  seems_different?: boolean;
-  incident_flags?: ("fall" | "medication_issue" | "choking" | "behavior")[];
-  flags?: ObservationFlags;
-  vitals_reported?: Vitals | null;
-  unknown?: ("intake" | "elimination" | "function" | "cognition" | "sleep" | "skin" | "pain" | "vitals")[];
-  followups?: FollowupQA[];
+  translation_zh: string | null;
+  domains: Record<string, DimensionValue>;
+  seems_different: boolean;
+  incident_flags: ("fall" | "medication_issue" | "choking" | "behavior")[];
+  flags: ObservationFlags;
+  vitals_reported: Vitals | null;
+  unknown: ("intake" | "elimination" | "function" | "cognition" | "sleep" | "skin" | "pain" | "vitals")[];
+  followups: FollowupQA[];
 }
 
 export interface OrderFollowUp {
-  done?: boolean | null;
-  effective?: boolean | null;
-  note?: string;
-  evidence_refs?: string[];
+  done: boolean | null;
+  effective: boolean | null;
+  note: string;
+  evidence_refs: string[];
 }
 
 export interface OrderItem {
   text: string;
   category: "medication" | "observation" | "diet" | "activity" | "referral" | "other";
-  target_dimension?: "intake" | "elimination" | "function" | "cognition" | "sleep" | "skin" | "pain" | "vitals" | null;
-  caregiver_instruction?: string | null;
+  target_dimension: "intake" | "elimination" | "function" | "cognition" | "sleep" | "skin" | "pain" | "vitals" | null;
+  caregiver_instruction: string | null;
 }
 
 export interface ISBAR {
@@ -182,20 +182,20 @@ export interface ISBAR {
   situation: string;
   background: string;
   /** AI 的 A：只寫與基線比的變化 */ ai_change_vs_baseline: string;
-  /** AI 的 R：只寫請確認事項（提問式） */ ai_questions_for_nurse?: string[];
-  /** A — 只有護理師寫 */ nurse_assessment?: string | null;
-  /** R — 只有護理師寫 */ nurse_recommendation?: string | null;
-  status?: "draft" | "approved";
-  author?: "ai" | "nurse";
-  confirmed_by?: string | null;
-  confirmed_at?: string | null;
+  /** AI 的 R：只寫請確認事項（提問式） */ ai_questions_for_nurse: string[];
+  /** A — 只有護理師寫 */ nurse_assessment: string | null;
+  /** R — 只有護理師寫 */ nurse_recommendation: string | null;
+  status: "draft" | "approved";
+  author: "ai" | "nurse";
+  confirmed_by: string | null;
+  confirmed_at: string | null;
 }
 
 export interface OnsiteAssessment {
   vitals: Vitals;
   consciousness: string;
-  wound?: string | null;
-  notes?: string | null;
+  wound: string | null;
+  notes: string | null;
   assessed_by: string;
   ts: string;
 }
@@ -203,22 +203,22 @@ export interface OnsiteAssessment {
 export interface CaregiverSection {
   raw_text: string;
   language: "zh-TW" | "id" | "vi" | "en";
-  translation_zh?: string | null;
-  domains?: Record<string, DimensionValue>;
-  seems_different?: boolean;
-  incident_flags?: ("fall" | "medication_issue" | "choking" | "behavior")[];
-  followups?: FollowupQA[];
-  unknown?: ("intake" | "elimination" | "function" | "cognition" | "sleep" | "skin" | "pain" | "vitals")[];
-  image_summary?: string | null;
-  caregiver_confirmed_meaning?: boolean | null;
+  translation_zh: string | null;
+  domains: Record<string, DimensionValue>;
+  seems_different: boolean;
+  incident_flags: ("fall" | "medication_issue" | "choking" | "behavior")[];
+  followups: FollowupQA[];
+  unknown: ("intake" | "elimination" | "function" | "cognition" | "sleep" | "skin" | "pain" | "vitals")[];
+  image_summary: string | null;
+  caregiver_confirmed_meaning: boolean | null;
   provenance: Provenance;
 }
 
 export interface FollowUp {
   due_at: string;
   question: string;
-  answer?: string | null;
-  answered_at?: string | null;
+  answer: string | null;
+  answered_at: string | null;
   set_by: string;
 }
 
@@ -226,23 +226,23 @@ export interface Notification {
   to: "family" | "hospital" | "119" | "nurse" | "second_nurse" | "head_nurse";
   channel: "line" | "phone" | "screen";
   content: string;
-  status?: "draft" | "approved" | "sent" | "displayed_only";
-  sent_at?: string | null;
-  approved_by?: string | null;
-  content_ref?: string | null;
+  status: "draft" | "approved" | "sent" | "displayed_only";
+  sent_at: string | null;
+  approved_by: string | null;
+  content_ref: string | null;
 }
 
 export interface NurseSection {
-  onsite_assessment?: OnsiteAssessment | null;
+  onsite_assessment: OnsiteAssessment | null;
   isbar: ISBAR;
-  confirmed_by?: string | null;
-  confirmed_at?: string | null;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
 }
 
 export interface TrendPoint {
   date: string;
-  value?: number | null;
-  label?: string;
+  value: number | null;
+  label: string;
 }
 
 export interface TrendLine {
@@ -250,9 +250,9 @@ export interface TrendLine {
   direction: "up" | "down" | "same" | "unknown";
   summary: string;
   window_days: number;
-  magnitude?: number | null;
-  evidence_refs?: string[];
-  is_abnormal?: boolean;
+  magnitude: number | null;
+  evidence_refs: string[];
+  is_abnormal: boolean;
 }
 
 export interface TrendSeries {
@@ -263,30 +263,30 @@ export interface TrendSeries {
 export interface OrderFollowUpLine {
   order_id: string;
   text: string;
-  done?: boolean | null;
-  effective?: boolean | null;
-  note?: string;
+  done: boolean | null;
+  effective: boolean | null;
+  note: string;
 }
 
 export interface Baseline {
-  entries?: BaselineEntry[];
-  vitals_usual?: Vitals | null;
+  entries: BaselineEntry[];
+  vitals_usual: Vitals | null;
 }
 
 export interface CaregiverNotes {
   id: string;
   patient_id: string;
   generated_at: string;
-  /** timeline ids */ generated_from?: string[];
-  status?: "draft" | "approved";
+  /** timeline ids */ generated_from: string[];
+  status: "draft" | "approved";
   author: string;
-  confirmed_by?: string | null;
+  confirmed_by: string | null;
   provenance: Provenance;
   audience: "doctor" | "er" | "nurse" | "caregiver" | "family" | "system";
-  doc_type?: "caregiver_notes";
+  doc_type: "caregiver_notes";
   lang: "zh-TW" | "id" | "vi" | "en";
   /** 本月注意三件事 */ items: string[];
-  items_zh?: string[];
+  items_zh: string[];
   source_order_id: string;
 }
 
@@ -294,28 +294,28 @@ export interface Encounter {
   id: string;
   patient_id: string;
   ts: string;
-  status?: "draft" | "approved";
-  confirmed_by?: string | null;
+  status: "draft" | "approved";
+  confirmed_by: string | null;
   provenance: Provenance;
-  related_ids?: string[];
-  kind?: "encounter";
+  related_ids: string[];
+  kind: "encounter";
   encounter_type: "round" | "emergency" | "visit";
   doctor: string;
   summary: string;
-  order_ids?: string[];
+  order_ids: string[];
 }
 
 export interface HandoffPage {
   id: string;
   patient_id: string;
   generated_at: string;
-  /** timeline ids */ generated_from?: string[];
-  status?: "draft" | "approved";
+  /** timeline ids */ generated_from: string[];
+  status: "draft" | "approved";
   author: string;
-  confirmed_by?: string | null;
+  confirmed_by: string | null;
   provenance: Provenance;
   audience: "doctor" | "er" | "nurse" | "caregiver" | "family" | "system";
-  doc_type?: "handoff_page";
+  doc_type: "handoff_page";
   variant: "phone_isbar" | "visit_page";
   what_happened: string;
   usual_state: string[];
@@ -329,67 +329,67 @@ export interface Incident {
   id: string;
   patient_id: string;
   ts: string;
-  status?: "draft" | "approved";
-  confirmed_by?: string | null;
+  status: "draft" | "approved";
+  confirmed_by: string | null;
   provenance: Provenance;
-  related_ids?: string[];
-  kind?: "incident";
+  related_ids: string[];
+  kind: "incident";
   incident_kind: "fall" | "medication_issue" | "choking" | "behavior" | "acute";
   summary: string;
-  incident_file_id?: string | null;
+  incident_file_id: string | null;
 }
 
 export interface IncidentFile {
   id: string;
   patient_id: string;
   generated_at: string;
-  /** timeline ids */ generated_from?: string[];
-  status?: "draft" | "approved";
+  /** timeline ids */ generated_from: string[];
+  status: "draft" | "approved";
   author: string;
-  confirmed_by?: string | null;
+  confirmed_by: string | null;
   provenance: Provenance;
   audience: "doctor" | "er" | "nurse" | "caregiver" | "family" | "system";
-  doc_type?: "incident_file";
+  doc_type: "incident_file";
   caregiver_section: CaregiverSection;
   nurse_section: NurseSection;
-  red_flags?: RedFlagResult | null;
-  route_decision?: "contact_contract_hospital" | "home_acute_mode_b" | "accompany_visit" | "observe" | "escalate_119" | null;
-  notifications?: Notification[];
-  follow_up?: FollowUp | null;
+  red_flags: RedFlagResult | null;
+  route_decision: "contact_contract_hospital" | "home_acute_mode_b" | "accompany_visit" | "observe" | "escalate_119" | null;
+  notifications: Notification[];
+  follow_up: FollowUp | null;
 }
 
 export interface Observation {
   id: string;
   patient_id: string;
   ts: string;
-  status?: "draft" | "approved";
-  confirmed_by?: string | null;
+  status: "draft" | "approved";
+  confirmed_by: string | null;
   provenance: Provenance;
-  related_ids?: string[];
-  kind?: "observation";
+  related_ids: string[];
+  kind: "observation";
   shift: "day" | "evening" | "night";
   observation: StructuredObservation;
-  deltas?: BaselineDelta[];
-  minimal_sbar?: MinimalSBAR | null;
-  vitals?: Vitals | null;
-  red_flags?: RedFlagResult | null;
+  deltas: BaselineDelta[];
+  minimal_sbar: MinimalSBAR | null;
+  vitals: Vitals | null;
+  red_flags: RedFlagResult | null;
 }
 
 export interface Order {
   id: string;
   patient_id: string;
   ts: string;
-  status?: "draft" | "approved";
-  confirmed_by?: string | null;
+  status: "draft" | "approved";
+  confirmed_by: string | null;
   provenance: Provenance;
-  related_ids?: string[];
-  kind?: "order";
+  related_ids: string[];
+  kind: "order";
   doctor: string;
   raw_text: string;
-  items?: OrderItem[];
-  encounter_id?: string | null;
-  caregiver_notes_doc_id?: string | null;
-  follow_up?: OrderFollowUp | null;
+  items: OrderItem[];
+  encounter_id: string | null;
+  caregiver_notes_doc_id: string | null;
+  follow_up: OrderFollowUp | null;
 }
 
 export interface Profile {
@@ -398,64 +398,64 @@ export interface Profile {
   sex: "M" | "F";
   birth_year: number;
   room: string;
-  conditions?: Condition[];
-  allergies?: AllergyIntolerance[];
-  medications?: MedicationStatement[];
-  dnr?: boolean;
-  emergency_contacts?: Contact[];
+  conditions: Condition[];
+  allergies: AllergyIntolerance[];
+  medications: MedicationStatement[];
+  dnr: boolean;
+  emergency_contacts: Contact[];
   contract_facility: Facility;
-  current_location?: "facility" | "home" | "hospital";
+  current_location: "facility" | "home" | "hospital";
   caregiver_code_name: string;
-  caregiver_language?: "zh-TW" | "id" | "vi" | "en";
+  caregiver_language: "zh-TW" | "id" | "vi" | "en";
   primary_nurse: string;
-  /** 一句話的人 */ one_liner?: string;
+  /** 一句話的人 */ one_liner: string;
 }
 
 /** Append-only ledger row (records/{id}/provenance.jsonl). */
 export interface ProvenanceLine {
   line_id: string;
   /** timeline entry id or document id this line belongs to */ ref: string;
-  /** which field inside the ref, if any */ field?: string;
+  /** which field inside the ref, if any */ field: string;
   source: "caregiver_said" | "ai_extracted" | "nurse_assessed" | "nurse_confirmed" | "doctor_ordered" | "system_derived";
   author: string;
-  confirmed_by?: string | null;
+  confirmed_by: string | null;
   ts: string;
-  language_original?: "zh-TW" | "id" | "vi" | "en";
+  language_original: "zh-TW" | "id" | "vi" | "en";
 }
 
 export interface RoundPage {
   id: string;
   patient_id: string;
   generated_at: string;
-  /** timeline ids */ generated_from?: string[];
-  status?: "draft" | "approved";
+  /** timeline ids */ generated_from: string[];
+  status: "draft" | "approved";
   author: string;
-  confirmed_by?: string | null;
+  confirmed_by: string | null;
   provenance: Provenance;
   audience: "doctor" | "er" | "nurse" | "caregiver" | "family" | "system";
-  doc_type?: "round_page";
+  doc_type: "round_page";
   /** ① 一句話的人＋基線 */ who: string;
-  baseline_summary?: string[];
-  /** ② 異常優先 */ changes?: TrendLine[];
-  cross_dimension_signal?: string | null;
-  /** ③ */ order_followup?: OrderFollowUpLine[];
-  /** ④ 提問式 */ questions?: string[];
-  /** 變化最大的兩個維度 */ chart?: TrendSeries[];
+  baseline_summary: string[];
+  /** ② 異常優先 */ changes: TrendLine[];
+  cross_dimension_signal: string | null;
+  /** ③ */ order_followup: OrderFollowUpLine[];
+  /** ④ 提問式 */ questions: string[];
+  /** 變化最大的兩個維度 */ chart: TrendSeries[];
   since: string;
-  page_limit_ok?: boolean;
+  page_limit_ok: boolean;
 }
 
 export interface VisitPage {
   id: string;
   patient_id: string;
   generated_at: string;
-  /** timeline ids */ generated_from?: string[];
-  status?: "draft" | "approved";
+  /** timeline ids */ generated_from: string[];
+  status: "draft" | "approved";
   author: string;
-  confirmed_by?: string | null;
+  confirmed_by: string | null;
   provenance: Provenance;
   audience: "doctor" | "er" | "nurse" | "caregiver" | "family" | "system";
-  doc_type?: "visit_page";
+  doc_type: "visit_page";
   reason: string;
   recent: string[];
   medications: string[];
@@ -465,30 +465,30 @@ export interface BaselineProposal {
   patient_id: string;
   proposals: BaselineEntry[];
   reason: string;
-  status?: "draft" | "approved";
-  proposed_by?: "caregiver_said" | "ai_extracted" | "nurse_assessed" | "nurse_confirmed" | "doctor_ordered" | "system_derived";
-  confirmed_by?: string | null;
-  source_order_id?: string | null;
+  status: "draft" | "approved";
+  proposed_by: "caregiver_said" | "ai_extracted" | "nurse_assessed" | "nurse_confirmed" | "doctor_ordered" | "system_derived";
+  confirmed_by: string | null;
+  source_order_id: string | null;
 }
 
 export interface TimelineBase {
   id: string;
   patient_id: string;
   ts: string;
-  status?: "draft" | "approved";
-  confirmed_by?: string | null;
+  status: "draft" | "approved";
+  confirmed_by: string | null;
   provenance: Provenance;
-  related_ids?: string[];
+  related_ids: string[];
 }
 
 export interface DocBase {
   id: string;
   patient_id: string;
   generated_at: string;
-  /** timeline ids */ generated_from?: string[];
-  status?: "draft" | "approved";
+  /** timeline ids */ generated_from: string[];
+  status: "draft" | "approved";
   author: string;
-  confirmed_by?: string | null;
+  confirmed_by: string | null;
   provenance: Provenance;
   audience: "doctor" | "er" | "nurse" | "caregiver" | "family" | "system";
 }
@@ -498,18 +498,18 @@ export interface TrendReport {
   since: string;
   until: string;
   lines: TrendLine[];
-  cross_dimension_signal?: string | null;
-  series?: TrendSeries[];
-  incident_ids?: string[];
-  generated_by?: "caregiver_said" | "ai_extracted" | "nurse_assessed" | "nurse_confirmed" | "doctor_ordered" | "system_derived";
+  cross_dimension_signal: string | null;
+  series: TrendSeries[];
+  incident_ids: string[];
+  generated_by: "caregiver_said" | "ai_extracted" | "nurse_assessed" | "nurse_confirmed" | "doctor_ordered" | "system_derived";
 }
 
 export interface PersonRecord {
   profile: Profile;
   baseline: Baseline;
-  timeline?: (Observation | Incident | Encounter | Order)[];
-  documents?: (IncidentFile | HandoffPage | VisitPage | RoundPage | CaregiverNotes)[];
-  provenance?: ProvenanceLine[];
+  timeline: (Observation | Incident | Encounter | Order)[];
+  documents: (IncidentFile | HandoffPage | VisitPage | RoundPage | CaregiverNotes)[];
+  provenance: ProvenanceLine[];
 }
 
 export const DIMENSIONS = ["intake", "elimination", "function", "cognition", "sleep", "skin", "pain", "vitals"] as const;

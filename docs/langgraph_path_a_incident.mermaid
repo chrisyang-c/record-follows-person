@@ -14,7 +14,7 @@ flowchart TD
     review -- 超時 --> esc[escalate<br/>第二護理師／護理長]
     esc --> review
     review -- 退回 --> intake
-    review -- 接受／修改 --> onsite[nurse_onsite_assessment<br/>加生命徵象、意識、傷口<br/>改寫 A、R]
+    review -- 接受／修改 --> onsite{{"◇ nurse_onsite_assessment<br/>加生命徵象、意識、傷口<br/>改寫 A、R（紅燈路徑在此 interrupt）"}}
     onsite --> final[sbar_final<br/>status=approved<br/>confirmed_by=nurse, ts]
     final --> route{{"◇ nurse_route_choice<br/>interrupt：護理師決定路徑"}}
     route -- 聯絡特約醫療機構 --> pack1[handoff_packager<br/>通話版 ISBAR]

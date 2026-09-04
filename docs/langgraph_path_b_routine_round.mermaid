@@ -6,7 +6,7 @@ flowchart TD
         s1 --> s2[intake_agent<br/>語音→八維度]
         s2 --> s3[baseline_comparator]
         s3 --> s4{red_flag_rules<br/>純程式}
-        s4 -- 命中 --> s5[notify_nurse_urgent] --> sA[→ 轉入 Path A]
+        s4 -- 命中 --> s5[notify_nurse_urgent] --> sA[to_path_a<br/>→ 轉入 Path A]
         s4 -- 未命中 --> s6[minimal_sbar_draft<br/>一行 S、一行 A<br/>status=draft]
         s6 --> s7{{"◇ nurse_10s_confirm<br/>接受／改一句／退回"}}
         s7 -- 退回 --> s2
@@ -21,7 +21,7 @@ flowchart TD
         r2 --> r3[familiarization_writer ×N<br/>subagent，產 RoundPage 四段]
         r3 --> r4{{"◇ head_nurse_edit_list<br/>增刪名單、掃每頁"}}
         r4 --> r5[publish_round_pages<br/>醫師端唯讀]
-        r5 --> r6[doctor_round<br/>醫師看頁、看人、開醫囑<br/>系統不介入]
+        r5 --> r6{{"◇ doctor_round<br/>醫師看頁、看人、開醫囑<br/>系統不介入，等護理師輸入醫囑"}}
         r6 --> r7[order_ingest<br/>護理師輸入醫囑]
         r7 --> r8[order_to_caregiver_notes<br/>本月注意三件事，多語]
         r7 --> r9[baseline_update_proposal]

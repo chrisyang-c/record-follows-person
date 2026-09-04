@@ -1,0 +1,190 @@
+{
+  "_note": "合成資料，姓名為代號。任何相似皆屬巧合。Synthetic only.",
+  "last_round_date": "2026-08-20",
+  "day1": "2026-08-22",
+  "nurses": {"primary": "nurse_lin", "second": "nurse_huang", "head": "head_nurse_chen", "doctor": "dr_wu"},
+  "residents": [
+    {
+      "patient_id": "P001",
+      "code_name": "王伯",
+      "sex": "M",
+      "birth_year": 1940,
+      "room": "201-A",
+      "one_liner": "愛看棒球轉播，早餐一定要喝豆漿，女兒每週三來。",
+      "conditions": [
+        {"display": "高血壓", "code": "I10"},
+        {"display": "心房顫動", "code": "I48"},
+        {"display": "輕度失智", "code": "F03"}
+      ],
+      "allergies": [{"substance": "Penicillin", "reaction": "皮疹", "severity": "moderate"}],
+      "medications": [
+        {"name": "Warfarin", "dose": "2 mg", "schedule": "每晚一次", "is_anticoagulant": true},
+        {"name": "Amlodipine", "dose": "5 mg", "schedule": "每天早上", "is_anticoagulant": false},
+        {"name": "Donepezil", "dose": "5 mg", "schedule": "睡前", "is_anticoagulant": false}
+      ],
+      "dnr": false,
+      "emergency_contacts": [{"name": "王小姐", "relation": "女兒", "phone": "0912-000-001", "notify_first": true}],
+      "contract_facility": {"name": "特約醫院（示意）", "phone": "02-0000-0001"},
+      "caregiver_code_name": "cg_siti",
+      "caregiver_language": "id",
+      "primary_nurse": "nurse_lin",
+      "baseline": {
+        "intake": {"value": 1.0, "description": "三餐吃完，一天喝水約 6 杯"},
+        "elimination": {"value": 1, "description": "每天一次軟便，尿量正常，白天不失禁"},
+        "function": {"value": null, "description": "拿四腳拐杖自己走到餐廳，轉位不需協助"},
+        "cognition": {"value": null, "description": "認得家人與照服員，對答清楚，偶爾重複問時間"},
+        "sleep": {"value": 1, "description": "夜間醒 0–1 次，早上 6 點自己醒"},
+        "skin": {"value": null, "description": "完整，無壓傷"},
+        "pain": {"value": null, "description": "無"},
+        "vitals": {"value": null, "description": "血壓 130–140/80，心率 70–80，SpO₂ 96%"}
+      },
+      "vitals_usual": {"temp_c": 36.6, "sbp": 138, "dbp": 82, "hr": 76, "rr": 18, "spo2": 96},
+      "last_order": {
+        "text": "飲食：每餐記錄進食量；每週量體重一次。血壓維持目前用藥。",
+        "follow_up": {"done": true, "effective": false, "note": "有記錄，進食量仍下降"}
+      },
+      "days": [
+        ["Kakek makan habis, minum enam gelas, tidur nyenyak", "Malam bangun satu kali ke kamar mandi, tidur lagi"],
+        ["Makan habis, jalan ke ruang makan sendiri pakai tongkat", "Tidur nyenyak, tidak bangun"],
+        ["Makan habis, BAB sekali pagi normal", "Malam bangun satu kali"],
+        ["Makan habis, nonton bola, senang", "Tidur nyenyak"],
+        ["Makan habis, minum lima gelas", "Malam bangun satu kali"],
+        ["Makan habis, jalan sendiri", "Tidur nyenyak"],
+        ["Makan habis, BAB normal", "Malam bangun satu kali"],
+        ["Hari ini makan cuma tiga perempat, bilang tidak lapar", "Malam bangun dua kali"],
+        ["Makan setengah saja, minum empat gelas", "Malam bangun dua kali, bilang tidak bisa tidur"],
+        ["Makan setengah, jalan lebih pelan dari biasa", "Malam bangun tiga kali"],
+        ["Makan setengah, minum sedikit", "Malam bangun tiga kali, siang ngantuk"],
+        ["Makan setengah, tidak seperti biasa, diam saja", "INCIDENT"],
+        ["Pagi ini sudah lebih baik, makan setengah, bicara sudah normal", "Malam bangun dua kali"],
+        ["Makan setengah, minum empat gelas, jalan pakai tongkat dibantu", "Malam bangun tiga kali"]
+      ],
+      "incident": {
+        "day": 12,
+        "time": "20:30",
+        "text": "Kakek jatuh di kamar mandi jam setengah sembilan malam, kepalanya terbentur pinggir wastafel, sekarang bicaranya agak aneh",
+        "onsite": {
+          "vitals": {"temp_c": 36.8, "sbp": 152, "dbp": 88, "hr": 92, "rr": 18, "spo2": 95},
+          "consciousness": "可喚醒，對答較平常慢，能說出自己名字與地點",
+          "wound": "右額 2 cm 血腫，無開放性傷口",
+          "notes": "床邊坐起無頭暈，右手握力稍弱待醫師評估"
+        },
+        "nurse_assessment": "跌倒後頭部撞擊，正在服用 Warfarin，對答較平常遲鈍，右額血腫。需醫師評估是否有顱內出血風險。",
+        "nurse_recommendation": "立即聯絡特約醫院急診安排後送與頭部影像檢查；後送前每 15 分鐘觀察意識。",
+        "route": "contact_contract_hospital",
+        "family_message": "王小姐您好，這裡是機構護理站。王伯今晚在浴室跌倒，撞到頭，人是清醒的，講話比平常慢一點。因為他有在吃抗凝血藥，護理師已聯絡特約醫院安排到急診做檢查，我們會陪同前往並隨時跟您更新。若您方便，請回撥護理站。",
+        "follow_up_answer": "Pagi ini sudah lebih baik, bicara sudah normal, kepala masih sedikit bengkak"
+      }
+    },
+    {
+      "patient_id": "P002",
+      "code_name": "陳奶奶",
+      "sex": "F",
+      "birth_year": 1936,
+      "room": "203-B",
+      "one_liner": "喜歡唱歌，聽到台語老歌會跟著哼，怕冷。",
+      "conditions": [
+        {"display": "第 2 型糖尿病", "code": "E11"},
+        {"display": "慢性腎臟病第 3 期", "code": "N18.3"},
+        {"display": "薦骨壓傷第 2 級（照護中）", "code": "L89.15"}
+      ],
+      "allergies": [],
+      "medications": [
+        {"name": "Metformin", "dose": "500 mg", "schedule": "早晚各一次", "is_anticoagulant": false},
+        {"name": "Glipizide", "dose": "5 mg", "schedule": "早餐前", "is_anticoagulant": false}
+      ],
+      "dnr": true,
+      "emergency_contacts": [{"name": "陳先生", "relation": "兒子", "phone": "0912-000-002", "notify_first": true}],
+      "contract_facility": {"name": "特約醫院（示意）", "phone": "02-0000-0001"},
+      "caregiver_code_name": "cg_lan",
+      "caregiver_language": "vi",
+      "primary_nurse": "nurse_lin",
+      "baseline": {
+        "intake": {"value": 0.8, "description": "三餐約八分，糖尿病餐，喝水 5 杯"},
+        "elimination": {"value": 1, "description": "每天一次，夜間包尿布"},
+        "function": {"value": null, "description": "輪椅代步，轉位需一人協助"},
+        "cognition": {"value": null, "description": "清楚，愛聊天，會唱歌"},
+        "sleep": {"value": 1, "description": "夜間醒 1 次換尿布後再睡"},
+        "skin": {"value": null, "description": "薦骨壓傷 2 級約 3×2 cm，每班翻身"},
+        "pain": {"value": null, "description": "翻身時薦骨處微痛"},
+        "vitals": {"value": null, "description": "血壓 120–130/70，心率 70，SpO₂ 97%"}
+      },
+      "vitals_usual": {"temp_c": 36.4, "sbp": 126, "dbp": 74, "hr": 70, "rr": 16, "spo2": 97},
+      "last_order": {
+        "text": "壓傷：每 2 小時翻身，尾椎敷料每日更換；飲食：糖尿病餐維持，喝水每天 5 杯。",
+        "follow_up": {"done": true, "effective": true, "note": "傷口縮小，疼痛減少"}
+      },
+      "days": [
+        ["Bà ăn được tám phần, vết thương ở xương cụt còn đỏ, xoay trở thì kêu đau", "Đêm dậy một lần thay tã rồi ngủ lại"],
+        ["Ăn tám phần, uống năm ly, vết thương đỏ như hôm qua", "Đêm dậy một lần"],
+        ["Ăn hết, hát bài cũ, vui vẻ", "Ngủ ngon"],
+        ["Ăn tám phần, xoay trở kêu đau nhẹ", "Đêm dậy một lần"],
+        ["Sáng nay không chịu uống thuốc, nói đắng, dỗ mãi mới uống", "Đêm dậy một lần"],
+        ["Ăn tám phần, vết thương ở xương cụt nhỏ hơn, bớt đỏ", "Ngủ ngon"],
+        ["Ăn hết, xoay trở không kêu đau", "Đêm dậy một lần"],
+        ["Ăn tám phần, vết thương khô hơn", "Ngủ ngon"],
+        ["Ăn tám phần, uống năm ly, đi ngoài một lần", "Đêm dậy một lần"],
+        ["Ăn hết, vết thương nhỏ hơn nhiều, không đau", "Ngủ ngon"],
+        ["Ăn tám phần, hát cả buổi", "Đêm dậy một lần"],
+        ["Ăn tám phần, vết thương gần lành", "Ngủ ngon"],
+        ["Ăn hết, uống năm ly", "Đêm dậy một lần"],
+        ["Ăn tám phần, vết thương gần lành, không đau", "Ngủ ngon"]
+      ]
+    },
+    {
+      "patient_id": "P003",
+      "code_name": "李阿公",
+      "sex": "M",
+      "birth_year": 1943,
+      "room": "205-A",
+      "one_liner": "以前開計程車，話少但愛下象棋，太太每天下午來。",
+      "conditions": [
+        {"display": "帕金森氏症", "code": "G20"},
+        {"display": "慢性阻塞性肺病", "code": "J44"},
+        {"display": "退化性膝關節炎", "code": "M17"}
+      ],
+      "allergies": [{"substance": "NSAIDs", "reaction": "胃痛", "severity": "mild"}],
+      "medications": [
+        {"name": "Levodopa/Carbidopa", "dose": "100/25 mg", "schedule": "每日三次", "is_anticoagulant": false},
+        {"name": "Tiotropium 吸入劑", "dose": "18 mcg", "schedule": "每天早上", "is_anticoagulant": false}
+      ],
+      "dnr": false,
+      "emergency_contacts": [{"name": "李太太", "relation": "配偶", "phone": "0912-000-003", "notify_first": true}],
+      "contract_facility": {"name": "特約醫院（示意）", "phone": "02-0000-0001"},
+      "caregiver_code_name": "cg_amei",
+      "caregiver_language": "zh-TW",
+      "primary_nurse": "nurse_lin",
+      "baseline": {
+        "intake": {"value": 1.0, "description": "三餐吃完，吃得慢，喝水 5 杯"},
+        "elimination": {"value": 1, "description": "兩天一次，偶爾便秘"},
+        "function": {"value": null, "description": "需一人扶持走到餐廳，起步慢"},
+        "cognition": {"value": null, "description": "清楚，話少，叫名字會回頭"},
+        "sleep": {"value": 1, "description": "夜間醒 1 次，白天午睡 1 小時"},
+        "skin": {"value": null, "description": "完整"},
+        "pain": {"value": null, "description": "無"},
+        "vitals": {"value": null, "description": "SpO₂ 平常 93–94%（COPD），偶有晨咳"}
+      },
+      "vitals_usual": {"temp_c": 36.7, "sbp": 144, "dbp": 86, "hr": 82, "rr": 18, "spo2": 93},
+      "last_order": {
+        "text": "Levodopa 改為每日三次；活動：每天陪走廊走一趟。",
+        "follow_up": {"done": true, "effective": null, "note": "有走，但膝蓋開始痛"}
+      },
+      "days": [
+        ["三餐吃完，早上有咳幾聲，走廊走一趟", "晚上起來一次"],
+        ["吃完，兩天沒大便今天有了", "睡得好"],
+        ["吃完，扶著走廊走一趟，起步慢", "晚上起來一次"],
+        ["吃完，下象棋贏了很開心", "睡得好"],
+        ["吃完，早上咳幾聲有痰", "晚上起來一次"],
+        ["吃完，今天叫他名字反應比較慢，下午就正常了", "睡得好"],
+        ["吃完，走廊走一趟", "晚上起來一次"],
+        ["吃完，咳嗽比前幾天多一點", "晚上起來兩次，說咳醒"],
+        ["吃完，說右邊膝蓋痛，走路更慢", "晚上起來一次"],
+        ["吃八分，右膝痛，扶著走一半就不走了", "晚上咳醒兩次"],
+        ["吃八分，早上叫他反應慢，中午後正常，膝蓋還是痛", "晚上起來兩次"],
+        ["吃八分，咳嗽有黃痰，右膝痛", "晚上咳醒兩次"],
+        ["只吃幾口，說沒胃口，咳嗽，膝蓋痛不想走", "晚上起來三次"],
+        ["吃一半，咳嗽有痰，右膝痛，今天沒走廊走", "晚上咳醒兩次"]
+      ]
+    }
+  ]
+}

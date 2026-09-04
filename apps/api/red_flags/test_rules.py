@@ -53,7 +53,9 @@ def test_rf02_uses_caregiver_reported_when_not_measured():
 
 
 def test_rf02_measured_overrides_reported():
-    r = evaluate(RedFlagInput(observation=obs(reported=Vitals(temp_c=39.0)), vitals=Vitals(temp_c=37.2)))
+    r = evaluate(
+        RedFlagInput(observation=obs(reported=Vitals(temp_c=39.0)), vitals=Vitals(temp_c=37.2))
+    )
     assert "RF02" not in ids(r)
 
 
@@ -65,12 +67,18 @@ def test_rf03_rr_boundaries(rr, hit):
 
 @pytest.mark.parametrize("spo2,hit", [(91, True), (92, False)])
 def test_rf03_spo2_absolute(spo2, hit):
-    assert ("RF03" in ids(evaluate(RedFlagInput(observation=obs(), vitals=Vitals(spo2=spo2))))) is hit
+    assert (
+        "RF03" in ids(evaluate(RedFlagInput(observation=obs(), vitals=Vitals(spo2=spo2))))
+    ) is hit
 
 
 def test_rf03_spo2_drop_vs_baseline():
-    hit = evaluate(RedFlagInput(observation=obs(), vitals=Vitals(spo2=94), baseline_vitals=Vitals(spo2=97)))
-    miss = evaluate(RedFlagInput(observation=obs(), vitals=Vitals(spo2=95), baseline_vitals=Vitals(spo2=97)))
+    hit = evaluate(
+        RedFlagInput(observation=obs(), vitals=Vitals(spo2=94), baseline_vitals=Vitals(spo2=97))
+    )
+    miss = evaluate(
+        RedFlagInput(observation=obs(), vitals=Vitals(spo2=95), baseline_vitals=Vitals(spo2=97))
+    )
     assert "RF03" in ids(hit) and "RF03" not in ids(miss)
 
 
@@ -87,7 +95,9 @@ def test_rf04_hr(hr, hit):
 
 # RF05 跌倒 ---------------------------------------------------------------------
 def test_rf05_fall_with_head_strike():
-    r = evaluate(RedFlagInput(observation=obs(ObservationFlags(fall_head_strike=True), incidents=["fall"])))
+    r = evaluate(
+        RedFlagInput(observation=obs(ObservationFlags(fall_head_strike=True), incidents=["fall"]))
+    )
     assert "RF05" in ids(r)
 
 
@@ -178,7 +188,9 @@ def test_rf10_requires_fall_event():
 
 # 輸出與治理 --------------------------------------------------------------------
 def test_render_has_no_level_or_score():
-    r = evaluate(RedFlagInput(observation=obs(ObservationFlags(chest_pain=True)), vitals=Vitals(temp_c=39)))
+    r = evaluate(
+        RedFlagInput(observation=obs(ObservationFlags(chest_pain=True)), vitals=Vitals(temp_c=39))
+    )
     text = "\n".join(render_lines(r))
     assert "建議" in text and "非診斷" in text
     for banned in ("等級", "分數", "Level", "score", "檢傷 1", "檢傷 2", "第一級", "紅色警戒"):

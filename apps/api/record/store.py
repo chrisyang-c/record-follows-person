@@ -112,7 +112,11 @@ class RecordStore:
             if kinds and e.kind not in kinds:
                 continue
             if since is not None:
-                s = since if isinstance(since, datetime) else datetime.combine(since, datetime.min.time(), UTC)
+                s = (
+                    since
+                    if isinstance(since, datetime)
+                    else datetime.combine(since, datetime.min.time(), UTC)
+                )
                 if e.ts < s:
                     continue
             out.append(e)
@@ -154,7 +158,7 @@ class RecordStore:
 
     # -- write (gated) ----------------------------------------------------------
     def write_timeline(self, patient_id: str, payload: Any) -> str:
-        """The only write entry for the timeline. Rejects drafts, rewrites and missing provenance."""
+        """The only timeline write entry. Rejects drafts, rewrites and missing provenance."""
         entry = self._coerce_timeline(payload)
         assert entry.status == "approved" and entry.confirmed_by, "timeline_write requires approval"
         if entry.patient_id != patient_id:
@@ -185,8 +189,23 @@ class RecordStore:
         self._append_provenance(patient_id, ref=doc.id, field="", prov=doc.provenance)
         return doc.id
 
+    def update_document(self, patient_id: str, payload: Any) -> str:
+        """Documents are generated artifacts and may be updated in place (e.g. notifications,
+        follow_up appended to an IncidentFile). Still requires approval; still logs provenance.
+        The timeline itself is never updated — see write_timeline."""
+        doc = self._coerce_document(payload)
+        if doc.status != "approved" or not doc.confirmed_by:
+            raise UnapprovedWriteError(f"document {doc.id} is not approved")
+        ddir = self.dir(patient_id) / "documents"
+        target = ddir / f"{doc.doc_type}_{doc.id}.json"
+        if not target.exists():
+            raise FileNotFoundError(f"document {doc.id} does not exist; use write_document")
+        target.write_text(_dump(doc), encoding="utf-8")
+        self._append_provenance(patient_id, ref=doc.id, field="update", prov=doc.provenance)
+        return doc.id
+
     def write_baseline(self, patient_id: str, proposal: BaselineProposal) -> Baseline:
-        """Only entry for baseline changes; requires an approved proposal (◇nurse_confirm_baseline)."""
+        """Only entry for baseline changes; needs an approved proposal (◇nurse_confirm_baseline)."""
         if proposal.status != "approved" or not proposal.confirmed_by:
             raise UnapprovedWriteError("baseline proposal must be approved by a nurse")
         if proposal.patient_id != patient_id:
@@ -222,8 +241,12 @@ class RecordStore:
             try:
                 return _TIMELINE.validate_python(payload)
             except ValidationError as e:
-                raise MissingProvenanceError(str(e)) if "provenance" in str(e) else e
-        if getattr(payload, "status", None) != "approved" or not getattr(payload, "confirmed_by", None):
+                if "provenance" in str(e):
+                    raise MissingProvenanceError(str(e)) from e
+                raise
+        if getattr(payload, "status", None) != "approved" or not getattr(
+            payload, "confirmed_by", None
+        ):
             raise UnapprovedWriteError(
                 f"timeline entry {getattr(payload, 'id', '?')} is not approved/confirmed"
             )
@@ -246,7 +269,9 @@ class RecordStore:
             if not isinstance(dv, dict) or not dv.get("provenance"):
                 raise MissingProvenanceError(f"dimension {dim} has no provenance")
 
-    def _append_provenance(self, patient_id: str, *, ref: str, field: str, prov: Provenance) -> None:
+    def _append_provenance(
+        self, patient_id: str, *, ref: str, field: str, prov: Provenance
+    ) -> None:
         line = ProvenanceLine(
             line_id=new_id("prov"),
             ref=ref,
@@ -267,5 +292,5 @@ def get_store() -> RecordStore:
 
 
 def write_timeline(patient_id: str, payload: Any) -> str:
-    """Module-level alias — the single sanctioned timeline write (used by graph `timeline_write`)."""
+    """Module-level alias — the single sanctioned timeline write (graph `timeline_write`)."""
     return get_store().write_timeline(patient_id, payload)
