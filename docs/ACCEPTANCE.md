@@ -125,5 +125,5 @@ cd apps/web && pnpm screenshot; cd ../..
 
 ## 交付物
 
-- GitHub main 可跑；PR #1 graphs、#2 agents／API、#3 API 修正、#4 MODEL_PROVIDER=openai、#5 web 三介面＋UI 稽核、#6 zh-TW demo＋聊天式多輪 intake＋docs／CI／acceptance。
+- GitHub main 可跑，CI 綠燈（api + web 兩個 job）；PR #1 graphs、#2 agents／API、#3 API 修正、#4 MODEL_PROVIDER=openai、#5 web 三介面＋UI 稽核、#6 zh-TW demo＋聊天式多輪 intake＋docs／CI／acceptance、#7 CI 順序修正。
 - `docs/`：ARCHITECTURE、兩張 mermaid、DECISIONS、design.md、UI_AUDIT、VIDEO、KNOWN_ISSUES、ACCEPTANCE（本檔）、img/（390px 截圖）。
