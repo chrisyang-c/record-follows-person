@@ -80,7 +80,7 @@ make api                           # http://localhost:8000  (/docs 有 OpenAPI)
 make web                           # http://localhost:3000
 ```
 
-三個介面：`/caregiver`（手機 390px 優先、LINE 式聊天引導：先講一句，每一題都由 intake_agent（LLM）依八維度缺口、profile、基線與已問過的題決定並附 reason，只有語音與文字輸入，上限 4 題；紅燈時程式先通知護理師、對話繼續由 agent 問關鍵事實並即時同步到護理師端；沒有模型就報錯停止；zh-TW）、`/trace` 與 `GET /debug/trace/{thread_id}`（每一次 LLM／agent 呼叫的紀錄）、`/nurse`（平板／桌面：紅燈置頂、10 秒確認、ISBAR 編輯器、巡診準備）、`/doctor`（唯讀 RoundPage，可列印 A4）。逐步驗收指令見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
+畫面：`/` 選角色（cookie）→ 角色首頁（`/caregiver` 住民卡、`/nurse` 紅燈橫幅→等我確認→今日總覽＋巡診準備、`/doctor` 巡診名單）→ 病人頁 `/p/{id}?tab=who|timeline|docs|talk`（這份紀錄的唯一入口）。`talk` 是 LINE 式聊天：每一題都由 intake_agent（LLM）依八維度缺口、profile、基線與已問過的題決定並附 reason，只有語音與文字輸入，上限 4 題；紅燈時程式先通知護理師、對話繼續由 agent 問關鍵事實並即時同步到護理師端；沒有模型就報錯停止。每則回覆下有 Agent 活動列（收合「花了 2.3 秒，7 步」，展開＝`GET /debug/trace/{thread_id}` 的內容）。`docs` 放護理師的等我確認（Path A 審核、10 秒確認）、RoundPage（可列印 A4）、事故檔、注意事項。逐步驗收指令見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
 
 測試：`make test`（api：ruff + pytest；web：eslint + vitest）；評測：`make eval`。
 

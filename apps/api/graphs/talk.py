@@ -525,7 +525,16 @@ def compiled():
 
 
 def run_turn(patient_id: str, text: str, role_view: str = "caregiver"):
-    """Generator: yields ('event', dict) as nodes run, then ('final', state)."""
+    """Generator: yields ('event', dict) as nodes run, then ('final', state).
+
+    The graph runs in one worker thread (contextvars-safe under StreamingResponse).
+    """
+    from core.trace import run_in_thread
+
+    yield from run_in_thread(lambda: _run_turn(patient_id, text, role_view))
+
+
+def _run_turn(patient_id: str, text: str, role_view: str):
     from core.trace import tagged
 
     s = conv.open_session(patient_id)

@@ -1,77 +1,38 @@
-"use client";
-
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
-import { useApi, type Resident } from "@/lib/api";
-import { fmtDateTime } from "@/lib/format";
+import { ROLE_LABEL, ROLES } from "@/lib/role";
 
-const CHANNELS = [
-  { n: 1, name: "照服員每班觀察 + 護理師 ISBAR", live: true },
-  { n: 2, name: "醫師醫囑（巡診）", live: true },
-  { n: 3, name: "出院摘要（mock）", live: false },
-  { n: 4, name: "生命徵象（寫死）", live: false },
-  { n: 5, name: "家屬觀察", live: false },
-  { n: 6, name: "健保雲端藥歷", live: false },
-  { n: 7, name: "感測器", live: false },
-];
+const HINT: Record<string, string> = {
+  caregiver: "講一句今天怎麼樣",
+  nurse: "紅燈、等我確認、今日總覽",
+  doctor: "巡診名單，一人一頁",
+};
 
-const PILL = "inline-flex min-h-11 items-center rounded-full border border-line px-3 hover:border-primary hover:text-primary";
-
-export default function Home() {
-  const { data: residents, error, loading } = useApi<Resident[]>("/residents");
+/** 角色入口：三顆大按鈕（≥88px），選完寫 cookie 進角色首頁。 */
+export default async function Entry({ searchParams }: PageProps<"/">) {
+  const sp = await searchParams;
+  const next = typeof sp.next === "string" ? sp.next : "";
   return (
-    <div className="space-y-8">
-      <section className="max-w-3xl">
-        <h1 className="text-3xl font-medium leading-tight">每個人有一份跟著他走的紀錄，和一個替這份紀錄說話的 agent。</h1>
-        <p className="mt-3 text-ink-2">今天，它先學會聽照顧他的人說話。照服員講一句話（中文；多語為第二階段）→ 八維度 → 護理師按一下 → 醫師看一頁。</p>
-      </section>
-
-      <section aria-labelledby="residents">
-        <h2 id="residents" className="mb-3 text-lg font-medium">三位住民（合成資料）</h2>
-        {error && (
-          <p role="alert" className="text-danger-ink">
-            API 沒有回應：<span translate="no">{error}</span>。請先啟動 <code>make api</code>。
-          </p>
-        )}
-        {loading && <p className="text-ink-2">Loading…</p>}
-        {residents && residents.length === 0 && (
-          <p className="text-ink-2">
-            還沒有住民資料，先跑 <code>make seed</code>。
-          </p>
-        )}
-        {residents && residents.length > 0 && (
-          <ul className="grid gap-4 sm:grid-cols-3">
-            {residents.map((r) => (
-              <li key={r.patient_id}>
-                <Card title={`${r.code_name} · ${r.room}`} meta={<span translate="no">{r.patient_id}</span>}>
-                  <p className="text-sm text-ink-2">
-                    紀錄 <span className="num">{r.timeline_count}</span> 筆 · 事故 <span className="num">{r.incident_count}</span> · 最近 {fmtDateTime(r.last_entry_ts)}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-sm">
-                    <Link className={PILL} href={`/caregiver?patient=${r.patient_id}`}>照護者</Link>
-                    <Link className={PILL} href={`/record/${r.patient_id}`}>紀錄</Link>
-                    <Link className={PILL} href={`/doctor/round/${r.patient_id}`}>RoundPage</Link>
-                  </div>
-                </Card>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section aria-labelledby="channels">
-        <h2 id="channels" className="mb-3 text-lg font-medium">七條通道，同一份紀錄</h2>
-        <ol className="grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
-          {CHANNELS.map((c) => (
-            // --ai-fill 只代表「AI 草稿」；已接上的通道用 --primary 邊框 + --surface
-            <li key={c.n} className={c.live ? "rounded-[10px] border border-primary bg-surface p-3 text-sm" : "rounded-[10px] border border-line bg-surface p-3 text-sm text-ink-2"}>
-              <span className="num mr-1 text-xs">{c.n}</span>
-              {c.name}
-            </li>
-          ))}
-        </ol>
-        <p className="mt-2 text-sm text-ink-2">今天接了通道 1 與 2，這份紀錄會一直長。</p>
-      </section>
+    <div className="mx-auto flex max-w-[390px] flex-col gap-6 py-6">
+      <header>
+        <h1 className="text-2xl font-medium leading-tight">你是誰？</h1>
+        <p className="mt-1 text-ink-2">每個人有一份跟著他走的紀錄。選角色進去。</p>
+      </header>
+      <ul className="grid gap-3">
+        {ROLES.map((r) => (
+          <li key={r}>
+            <Link
+              href={`/role?set=${r}${next ? `&next=${encodeURIComponent(next)}` : ""}`}
+              className="flex min-h-[88px] flex-col justify-center rounded-[12px] border border-line bg-bg px-5 shadow-[var(--shadow-card)] hover:border-primary hover:bg-surface"
+            >
+              <span className="text-xl font-medium">{ROLE_LABEL[r]}</span>
+              <span className="text-sm text-ink-2">{HINT[r]}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p className="text-center text-sm">
+        <Link href="/about" className="inline-flex min-h-11 items-center text-primary hover:underline">關於這份紀錄 →</Link>
+      </p>
     </div>
   );
 }

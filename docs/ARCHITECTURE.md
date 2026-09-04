@@ -47,6 +47,10 @@ PersonRecord（一人一份，跟著人走）
 
 ---
 
+### 1.1 對話串（conversation）與 timeline 的關係
+
+每位住民一條持續的對話（`records/{pid}/conversation.jsonl`），每一輪（照護者原話 `caregiver_said`、agent 的追問／摘要 `ai_extracted`、系統事件 `system_derived`）在寫入時同時寫一行 provenance，並在病人頁「紀錄」tab 與 timeline 一起顯示。**但它不是 timeline**：CLAUDE.md §1.2／§4／§11 規定 timeline 只能經 `timeline_write` 寫入 `status="approved"` 且有 `confirmed_by` 的內容，所以對話串放在 timeline 旁邊、以 provenance 連結，護理師確認後才由 Path A／B 的 `timeline_write` 產生正式的 Observation／Incident。Agent 活動列（每輪的節點／LLM／subagent 事件）存在 agent 訊息的 `meta.activity`，同一份內容也是 `GET /debug/trace/{thread_id}` 的來源。
+
 ## 2. 輸入通道：他的紀錄從哪裡來
 
 | 通道 | 來源 | 進來的形式 | 誰確認 | 狀態 |
@@ -265,6 +269,10 @@ Demo 資料：3 位住民、各 14 天觀察、其中 1 位有一次急症。這
 這樣評審看到的是「一個人的紀錄和替他說話的 agent」，照護者流程是它第一次開口的樣子。
 
 ---
+
+### 9.1 畫面資訊架構（2026-09-05）
+
+`/` 選角色（cookie）→ 角色首頁（照護者：住民卡；護理師：紅燈橫幅 → 等我確認 → 今日總覽 ＋ 巡診準備；醫師：巡診名單）→ 病人頁 `/p/{id}?tab=who|timeline|docs|talk`。病人頁是這份紀錄的唯一入口；`talk` 是 `graphs/talk.py`（每句一個小 LangGraph：load_person_record → record_caregiver_message → intake_agent → baseline_comparator → red_flag_rules → notify_nurse → decide_next → reply），節點以 `get_stream_writer()` 發自訂事件，API 以 SSE（`POST /patients/{id}/talk`）轉給畫面：活動事件 → 逐字回覆 → done。紅燈時 `notify_nurse` 直接 `runner.start("path_a")`／`update_caregiver`，對話不中斷。巡診 `POST /round/start/stream` 同樣串流 roster_agent → trend_analyzer → familiarization_writer 的每一步。
 
 ## 10. 評審會問的三題
 

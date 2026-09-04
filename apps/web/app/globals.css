@@ -123,6 +123,8 @@ button, a, [role="button"] { touch-action: manipulation; }
 @media print {
   html, body { background: #fff !important; color: #000 !important; font-size: 11pt; }
   .no-print { display: none !important; }
+  /* 病人頁「文件」tab：只印 RoundPage 那一張 */
+  main > * > section:not(:has(.print-page)) { display: none !important; }
   .print-page { box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; padding: 0 !important; }
   a { color: inherit; text-decoration: none; }
   .ai-draft { border-style: dashed; background: #fff; }

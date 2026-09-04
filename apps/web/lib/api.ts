@@ -1,7 +1,8 @@
 "use client";
 
-import type { Document, PersonRecord, StructuredObservation, TimelineEntry, RedFlagResult } from "@schema";
+import type { Baseline, Document, PersonRecord, Profile, StructuredObservation, TimelineEntry, RedFlagResult, TrendLine } from "@schema";
 import { useCallback, useEffect, useState } from "react";
+import { readRole } from "@/lib/role";
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -13,11 +14,17 @@ export class ApiError extends Error {
   }
 }
 
+/** 病人頁的權限過濾靠這個 header（照護者只看自己記的）；角色來自 cookie。 */
+function roleHeader(): Record<string, string> {
+  const r = readRole();
+  return r ? { "X-Role": r } : {};
+}
+
 export async function api<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const { json, ...rest } = init ?? {};
   const res = await fetch(`${API}${path}`, {
     ...rest,
-    headers: { "content-type": "application/json", ...(rest.headers ?? {}) },
+    headers: { "content-type": "application/json", ...roleHeader(), ...(rest.headers ?? {}) },
     body: json !== undefined ? JSON.stringify(json) : rest.body,
     cache: "no-store",
   });
@@ -90,6 +97,7 @@ export interface InboxItem {
   thread_id: string;
   graph: string;
   patient_id: string;
+  code_name?: string | null;
   interrupt_type: string | null;
   red_flag: boolean;
   red_flag_lines: string[];
@@ -114,3 +122,124 @@ export const resumeThread = (thread: string, payload: Record<string, unknown>) =
   api<Snapshot>(`/threads/${encodeURIComponent(thread)}/resume`, { method: "POST", json: payload });
 export const threadState = (thread: string) => api<Snapshot>(`/threads/${encodeURIComponent(thread)}/state`);
 export const preview = (body: Record<string, unknown>) => api<Preview>("/intake/preview", { method: "POST", json: body });
+
+// ---- patient page (/p/{id}) ----
+export interface ConvMessage {
+  id: string;
+  patient_id: string;
+  session_id: string;
+  role: "caregiver" | "agent" | "system";
+  kind: "message" | "question" | "summary" | "closing" | "event" | "error";
+  text: string;
+  ts: string;
+  meta: Record<string, unknown> & { activity?: ActivityEvent[]; reason?: string; dimension?: string | null; thread_id?: string; red?: boolean };
+}
+export interface SessionState {
+  session_id: string;
+  dialog_id: string;
+  phase: "intake" | "confirm" | "red" | "closed";
+  thread_id: string | null;
+  started: string;
+  closed: string | null;
+}
+/** LangGraph 串流事件（graphs/talk.py、runner.start_stream、agents/personal.run_task 發出） */
+export interface ActivityEvent {
+  type: "node_start" | "node_end" | "llm_call" | "tool_call" | "red";
+  name: string;
+  summary: string;
+  plain: string;
+  ms?: number;
+  output?: string;
+  input?: string;
+  reason?: string;
+  red?: boolean;
+  patient_id?: string | null;
+}
+export interface PendingThread {
+  thread_id: string;
+  graph: "path_a" | "shift" | "round";
+  interrupt_type: string | null;
+  red_flag: boolean;
+  red_flag_lines: string[];
+  minimal_sbar: { s: string; a_change_vs_baseline: string } | null;
+  sbar: Record<string, unknown> | null;
+  caregiver_reports: { question: string; answer: string; key: string; ts: string }[];
+  deadline: string | null;
+  escalation_level: number;
+  updated_at: string | null;
+}
+export interface PatientSummary {
+  role: "caregiver" | "nurse" | "doctor";
+  profile: Profile;
+  baseline: Baseline;
+  timeline: TimelineEntry[];
+  documents: Document[];
+  conversation: ConvMessage[];
+  session: SessionState | null;
+  pending: PendingThread[];
+  changed_dimensions: string[];
+  trend_lines: TrendLine[];
+  recorded_today: boolean;
+  notes_count: number;
+}
+export interface TalkDone {
+  reply: string;
+  kind: ConvMessage["kind"];
+  meta: ConvMessage["meta"];
+  phase: SessionState["phase"];
+  red: boolean;
+  thread_id: string | null;
+  sent: string | null;
+  steps: number;
+  ms: number;
+  session: SessionState | null;
+}
+
+/**
+ * 讀 SSE（POST）。每個 `event:` 行對應一次 onEvent(name, data)。
+ * 串流結束或連線失敗時 resolve / reject；呼叫端在 "error" 事件顯示錯誤並停止（不退回規則版）。
+ */
+export async function streamSSE(path: string, body: unknown, onEvent: (name: string, data: Record<string, unknown>) => void, signal?: AbortSignal) {
+  const res = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...roleHeader() },
+    body: JSON.stringify(body),
+    signal,
+    cache: "no-store",
+  });
+  if (!res.ok || !res.body) {
+    let detail = res.statusText;
+    try {
+      const j = await res.json();
+      detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail ?? j);
+    } catch {
+      /* keep */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      let name = "message";
+      let data = "";
+      for (const line of chunk.split("\n")) {
+        if (line.startsWith("event:")) name = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (!data) continue;
+      try {
+        onEvent(name, JSON.parse(data) as Record<string, unknown>);
+      } catch {
+        /* ignore malformed */
+      }
+    }
+  }
+}

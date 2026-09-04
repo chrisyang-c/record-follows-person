@@ -168,7 +168,7 @@ def test_live_caregiver_reports_reach_the_interrupted_red_thread(monkeypatch):
     assert snap["values"]["red_flags"]["notify_now"] is True
     turns.append({"text": "站不起來", "question": "能不能自己站起來？", "phase": "red"})
     out = runner.update_caregiver(snap["thread_id"], turns, [], False)
-    assert out["dialog"]["next_question"] is not None and out["dialog"]["red"] is True
+    assert out["dialog"]["red"] is True  # talk graph plans the next question itself (no 2nd LLM call)
     s2 = out["snapshot"]
     assert s2["status"] == "interrupted" and s2["interrupt"]["type"] == "nurse_onsite_assessment"
     assert [r["answer"] for r in s2["values"]["caregiver_reports"]] == ["撞到頭", "站不起來"]

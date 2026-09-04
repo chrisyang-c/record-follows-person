@@ -315,14 +315,19 @@ def patient_talk(patient_id: str, body: TalkIn) -> StreamingResponse:
         import time as _time
 
         final: dict[str, Any] | None = None
-        for kind, data in run_turn(patient_id, body.text, body.role_view):
-            if kind == "event":
-                yield _sse("event", data)
-            elif kind == "error":
-                yield _sse("error", data)
-                return
-            else:
-                final = data
+        try:
+            for kind, data in run_turn(patient_id, body.text, body.role_view):
+                if kind == "event":
+                    yield _sse("event", data)
+                elif kind == "error":
+                    yield _sse("error", data)
+                    return
+                else:
+                    final = data
+        except Exception as e:  # noqa: BLE001 - surface to the UI, never fall back
+            log.exception("talk turn failed")
+            yield _sse("error", {"detail": f"{type(e).__name__}: {e}"})
+            return
         if final is None:
             yield _sse("error", {"detail": "no result"})
             return
@@ -672,6 +677,13 @@ def get_trace(
     return recent(kind=kind, limit=min(limit, 500), contains=contains)
 
 
+def _code_name(pid: str | None) -> str | None:
+    store = get_store()
+    if not pid or not store.exists(pid):
+        return None
+    return store.load_profile(pid).code_name
+
+
 @app.get("/nurse/inbox")
 def nurse_inbox() -> dict[str, Any]:
     """一屏看完：紅燈置頂，然後待審核（Path A）、待 10 秒確認（Path B）、巡診待辦。"""
@@ -686,6 +698,9 @@ def nurse_inbox() -> dict[str, Any]:
                 "thread_id": row["thread_id"],
                 "graph": row["graph"],
                 "patient_id": vals.get("patient_id", "ALL"),
+                "code_name": _code_name(vals.get("patient_id")),
+                "caregiver_reports": (vals.get("caregiver_reports") or [])[-5:],
+                "turn_count": len(vals.get("caregiver_reports") or []),
                 "interrupt_type": itype,
                 "red_flag": red,
                 "red_flag_lines": render_lines(

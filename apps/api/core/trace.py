@@ -132,3 +132,35 @@ def for_ids(
 def clear_for_tests() -> None:
     with _LOCK:
         _BUF.clear()
+
+
+def run_in_thread(producer):
+    """Run a generator-producing function in one worker thread and relay its items.
+
+    StreamingResponse iterates sync generators via a threadpool, one ``next()`` per (possibly
+    different) thread, which breaks ``contextvars`` tokens. Running the whole producer in a single
+    thread keeps ``tagged()`` valid; items are relayed through a queue in order.
+    """
+    import queue
+    import threading
+
+    q: queue.Queue = queue.Queue()
+    _END = object()
+
+    def worker():
+        try:
+            for item in producer():
+                q.put(item)
+        except BaseException as e:  # noqa: BLE001 - relayed to the consumer
+            q.put(("__exc__", e))
+        finally:
+            q.put(_END)
+
+    threading.Thread(target=worker, daemon=True).start()
+    while True:
+        item = q.get()
+        if item is _END:
+            return
+        if isinstance(item, tuple) and len(item) == 2 and item[0] == "__exc__":
+            raise item[1]
+        yield item

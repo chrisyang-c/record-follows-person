@@ -173,6 +173,7 @@ def update_caregiver(
         baseline,
         seems_different=seems_different,
         incidents=incidents,
+        plan_next=False,  # the talk graph plans the next question itself; no second LLM call here
     )
     obs = res.observation
     recent = [Observation.model_validate(o) for o in values.get("recent_observations", [])]
@@ -214,6 +215,12 @@ def update_caregiver(
 
 def start_stream(graph: str, patient_id: str, input_values: dict[str, Any]):
     """Like start(), but yields ('event', {...}) per node/agent step, then ('done', snapshot)."""
+    from core.trace import run_in_thread
+
+    yield from run_in_thread(lambda: _start_stream(graph, patient_id, input_values))
+
+
+def _start_stream(graph: str, patient_id: str, input_values: dict[str, Any]):
     tid = new_thread_id(graph, patient_id)
     registry.upsert(tid, graph=graph, patient_id=patient_id, status="running")
     dialog_id = (input_values.get("raw_input") or {}).get("dialog_id")

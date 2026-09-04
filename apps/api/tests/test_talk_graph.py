@@ -35,8 +35,11 @@ def test_turn_emits_node_events_and_persists_conversation(records_root, scripted
     events, final = _turn("P002", "陳奶奶今天吃一半")
     names = [e["name"] for e in events if e["type"] == "node_end"]
     assert names[:5] == [
-        "load_person_record", "record_caregiver_message", "intake_agent",
-        "baseline_comparator", "red_flag_rules",
+        "load_person_record",
+        "record_caregiver_message",
+        "intake_agent",
+        "baseline_comparator",
+        "red_flag_rules",
     ]
     assert any(e["type"] == "llm_call" and e["name"] == "next_question" for e in events)
     assert all("plain" in e and "summary" in e for e in events)

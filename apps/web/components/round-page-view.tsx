@@ -61,7 +61,7 @@ export function RoundPageView({
               {c.evidence_refs.length > 0 &&
                 (showLinks ? (
                   <Link
-                    href={`/record/${page.patient_id}?ids=${c.evidence_refs.join(",")}`}
+                    href={`/p/${page.patient_id}?tab=timeline&ids=${c.evidence_refs.join(",")}`}
                     className="inline-flex min-h-6 items-center rounded-full border border-line px-2 text-xs text-primary hover:border-primary"
                   >
                     {c.evidence_refs.length} 筆紀錄
