@@ -2,7 +2,7 @@
 
 > 每個人有一份跟著他走的紀錄，和一個替這份紀錄說話的 agent。今天，它先學會聽照顧他的人說話。
 
-BUILDMODE 2026 × SITCON ・ Healthcare AI 賽道。照服員講一句話（任何語言）→ AI 只抽取成八個觀察維度、不判斷 → 護理師按一下 → 醫師巡診看一頁。紀錄是唯一資產；AI 只起草，人才定稿；每一行都有來源。
+BUILDMODE 2026 × SITCON ・ Healthcare AI 賽道。照服員講一句話（demo 為中文；多語為第二階段）→ AI 只抽取成八個觀察維度、不判斷 → 護理師按一下 → 醫師巡診看一頁。紀錄是唯一資產；AI 只起草，人才定稿；每一行都有來源。
 
 ![ci](https://github.com/chrisyang-c/record-follows-person/actions/workflows/ci.yml/badge.svg)
 
@@ -80,7 +80,7 @@ make api                           # http://localhost:8000  (/docs 有 OpenAPI)
 make web                           # http://localhost:3000
 ```
 
-三個介面：`/caregiver`（手機、語音優先、母語）、`/nurse`（平板／桌面：紅燈置頂、10 秒確認、ISBAR 編輯器、巡診準備）、`/doctor`（唯讀 RoundPage，可列印 A4）。逐步驗收指令見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
+三個介面：`/caregiver`（手機 390px 優先、LINE 式聊天引導：先講一句，系統依八維度一次問一題、快速回覆、上限 4 題，紅燈立即中止；zh-TW）、`/nurse`（平板／桌面：紅燈置頂、10 秒確認、ISBAR 編輯器、巡診準備）、`/doctor`（唯讀 RoundPage，可列印 A4）。逐步驗收指令見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
 
 測試：`make test`（api：ruff + pytest；web：eslint + vitest）；評測：`make eval`。
 
@@ -99,7 +99,7 @@ PersonRecord（records/{patient_id}/）
 
 八維度（觀察架構參考 INTERACT Stop and Watch（Florida Atlantic University），項目措辭與分類為本專案自訂，未複製原工具）：`intake` 進食與飲水｜`elimination` 排泄｜`function` 活動與日常功能｜`cognition` 意識、認知、情緒、溝通｜`sleep` 睡眠｜`skin` 皮膚與傷口｜`pain` 疼痛｜`vitals` 生命徵象與呼吸症狀。跨維度旗標 `seems_different`；事件快捷 `fall / medication_issue / choking / behavior`。
 
-provenance 六種來源：`caregiver_said | ai_extracted | nurse_assessed | nurse_confirmed | doctor_ordered | system_derived`。AI 的行永遠是 `ai_extracted`；只有 `nurse_confirmed` 的行會出現在給醫師的頁面。ISBAR 的 A／R 是兩組欄位：AI 只能寫 `ai_change_vs_baseline` 與 `ai_questions_for_nurse`；`nurse_assessment` / `nurse_recommendation` 只有護理師能寫。
+每一行保留 `language_original`（預設 `zh-TW`）。provenance 六種來源：`caregiver_said | ai_extracted | nurse_assessed | nurse_confirmed | doctor_ordered | system_derived`。AI 的行永遠是 `ai_extracted`；只有 `nurse_confirmed` 的行會出現在給醫師的頁面。ISBAR 的 A／R 是兩組欄位：AI 只能寫 `ai_change_vs_baseline` 與 `ai_questions_for_nurse`；`nurse_assessment` / `nurse_recommendation` 只有護理師能寫。
 
 Schema 單一來源：[packages/schema/record_schema/models.py](packages/schema/record_schema/models.py)（Pydantic v2）→ `make codegen` → [packages/schema/ts/index.ts](packages/schema/ts/index.ts)。
 
@@ -124,7 +124,7 @@ Schema 單一來源：[packages/schema/record_schema/models.py](packages/schema/
 
 ## 評測結果
 
-`apps/api/eval/run.py` 對 46 條合成照護者語句（中 24／印 12／越 10，含模糊句與 5 條誘導下診斷的句子）計算。CI 每次跑，結果在 [apps/api/eval/results.md](apps/api/eval/results.md)。目前（`MODEL_PROVIDER=openai` 但本機無 `OPENAI_API_KEY`，實際走 mock 確定性抽取）：
+`apps/api/eval/run.py` 對 46 條合成照護者語句（zh-TW，含模糊句與 5 條誘導下診斷的句子；多語語句集為第二階段）計算。CI 每次跑，結果在 [apps/api/eval/results.md](apps/api/eval/results.md)。目前（`MODEL_PROVIDER=openai` 但本機無 `OPENAI_API_KEY`，實際走 mock 確定性抽取）：
 
 | 指標 | 值 |
 |---|---|
@@ -142,13 +142,14 @@ mock 模式的 hallucination 在結構上不可能超過關鍵字命中（raw_qu
 
 | 真做 | 假做／寫死 |
 |---|---|
-| Intake（語音→八維度，含追問，三語）| 影像分析（固定摘要）|
+| Intake（語音→八維度，多輪聊天追問上限 4 題；zh-TW）| 影像分析（固定摘要）|
+| — | 多語（id／vi）介面與翻譯：第二階段（schema 的 `lang` / `language_original` 已保留，預設 zh-TW）|
 | Baseline Comparator（規則）| Timeline Curator 只做結構（seed 資料先整理好）|
 | 紅燈規則＋推播 | 119／特約醫療機構通知（畫面提示）|
 | ISBAR 預填＋護理師確認畫面＋退回＋超時升級（worker）| LINE 家屬通知（未設 token 時只顯示）|
 | Incident Compiler → 兩區塊事故檔 + 後送頁 | 出院摘要 PDF（`ingest/discharge_pdf.py` mock）|
 | Familiarization Writer → 一頁 RoundPage，可列印 | 生命徵象量測（`ingest/vitals.py` 寫死）|
-| Order Ingest → 照護者三件事（印尼／越南語）＋ baseline 提案＋確認 | Roster 排序（3 位住民）|
+| Order Ingest → 照護者三件事（中文）＋ baseline 提案＋確認 | Roster 排序（3 位住民）|
 
 其他限制見 [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)。本機沒有 `OPENAI_API_KEY` 時所有流程以 mock（確定性抽取）跑完；`deepagents / langgraph / langchain` 鎖精確版本（alpha）。**只用合成資料**：`data/seed/` 的姓名為代號，repo 內沒有任何真實個資。
 

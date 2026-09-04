@@ -26,7 +26,7 @@ from record.store import (
 TS = datetime(2026, 9, 1, 8, 0, tzinfo=UTC)
 
 
-def prov(source="caregiver_said", author="cg_siti", confirmed_by=None) -> Provenance:
+def prov(source="caregiver_said", author="cg_xiaofang", confirmed_by=None) -> Provenance:
     return Provenance(source=source, author=author, confirmed_by=confirmed_by, ts=TS)
 
 
@@ -38,8 +38,8 @@ def profile() -> Profile:
         birth_year=1940,
         room="201-A",
         contract_facility=Facility(name="特約醫院", phone="02-0000-0000"),
-        caregiver_code_name="cg_siti",
-        caregiver_language="id",
+        caregiver_code_name="cg_xiaofang",
+        caregiver_language="zh-TW",
         primary_nurse="nurse_lin",
     )
 
@@ -70,15 +70,15 @@ def observation(status="approved", confirmed_by="nurse_lin", oid="obs_1") -> Obs
         provenance=prov("nurse_confirmed", "nurse_lin", confirmed_by),
         shift="day",
         observation=StructuredObservation(
-            raw_text="makan setengah",
-            language="id",
+            raw_text="吃一半",
+            language="zh-TW",
             domains={
                 "intake": DimensionValue(
                     value=0.5,
-                    raw_quote="makan setengah",
+                    raw_quote="吃一半",
                     provenance=prov("ai_extracted", "intake_agent"),
                     confidence=0.8,
-                    lang="id",
+                    lang="zh-TW",
                     direction="down",
                 )
             },
@@ -177,7 +177,7 @@ def test_document_write_rejects_draft(store):
         author="order_ingest",
         provenance=prov("ai_extracted", "order_ingest"),
         audience="caregiver",
-        lang="id",
+        lang="zh-TW",
         items=["a", "b", "c"],
         source_order_id="ord_1",
     )

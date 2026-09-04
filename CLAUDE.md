@@ -126,7 +126,7 @@ class DimensionValue(BaseModel):
     raw_quote: str            # 照護者原話片段
     provenance: Provenance
     confidence: float
-    lang: str                 # "zh-TW" | "id" | "vi"
+    lang: str                 # 預設 "zh-TW"；"id" | "vi" 為第二階段（demo 只用中文）
 ```
 
 ---
@@ -136,7 +136,7 @@ class DimensionValue(BaseModel):
 節點名稱以 `docs/*.mermaid` 為準。這裡只列閘門與硬規則。
 
 **Path A（急症）**
-`load_person_record → intake_agent → baseline_comparator → red_flag_rules`
+`load_person_record → intake_agent（多輪：追問到八維度足夠，上限 4 題；state 有 asked_dimensions、turn_count）→ baseline_comparator → red_flag_rules`
 → 命中：`notify_nurse_urgent → nurse_onsite_assessment`
 → 未命中：`caregiver_section_writer → sbar_draft → push_to_nurse → ◇nurse_review`
 `◇nurse_review`：接受／修改 → `nurse_onsite_assessment → sbar_final`；退回 → `intake_agent`；超時 → `escalate`（第二護理師／護理長）→ 回 `◇nurse_review`
@@ -209,7 +209,7 @@ agent = create_deep_agent(
 間距：8pt grid；卡片圓角 12px；陰影 0 1px 2px rgba(15,27,45,.06)
 ```
 **三個介面**
-- 照護者手機：一顆 ≥72px 麥克風鍵，最少文字，母語提示，追問最多兩題，「不知道」是大按鈕。
+- 照護者手機：LINE 式聊天引導（氣泡＋底部輸入列：麥克風＋文字），最少文字；先講一句，系統依八維度判斷缺什麼、一次只問一題、每題 2–4 個快速回覆、永遠有「不知道」；追問到八維度足夠，上限 4 題；已提到的維度不再問；紅燈關鍵字一出現立即中止追問並顯示「已通知護理師」；結束出「我理解的是這樣」摘要卡（照護者口吻）。390px 手機優先，按鈕 ≥56px。（demo 只用 zh-TW；多語為第二階段）
 - 護理師平板／桌面：一屏看完異常優先＋趨勢小圖；ISBAR 編輯器中 AI 欄位用虛線框＋「AI 草稿，請確認」；A/R 欄空白待填；紅燈 banner 置頂；確認鍵 ≥56px。
 - 醫師唯讀：RoundPage 可列印 A4，print CSS 第一週就做。
 
@@ -231,7 +231,7 @@ agent = create_deep_agent(
 ## 9. 測試與評測
 - 單元：`red_flags/`（每條規則三案例）、`record/`（provenance 不可缺、`timeline_write` 拒絕未核准）。
 - 圖測：Path A 走完全程含一次退回、一次超時升級；Path B 每班流程與巡診流程各一次。
-- 評測：`apps/api/eval/run.py` 對 30–50 條合成照護者語句（中／印／越，含模糊與誘導句）算 hallucination rate、omission rate、provenance 正確率；CI 跑，結果寫進 README。
+- 評測：`apps/api/eval/run.py` 對 30–50 條合成照護者語句（zh-TW，含模糊與誘導句；多語語句集為第二階段）算 hallucination rate、omission rate、provenance 正確率；CI 跑，結果寫進 README。
 
 ---
 
@@ -256,7 +256,8 @@ agent = create_deep_agent(
 ## 12. Demo 完成定義
 - `make seed` 後 3 住民 × 14 天資料存在，其中 1 位第 12 天有急症。
 - Path A：照護者說一句 → 紅燈或草稿 → 護理師審核（含一次退回）→ 定稿 → 路徑選擇 → 事故檔 → 家屬通知。
-- Path B：每班確認 → 巡診前名單 → RoundPage 三人各一頁 → 列印 A4 正常 → 醫囑 → 照服員三件事（印尼語版）。
+- Path B：每班確認 → 巡診前名單 → RoundPage 三人各一頁 → 列印 A4 正常 → 醫囑 → 照服員三件事（中文版）。
+- **Demo 語言只用 zh-TW。** 介面沒有語言切換與翻譯步驟；`lang` 與 provenance 的 `language_original` 欄位保留、預設 `"zh-TW"`；多語（id／vi）為第二階段。
 - 影片腳本（docs/VIDEO.md）：開場一個人的名字與一份紀錄 10 秒 → Path B 每班 20 秒 → Path A 急症 40 秒 → RoundPage 30 秒 → 拉遠看七條通道 15 秒 → 收尾句 5 秒。
 - README 含：一句話定位、問題與制度出處（頁碼）、架構圖（兩張 mermaid）、快速開始、資料模型與 provenance、紅燈規則聲明（非診斷）、評測結果、限制與 mock 清單、LICENSE（Apache-2.0）。
 

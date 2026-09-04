@@ -99,7 +99,7 @@ Timeline Curator 整理、Baseline Comparator 比對、Trend Analyzer 找變化�
 **輸入端**
 1. **Intake Agent（對話式引導）**
    輸入：照護者語音／文字／圖片，任何語言。
-   做：轉文字、翻譯、拆成八維度、缺什麼就問，最多 1–2 個問題，一定有「不知道」選項。
+   做：轉文字、拆成八維度、依八維度判斷缺什麼就問：一次只問一題、每題 2–4 個快速回覆、一定有「不知道」；追問到八維度足夠，上限 4 題；已提到的維度不再問；紅燈關鍵字一出現立即中止追問。結束時出「我理解的是這樣」摘要卡（照護者口吻）。state 記 `asked_dimensions`、`turn_count`。（demo 語言 zh-TW；翻譯／多語為第二階段）
    出：`StructuredObservation`，保留原話 `raw_text` 與 `language`。
    規則：不改照護者的口吻，不加判斷。
 
@@ -155,7 +155,7 @@ Timeline Curator 整理、Baseline Comparator 比對、Trend Analyzer 找變化�
 ```
 START
  → load PersonRecord
- → Intake Agent（對話式，1–2 問）
+ → Intake Agent（對話式，多輪追問，上限 4 題）
  → Baseline Comparator
  → Triage Agent
      ├─ 紅燈 → 推播護理師 → 護理師到場 → 後送 or 119 → Handoff Packager → END（緊急）
@@ -220,6 +220,7 @@ START
   "person_record_ref": "…",
   "raw_input": { "text": "…", "language": "id", "media": [] },
   "structured_observation": { "domains": { "intake": {...}, "sleep": {...}, "...": {} }, "unknown": [], "raw_text": "…" },
+  "asked_dimensions": ["sleep", "pain"], "turn_count": 2,
   "baseline_delta": [ { "domain": "intake", "direction": "down", "magnitude": 0.5, "days": 3 } ],
   "triage": { "level": "red | urgent | routine", "reasons": [], "evidence_refs": [], "decided_by": "rule | llm | nurse" },
   "caregiver_section": { "…": "…" },
@@ -240,7 +241,7 @@ Checkpointer 用 PostgreSQL，interrupt 節點：護理師確認（A、B 都有�
 
 | 真做 | 假做／寫死 |
 |---|---|
-| Intake（語音→結構化，含一次追問） | 影像分析（用固定摘要） |
+| Intake（語音→結構化，多輪追問上限 4 題） | 影像分析（用固定摘要） |
 | Baseline Comparator（規則） | Timeline Curator（demo 資料先整理好） |
 | Triage 規則層＋紅燈推播 | 119／特約醫療機構通知（畫面提示即可） |
 | Nurse Assist ISBAR 預填＋護理師確認畫面 | 超時升級（旁白帶過） |

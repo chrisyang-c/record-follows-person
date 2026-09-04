@@ -107,10 +107,8 @@ def test_round_flow_three_pages_orders_notes_baseline():
     assert props and all(p["status"] == "draft" for p in props)
     notes = snap["values"]["caregiver_notes"]
     p001_notes = next(n for n in notes if n["patient_id"] == "P001")
-    assert p001_notes["lang"] == "id" and 1 <= len(p001_notes["items"]) <= 3
-    assert any(
-        "Catat" in it or "Target minum" in it or "Obat baru" in it for it in p001_notes["items"]
-    )
+    assert p001_notes["lang"] == "zh-TW" and 1 <= len(p001_notes["items"]) <= 3
+    assert any("喝水目標" in it or "新藥" in it or "夜間醒來" in it for it in p001_notes["items"])
 
     baseline_before = store.load_baseline("P001").current("intake")
     snap = runner.resume(snap["thread_id"], {"action": "approve", "nurse_id": NURSE})

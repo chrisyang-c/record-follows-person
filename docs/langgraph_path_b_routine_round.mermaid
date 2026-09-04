@@ -3,7 +3,7 @@
 flowchart TD
     subgraph SHIFT[每班：照護者一句話]
         s0([START]) --> s1[load_person_record]
-        s1 --> s2[intake_agent<br/>語音→八維度]
+        s1 --> s2[intake_agent<br/>語音→八維度<br/>多輪追問，上限 4 題]
         s2 --> s3[baseline_comparator]
         s3 --> s4{red_flag_rules<br/>純程式}
         s4 -- 命中 --> s5[notify_nurse_urgent] --> sA[to_path_a<br/>→ 轉入 Path A]

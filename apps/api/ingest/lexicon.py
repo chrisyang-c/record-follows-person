@@ -139,7 +139,7 @@ _FLAGS: dict[str, str] = {
         r"không đứng dậy được|không dậy được|không đứng được|can.?t get up|cannot get up"
     ),
     "no_urine_24h": (
-        r"一整天沒尿|整天沒尿|24 ?小時沒尿|一天沒有尿|都沒尿|尿布都是乾的|"
+        r"一整天沒尿|整天沒尿|整天沒有尿|24 ?小時沒尿|一天沒有尿|都沒尿|尿布都是乾的|尿布是乾的|"
         r"tidak kencing seharian|seharian tidak pipis|seharian tidak kencing|popok kering seharian|"
         r"cả ngày không đi tiểu|cả ngày không tiểu|tã khô cả ngày|no urine all day"
     ),
@@ -173,7 +173,7 @@ _INCIDENTS: dict[str, str] = {
 _INC_RE = {k: re.compile(v, re.IGNORECASE) for k, v in _INCIDENTS.items()}
 
 _SEEMS_DIFFERENT = re.compile(
-    r"跟平常不一樣|和平常不一樣|跟平常不同|怪怪的|不太對勁|不太對|不像平常|今天很不一樣|"
+    r"跟平常不一樣|跟平常不太一樣|和平常不一樣|和平常不太一樣|跟平常不同|怪怪的|不太對勁|不太對|不像平常|今天很不一樣|"
     r"tidak seperti biasa|beda dari biasanya|tidak seperti biasanya|aneh|lain dari biasa|"
     r"khác thường|không như mọi khi|lạ lạ|khác mọi ngày|không bình thường|"
     r"not (?:like )?(?:him|her)self|"
@@ -181,6 +181,14 @@ _SEEMS_DIFFERENT = re.compile(
     re.IGNORECASE,
 )
 
+_NO_PAIN = re.compile(
+    r"不痛|不喊痛|沒痛|沒有痛|不會痛|不再痛|沒喊痛|tidak sakit|không đau", re.IGNORECASE
+)
+_SKIN_BETTER = re.compile(
+    r"變小|比較不紅|不紅了|快好了|快癒合|癒合|結痂|比較乾|乾了|小很多|好多了|"
+    r"mengecil|membaik|nhỏ hơn|đỡ hơn",
+    re.IGNORECASE,
+)
 _SLEPT_WELL = re.compile(
     r"睡得好|睡得很好|一覺到天亮|沒有醒|nyenyak|tidak bangun|ngủ ngon|ngủ yên|slept well",
     re.IGNORECASE,
@@ -352,6 +360,8 @@ def extract_with_lexicon(
                 continue  # 嗜睡／叫不醒 is cognition, not the sleep dimension
             if dim == "intake" and _MED_WORD.search(clause):
                 continue  # 吃藥／minum obat／uống thuốc is medication, not intake
+            if dim == "function" and _FLAG_RE["cannot_get_up_after_fall"].search(clause):
+                continue  # 跌倒後站不起來 is a red-flag fact, not the function dimension
             if dim == "pain" and _PAINKILLER.search(clause):
                 continue  # 止痛藥 names a drug, not a pain observation
             if dim in domains:
@@ -379,7 +389,11 @@ def extract_with_lexicon(
                 if c is not None:
                     value = c
             if direction == "unknown":
-                if dim in ("pain", "skin"):
+                if dim == "pain" and _NO_PAIN.search(clause):
+                    value, direction = 0.0, "down"  # 不痛／不喊痛了 = improvement
+                elif dim == "skin" and _SKIN_BETTER.search(clause):
+                    direction = "down"  # 變小／比較不紅／快好了 = improvement
+                elif dim in ("pain", "skin"):
                     direction = "up"
                 elif _DOWN.search(clause) and not _UP.search(clause):
                     direction = "down"

@@ -5,8 +5,7 @@ FilesystemMiddleware). Any write goes through record.write_timeline (graph node
 `timeline_write`), never through the agent. Subagents return structured results only.
 
 With MODEL_PROVIDER=mock (or a missing key) the same graph is built on a fake chat model
-so wiring, tool boundaries and interrupt config are testable without network.
-and interrupt config are testable without network."""
+so wiring, tool boundaries and interrupt config are testable without network."""
 
 from __future__ import annotations
 
