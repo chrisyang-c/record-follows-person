@@ -1,10 +1,12 @@
 """All LLM calls live here. Nothing else in apps/api may import langchain/anthropic.
 
 Two implementations behind one interface:
-  * MockLLM     — deterministic keyword extraction / templating. No network. Used when
-                  LLM_MODE=mock (default), by tests, eval and CI.
-  * AnthropicLLM — Claude via langchain-anthropic (LLM_MODE=anthropic + ANTHROPIC_API_KEY).
-                  Falls back to MockLLM per-call if the model call fails.
+  * MockLLM      — deterministic keyword extraction / templating. No network. Used when
+                   MODEL_PROVIDER=mock, by tests, eval and CI, and whenever the provider key
+                   is missing.
+  * ChatModelLLM — any LangChain chat model from settings.get_model() (ChatOpenAI when
+                   MODEL_PROVIDER=openai, ChatAnthropic when anthropic), pinned to MODEL_PINNED,
+                   temperature=0. Falls back to MockLLM per-call if the model call fails.
 
 Hard rules baked in regardless of implementation (CLAUDE.md §1.3):
   * extraction never adds judgement; every DimensionValue.raw_quote must be a substring
@@ -19,6 +21,7 @@ import logging
 import re
 from datetime import UTC, datetime
 from functools import lru_cache
+from typing import Any
 
 from pydantic import BaseModel, Field
 from record_schema import (
@@ -258,7 +261,7 @@ class MockLLM(LLM):
 
 
 # ---------------------------------------------------------------------------
-# Anthropic — Claude via langchain-anthropic (structured output)
+# ChatModelLLM — provider-agnostic, built on settings.get_model() (structured output)
 # ---------------------------------------------------------------------------
 
 
@@ -293,16 +296,11 @@ EXTRACT_SYSTEM = """你是長照機構的 Intake Agent。照護者用任何語�
 7. translation_zh：非中文時給忠實翻譯。"""
 
 
-class AnthropicLLM(LLM):
-    name = "anthropic"
-
-    def __init__(self) -> None:
-        from langchain_anthropic import ChatAnthropic
-
+class ChatModelLLM(LLM):
+    def __init__(self, model: Any | None = None) -> None:
         s = get_settings()
-        self.model = ChatAnthropic(
-            model=s.MODEL_PINNED, api_key=s.ANTHROPIC_API_KEY, temperature=0, max_tokens=2048
-        )
+        self.model = model if model is not None else s.get_model()
+        self.name = f"{s.effective_provider}:{s.MODEL_PINNED}"
         self.fallback = MockLLM()
 
     def extract_observation(self, text, lang, profile=None, baseline=None):
@@ -355,7 +353,7 @@ class AnthropicLLM(LLM):
             )
             return _guard_quotes(obs)
         except Exception as e:  # noqa: BLE001
-            log.warning("anthropic extraction failed (%s); using mock", e)
+            log.warning("%s extraction failed (%s); using mock", self.name, e)
             return self.fallback.extract_observation(text, lang, profile, baseline)
 
     def minimal_sbar(self, obs, deltas):
@@ -378,7 +376,7 @@ class AnthropicLLM(LLM):
             draft.situation = scrub_clinical_language(res.situation)
             draft.background = scrub_clinical_language(res.background)
         except Exception as e:  # noqa: BLE001
-            log.warning("anthropic isbar polish failed (%s); keeping mock draft", e)
+            log.warning("%s isbar polish failed (%s); keeping mock draft", self.name, e)
         return draft
 
     def family_notification(self, profile, what_happened, route_text):
@@ -390,7 +388,7 @@ class AnthropicLLM(LLM):
             )
             return scrub_clinical_language(str(res.content))
         except Exception as e:  # noqa: BLE001
-            log.warning("anthropic family notification failed (%s)", e)
+            log.warning("%s family notification failed (%s)", self.name, e)
             return base
 
     def translate_lines(self, lines_zh, lang):
@@ -406,16 +404,17 @@ class AnthropicLLM(LLM):
             if len(res.lines) == len(lines_zh):
                 return res.lines
         except Exception as e:  # noqa: BLE001
-            log.warning("anthropic translate failed (%s)", e)
+            log.warning("%s translate failed (%s)", self.name, e)
         return self.fallback.translate_lines(lines_zh, lang)
 
 
 @lru_cache
 def get_llm() -> LLM:
+    """MockLLM unless a provider AND its key are configured; then ChatModelLLM(get_model())."""
     s = get_settings()
     if s.llm_enabled:
         try:
-            return AnthropicLLM()
+            return ChatModelLLM(s.get_model())
         except Exception as e:  # noqa: BLE001
-            log.warning("AnthropicLLM unavailable (%s); using MockLLM", e)
+            log.warning("%s model unavailable (%s); using MockLLM", s.MODEL_PROVIDER, e)
     return MockLLM()

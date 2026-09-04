@@ -1,4 +1,4 @@
-.PHONY: db db-local migrate seed api web worker test lint eval codegen audit clean-records
+.PHONY: db db-local migrate seed api web worker test lint eval codegen audit clean-records reset reset-docker
 
 API_DIR=apps/api
 WEB_DIR=apps/web
@@ -47,3 +47,13 @@ audit:         ## web-design-guidelines audit of apps/web → docs/UI_AUDIT.md (
 
 clean-records:
 	rm -rf records
+
+reset:         ## drop + recreate the local DB, migrate, seed (clean demo state; brew postgres)
+	-$(PGBIN)/psql -h localhost -d postgres -c "drop database if exists record_follows_person" -c "create database record_follows_person"
+	$(MAKE) migrate
+	$(MAKE) seed
+
+reset-docker:  ## same for docker compose postgres
+	docker compose exec -T postgres psql -U rfp -d postgres -c "drop database if exists record_follows_person" -c "create database record_follows_person"
+	$(MAKE) migrate
+	$(MAKE) seed

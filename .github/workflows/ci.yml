@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: rfp
+          POSTGRES_PASSWORD: rfp
+          POSTGRES_DB: record_follows_person
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rfp -d record_follows_person"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      MODEL_PROVIDER: mock
+      DATABASE_URL: postgresql://rfp:rfp@localhost:5432/record_follows_person
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: sync
+        run: cd apps/api && uv sync
+      - name: lint
+        run: cd apps/api && uv run ruff check . && uv run ruff format --check .
+      - name: migrate (PostgresSaver.setup + registry)
+        run: cd apps/api && uv run python -m graphs.migrate
+      - name: seed
+        run: cd apps/api && uv run python ../../data/seed/seed.py
+      - name: tests
+        run: cd apps/api && uv run pytest -q
+      - name: eval (extraction)
+        run: cd apps/api && uv run python -m eval.run
+      - name: codegen is up to date
+        run: |
+          cd apps/api && uv run python ../../packages/schema/codegen.py
+          git diff --exit-code -- ../../packages/schema/ts/index.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: apps/api/eval/results.md
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: cd apps/web && pnpm install --frozen-lockfile
+      - run: cd apps/web && pnpm lint
+      - run: cd apps/web && pnpm typecheck
+      - run: cd apps/web && pnpm test
+      - run: cd apps/web && pnpm build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000

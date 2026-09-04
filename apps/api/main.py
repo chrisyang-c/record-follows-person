@@ -51,8 +51,10 @@ def health() -> dict[str, Any]:
     s = get_settings()
     return {
         "ok": True,
-        "llm_mode": s.LLM_MODE,
+        "model_provider": s.MODEL_PROVIDER,
+        "model_pinned": s.MODEL_PINNED,
         "llm_enabled": s.llm_enabled,
+        "effective_provider": s.effective_provider,
         "checkpointer": "postgres" if is_postgres() else "memory",
         "records": get_store().list_patients(),
         "time": datetime.now(UTC).isoformat(),

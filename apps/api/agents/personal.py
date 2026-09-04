@@ -4,7 +4,8 @@ The agent has NO state of its own: its only memory is records/{patient_id}/ (rea
 FilesystemMiddleware). Any write goes through record.write_timeline (graph node
 `timeline_write`), never through the agent. Subagents return structured results only.
 
-With LLM_MODE=mock the same graph is built on a fake chat model so wiring, tool boundaries
+With MODEL_PROVIDER=mock (or a missing key) the same graph is built on a fake chat model
+so wiring, tool boundaries and interrupt config are testable without network.
 and interrupt config are testable without network."""
 
 from __future__ import annotations
@@ -15,8 +16,6 @@ from typing import Any
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from deepagents.middleware import FilesystemMiddleware, SubAgent
-from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 
 from agents.subagents import familiarization_writer, handoff_packager, trend_analyzer
@@ -26,17 +25,10 @@ from record.store import get_store
 READ_ONLY_TOOLS = ["read_file", "ls", "glob", "grep"]
 
 
-def _mock_model() -> GenericFakeChatModel:
-    return GenericFakeChatModel(messages=iter([AIMessage(content="（mock 模型：無網路）")]))
-
-
 def _model() -> Any:
-    s = get_settings()
-    if s.llm_enabled:
-        from langchain_anthropic import ChatAnthropic
-
-        return ChatAnthropic(model=s.MODEL_PINNED, api_key=s.ANTHROPIC_API_KEY, temperature=0)
-    return _mock_model()
+    """Every deep agent gets its model from settings.get_model() (ChatOpenAI when
+    MODEL_PROVIDER=openai; a fake chat model when mock or the key is missing)."""
+    return get_settings().get_model()
 
 
 # --- tools that wrap the pure subagent implementations (structured in / structured out) ---

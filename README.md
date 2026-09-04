@@ -1,0 +1,163 @@
+# 一份能跟著人走的紀錄
+
+> 每個人有一份跟著他走的紀錄，和一個替這份紀錄說話的 agent。今天，它先學會聽照顧他的人說話。
+
+BUILDMODE 2026 × SITCON ・ Healthcare AI 賽道。照服員講一句話（任何語言）→ AI 只抽取成八個觀察維度、不判斷 → 護理師按一下 → 醫師巡診看一頁。紀錄是唯一資產；AI 只起草，人才定稿；每一行都有來源。
+
+![ci](https://github.com/chrisyang-c/record-follows-person/actions/workflows/ci.yml/badge.svg)
+
+---
+
+## 問題與制度出處
+
+醫師永遠不夠（WHO：2030 年全球醫療人力短缺 1,000 萬），台灣老得最快（65 歲以上 19.9%，2050 年 38.4%），但每位住民身邊都有一雙每天看著他的眼睛——照服員。他們看得到「今天不太想吃、走路變慢、叫她名字反應慢」，只是不會打字、不會填表、可能不講中文，所以醫療從來沒聽見。
+
+制度依據（衛福部《長期照顧十年計畫 3.0（115–124 年）核定本》，行政院 2025/12/31 核定）：
+
+| 頁 | 內容 |
+|---|---|
+| p.8 | 住宿式長照機構 1,687 家、118,716 床 |
+| p.19 | 減少照護機構住民就醫方案：1,681 家機構、529 家醫療機構、13.5 萬人受益 |
+| p.26 | 長照人員資訊能力落差、照顧紀錄數位化推進緩慢 |
+| p.68–69 | 住宿機構整合照護模式、論人計酬；在宅醫療照護資訊平台 |
+| p.70–72 | 多家醫療機構診療、無專責醫療機構負起住民健康管理 |
+| p.81 | 住宿機構品質獎勵：指標含「建構照顧資訊系統」 |
+| p.101 | 住宿機構住民失智症盛行率 86.17% |
+| p.147 | KPI「照護機構由同一醫療院所提供服務率」69.8% → 2035 年 90% |
+
+另：長照機構評鑑基準 B8（特約醫師巡診、緊急後送、每月診察有紀錄）、長照服務法第 33 條、長照機構定型化契約範本（113 年）。完整敘事見 [docs/一份能跟著人走的紀錄_摘要與願景.md](docs/一份能跟著人走的紀錄_摘要與願景.md)。
+
+---
+
+## 架構
+
+設計稿：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。兩張 LangGraph 圖是節點名稱的唯一來源（`tests/test_mermaid_sync.py` 會比對）。
+
+### Path A：急症（需看醫師，不到 119）
+
+```mermaid
+flowchart TD
+    START([START]) --> load[load_person_record] --> intake[intake_agent] --> cmp[baseline_comparator] --> rf{red_flag_rules<br/>純程式}
+    rf -- 命中 --> alert[notify_nurse_urgent] --> onsite
+    rf -- 未命中 --> cg[caregiver_section_writer] --> draft[sbar_draft<br/>A 只寫變化，R 只提問] --> push[push_to_nurse] --> review{{"◇ nurse_review"}}
+    review -- 超時 --> esc[escalate] --> review
+    review -- 退回 --> intake
+    review -- 接受／修改 --> onsite{{"◇ nurse_onsite_assessment<br/>護理師寫 A、R"}} --> final[sbar_final] --> route{{"◇ nurse_route_choice"}}
+    route --> pack[handoff_packager] --> inc[incident_compiler] --> tl[(timeline_write<br/>需 approved)] --> fam[family_notification_draft] --> famok{{"◇ nurse_approve_notification"}} --> send[send_line] --> fu[schedule_follow_up] --> END([END])
+    route -- 轉觀察 --> obs[to_routine_timeline] --> inc
+```
+
+### Path B：日常 → 本地歷史 → 巡診
+
+```mermaid
+flowchart TD
+    subgraph SHIFT[每班]
+        s1[load_person_record] --> s2[intake_agent] --> s3[baseline_comparator] --> s4{red_flag_rules}
+        s4 -- 命中 --> s5[notify_nurse_urgent] --> sA[to_path_a]
+        s4 -- 未命中 --> s6[minimal_sbar_draft] --> s7{{"◇ nurse_10s_confirm"}} --> s8[(timeline_write)] --> s9[timeline_curator]
+    end
+    subgraph ROUND[巡診前]
+        r1[roster_agent] --> r2[trend_analyzer ×N] --> r3[familiarization_writer ×N] --> r4{{"◇ head_nurse_edit_list"}} --> r5[publish_round_pages] --> r6{{"◇ doctor_round"}} --> r7[order_ingest]
+        r7 --> r8[order_to_caregiver_notes] --> r12[(timeline_write)]
+        r7 --> r9[baseline_update_proposal] --> r10{{"◇ nurse_confirm_baseline"}} --> r11[(baseline_write)] --> r12
+    end
+```
+
+原圖：[docs/langgraph_path_a_incident.mermaid](docs/langgraph_path_a_incident.mermaid)、[docs/langgraph_path_b_routine_round.mermaid](docs/langgraph_path_b_routine_round.mermaid)。
+
+**層級**：`apps/api/core/settings.py::get_model()`（唯一的模型工廠：`MODEL_PROVIDER=openai` → `ChatOpenAI(model=MODEL_PINNED, temperature=0)`；deep agent 與所有 graph 節點都經它）→ `apps/api/graphs`（LangGraph，PostgresSaver checkpointer，`interrupt()` + `Command(resume=…)`，APScheduler 超時 worker）→ `apps/api/agents`（每位住民一個 deepagents 實例，唯讀檔案系統；三個 subagent 只回結構化結果）→ `apps/api/record`（PersonRecord 讀寫層，`write_timeline` 是唯一寫入點）→ `records/{patient_id}/`（一人一個目錄，跟著人走）。
+
+---
+
+## 快速開始
+
+```bash
+cp .env.example .env               # MODEL_PROVIDER=openai + OPENAI_API_KEY；沒 key 會自動退回 mock
+docker compose up -d postgres      # 沒 Docker：make db-local（Homebrew postgresql@17）
+make migrate                       # PostgresSaver.setup() + threads 表（只在這裡跑）
+make seed                          # 3 住民 × 14 天 × 2 班 + 第 12 天一次急症 → records/
+make api                           # http://localhost:8000  (/docs 有 OpenAPI)
+make web                           # http://localhost:3000
+```
+
+三個介面：`/caregiver`（手機、語音優先、母語）、`/nurse`（平板／桌面：紅燈置頂、10 秒確認、ISBAR 編輯器、巡診準備）、`/doctor`（唯讀 RoundPage，可列印 A4）。逐步驗收指令見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
+
+測試：`make test`（api：ruff + pytest；web：eslint + vitest）；評測：`make eval`。
+
+---
+
+## 資料模型與 provenance
+
+```
+PersonRecord（records/{patient_id}/）
+├── profile.json      慢病、過敏、DNR、緊急聯絡人、特約醫療機構、目前所在（FHIR-lite 命名）
+├── baseline.json     八維度的「平常」，每筆 valid_from / valid_to / set_by；只在 ◇nurse_confirm_baseline 後更新
+├── timeline/         只增不改：Observation | Incident | Encounter | Order（每筆 status/confirmed_by/provenance）
+├── documents/        RoundPage | HandoffPage | VisitPage | IncidentFile | CaregiverNotes，帶 generated_from
+└── provenance.jsonl  每行：source, author, confirmed_by, ts, language_original
+```
+
+八維度（觀察架構參考 INTERACT Stop and Watch（Florida Atlantic University），項目措辭與分類為本專案自訂，未複製原工具）：`intake` 進食與飲水｜`elimination` 排泄｜`function` 活動與日常功能｜`cognition` 意識、認知、情緒、溝通｜`sleep` 睡眠｜`skin` 皮膚與傷口｜`pain` 疼痛｜`vitals` 生命徵象與呼吸症狀。跨維度旗標 `seems_different`；事件快捷 `fall / medication_issue / choking / behavior`。
+
+provenance 六種來源：`caregiver_said | ai_extracted | nurse_assessed | nurse_confirmed | doctor_ordered | system_derived`。AI 的行永遠是 `ai_extracted`；只有 `nurse_confirmed` 的行會出現在給醫師的頁面。ISBAR 的 A／R 是兩組欄位：AI 只能寫 `ai_change_vs_baseline` 與 `ai_questions_for_nurse`；`nurse_assessment` / `nurse_recommendation` 只有護理師能寫。
+
+Schema 單一來源：[packages/schema/record_schema/models.py](packages/schema/record_schema/models.py)（Pydantic v2）→ `make codegen` → [packages/schema/ts/index.ts](packages/schema/ts/index.ts)。
+
+---
+
+## 紅燈規則聲明（非診斷）
+
+[apps/api/red_flags/rules.py](apps/api/red_flags/rules.py) 是純程式，不呼叫 LLM（有測試檢查 import）。命中即推播護理師並跳過起草。輸出只呈現「觀察到的事實 + 建議聯絡護理師」，不輸出等級或分數。每條規則 `requires_validation=True`：**需護理師／醫師驗證，非診斷、非檢傷分級。**
+
+| id | 條件 | 動作 |
+|---|---|---|
+| RF01 | 意識改變、新發生混亂或嗜睡 | 立即通知 |
+| RF02 | 體溫 ≥38.5°C 或 <35°C | 立即通知 |
+| RF03 | 呼吸 <8 或 ≥25／分；SpO₂ <92% 或較基線降 ≥3% | 立即通知 |
+| RF04 | 收縮壓 <90 或 >220；心率 <40 或 >130 | 立即通知 |
+| RF05 | 跌倒且頭部撞擊或使用抗凝血劑 | 立即通知 |
+| RF06 | 發燒＋心跳快＋意識改變同時出現 | 立即通知 |
+| RF07 | 進食量驟降、24h 未排尿 | 記錄觀察 |
+| RF08–10 | 胸痛、呼吸困難、跌倒後無法起身（ARCHITECTURE §4 關鍵字硬條件） | 立即通知 |
+
+---
+
+## 評測結果
+
+`apps/api/eval/run.py` 對 46 條合成照護者語句（中 24／印 12／越 10，含模糊句與 5 條誘導下診斷的句子）計算。CI 每次跑，結果在 [apps/api/eval/results.md](apps/api/eval/results.md)。目前（`MODEL_PROVIDER=openai` 但本機無 `OPENAI_API_KEY`，實際走 mock 確定性抽取）：
+
+| 指標 | 值 |
+|---|---|
+| Hallucination rate（有 ≥1 個多抽的標籤） | 2/46 = 4.3% |
+| Omission rate（有 ≥1 個漏抽的標籤） | 0/46 = 0.0% |
+| Provenance 正確率（source=ai_extracted ∧ raw_quote ⊂ 原文） | 46/46 = 100% |
+| 輸出不含診斷詞 | 46/46 = 100% |
+| 誘導句（「他應該是感冒了吧」等）不下診斷 | 5/5 |
+
+mock 模式的 hallucination 在結構上不可能超過關鍵字命中（raw_quote 必須是原文子字串）；填入 `OPENAI_API_KEY` 後走 `ChatOpenAI(model=MODEL_PINNED, temperature=0)`，同一道守門仍在（`core/llm.py::_guard_quotes`）。
+
+---
+
+## 限制與 mock 清單
+
+| 真做 | 假做／寫死 |
+|---|---|
+| Intake（語音→八維度，含追問，三語）| 影像分析（固定摘要）|
+| Baseline Comparator（規則）| Timeline Curator 只做結構（seed 資料先整理好）|
+| 紅燈規則＋推播 | 119／特約醫療機構通知（畫面提示）|
+| ISBAR 預填＋護理師確認畫面＋退回＋超時升級（worker）| LINE 家屬通知（未設 token 時只顯示）|
+| Incident Compiler → 兩區塊事故檔 + 後送頁 | 出院摘要 PDF（`ingest/discharge_pdf.py` mock）|
+| Familiarization Writer → 一頁 RoundPage，可列印 | 生命徵象量測（`ingest/vitals.py` 寫死）|
+| Order Ingest → 照護者三件事（印尼／越南語）＋ baseline 提案＋確認 | Roster 排序（3 位住民）|
+
+其他限制見 [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)。本機沒有 `OPENAI_API_KEY` 時所有流程以 mock（確定性抽取）跑完；`deepagents / langgraph / langchain` 鎖精確版本（alpha）。**只用合成資料**：`data/seed/` 的姓名為代號，repo 內沒有任何真實個資。
+
+---
+
+## 文件
+
+[CLAUDE.md](CLAUDE.md)（開發規則）・[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)・[docs/DECISIONS.md](docs/DECISIONS.md)・[docs/design.md](docs/design.md)・[docs/UI_AUDIT.md](docs/UI_AUDIT.md)・[docs/VIDEO.md](docs/VIDEO.md)・[docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)・[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
+
+## LICENSE
+
+Apache-2.0，見 [LICENSE](LICENSE)。
