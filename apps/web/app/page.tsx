@@ -1,69 +1,77 @@
-import Image from "next/image";
+"use client";
+
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { useApi, type Resident } from "@/lib/api";
+import { fmtDateTime } from "@/lib/format";
+
+const CHANNELS = [
+  { n: 1, name: "照服員每班觀察 + 護理師 ISBAR", live: true },
+  { n: 2, name: "醫師醫囑（巡診）", live: true },
+  { n: 3, name: "出院摘要（mock）", live: false },
+  { n: 4, name: "生命徵象（寫死）", live: false },
+  { n: 5, name: "家屬觀察", live: false },
+  { n: 6, name: "健保雲端藥歷", live: false },
+  { n: 7, name: "感測器", live: false },
+];
+
+const PILL = "inline-flex min-h-11 items-center rounded-full border border-line px-3 hover:border-primary hover:text-primary";
 
 export default function Home() {
+  const { data: residents, error, loading } = useApi<Resident[]>("/residents");
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="space-y-8">
+      <section className="max-w-3xl">
+        <h1 className="text-3xl font-medium leading-tight">每個人有一份跟著他走的紀錄，和一個替這份紀錄說話的 agent。</h1>
+        <p className="mt-3 text-ink-2">今天，它先學會聽照顧他的人說話。照服員講一句話（中文；多語為第二階段）→ 八維度 → 護理師按一下 → 醫師看一頁。</p>
+      </section>
+
+      <section aria-labelledby="residents">
+        <h2 id="residents" className="mb-3 text-lg font-medium">三位住民（合成資料）</h2>
+        {error && (
+          <p role="alert" className="text-danger-ink">
+            API 沒有回應：<span translate="no">{error}</span>。請先啟動 <code>make api</code>。
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        )}
+        {loading && <p className="text-ink-2">Loading…</p>}
+        {residents && residents.length === 0 && (
+          <p className="text-ink-2">
+            還沒有住民資料，先跑 <code>make seed</code>。
+          </p>
+        )}
+        {residents && residents.length > 0 && (
+          <ul className="grid gap-4 sm:grid-cols-3">
+            {residents.map((r) => (
+              <li key={r.patient_id}>
+                <Card title={`${r.code_name} · ${r.room}`} meta={<span translate="no">{r.patient_id}</span>}>
+                  <p className="text-sm text-ink-2">
+                    紀錄 <span className="num">{r.timeline_count}</span> 筆 · 事故 <span className="num">{r.incident_count}</span> · 最近 {fmtDateTime(r.last_entry_ts)}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-sm">
+                    <Link className={PILL} href={`/caregiver?patient=${r.patient_id}`}>照護者</Link>
+                    <Link className={PILL} href={`/record/${r.patient_id}`}>紀錄</Link>
+                    <Link className={PILL} href={`/doctor/round/${r.patient_id}`}>RoundPage</Link>
+                  </div>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="channels">
+        <h2 id="channels" className="mb-3 text-lg font-medium">七條通道，同一份紀錄</h2>
+        <ol className="grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
+          {CHANNELS.map((c) => (
+            // --ai-fill 只代表「AI 草稿」；已接上的通道用 --primary 邊框 + --surface
+            <li key={c.n} className={c.live ? "rounded-[10px] border border-primary bg-surface p-3 text-sm" : "rounded-[10px] border border-line bg-surface p-3 text-sm text-ink-2"}>
+              <span className="num mr-1 text-xs">{c.n}</span>
+              {c.name}
+            </li>
+          ))}
+        </ol>
+        <p className="mt-2 text-sm text-ink-2">今天接了通道 1 與 2，這份紀錄會一直長。</p>
+      </section>
     </div>
   );
 }

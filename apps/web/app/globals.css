@@ -1,26 +1,130 @@
 @import "tailwindcss";
 
+/* ---- Tokens: CLAUDE.md §7 (single source; see docs/design.md) ---- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #ffffff;
+  --surface: #f7f9fc;
+  --line: #e3e8ef;
+  --ink: #0f1b2d;
+  --ink-2: #5b6b7f;
+  --primary: #1f6feb;
+  --ok: #1fa971;
+  --warn: #d98a00;
+  --danger: #d64545;
+  --ai-fill: #eaf2ff;
+  /* 衍生 tokens（docs/design.md §1、DECISIONS 2026-09-05）：
+     *-fill 填色、*-ink 填色上的文字（§7 原色白底對比不足 4.5:1）、*-hover 加深 6% */
+  --danger-fill: #fbe9e9;
+  --ok-fill: #e8f7f0;
+  --warn-fill: #fff4e0;
+  --ok-ink: #14724d;
+  --warn-ink: #8a5700;
+  --danger-ink: #a83232;
+  --primary-hover: #1a62d3;
+  --surface-hover: #eef2f7;
+  --ok-fill-hover: #d6f0e4;
+  --danger-fill-hover: #f5d5d5;
+  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgba(15, 27, 45, 0.06);
+  color-scheme: light;
+}
+
+/* 夜班深色變體（不是預設；紅燈維持高對比） */
+[data-theme="night"] {
+  --bg: #0f1b2d;
+  --surface: #16233a;
+  --line: #2a3a55;
+  --ink: #f5f7fa;
+  --ink-2: #aeb9c9;
+  --ai-fill: #1c2e4a;
+  --danger-fill: #4a1f1f;
+  --ok-fill: #143528;
+  --warn-fill: #3d2d0f;
+  --ok-ink: #7fd8b0;
+  --warn-ink: #f0b95a;
+  --danger-ink: #f28b8b;
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-primary: var(--primary);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-ai-fill: var(--ai-fill);
+  --color-danger-fill: var(--danger-fill);
+  --color-ok-fill: var(--ok-fill);
+  --color-warn-fill: var(--warn-fill);
+  --color-ok-ink: var(--ok-ink);
+  --color-warn-ink: var(--warn-ink);
+  --color-danger-ink: var(--danger-ink);
+  --color-primary-hover: var(--primary-hover);
+  --color-surface-hover: var(--surface-hover);
+  --color-ok-fill-hover: var(--ok-fill-hover);
+  --color-danger-fill-hover: var(--danger-fill-hover);
+  /* 拉丁與數字 Inter 在前；CJK 由 Noto Sans TC 補上 */
+  --font-sans: var(--font-inter), var(--font-noto), "Inter", "Noto Sans TC", system-ui, sans-serif;
+  --font-latin: var(--font-inter), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgba(15, 27, 45, 0.06);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  /* 紅燈 banner 為 sticky top：焦點元素捲入時不被蓋住 */
+  scroll-padding-top: 96px;
+  -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  margin: 0;
+  min-height: 100dvh;
+}
+
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+
+.num, td.num, .tabular { font-variant-numeric: tabular-nums; font-family: var(--font-latin); }
+
+button, a, [role="button"] { touch-action: manipulation; }
+
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* AI vs 人：樣式契約（docs/design.md §3） */
+.ai-draft { border: 1.5px dashed var(--primary); background: var(--ai-fill); border-radius: var(--radius-card); }
+.confirmed { border: 1.5px solid var(--ok); background: var(--bg); border-radius: var(--radius-card); }
+.red-flag { border: 2px solid var(--danger); background: var(--danger-fill); border-radius: var(--radius-card); }
+
+.skip-link {
+  position: absolute; left: -999px; top: 8px; z-index: 100;
+  background: var(--primary); color: #fff; padding: 8px 12px; border-radius: 8px;
+}
+.skip-link:focus { left: 8px; }
+
+/* ---- Print: RoundPage A4 ---- */
+@page { size: A4; margin: 14mm; }
+@media print {
+  html, body { background: #fff !important; color: #000 !important; font-size: 11pt; }
+  .no-print { display: none !important; }
+  .print-page { box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; padding: 0 !important; }
+  a { color: inherit; text-decoration: none; }
+  .ai-draft { border-style: dashed; background: #fff; }
+  section { break-inside: avoid; }
 }
