@@ -64,6 +64,14 @@ export default function ReviewPage() {
   });
 
   useEffect(() => {
+    if (!snap || snap.status !== "interrupted") return;
+    const id = setInterval(() => {
+      threadState(tid).then((sn) => setSnap((prev) => (prev && prev.status !== "interrupted" ? prev : sn))).catch(() => {});
+    }, 5000);
+    return () => clearInterval(id);
+  }, [tid, snap]);
+
+  useEffect(() => {
     let alive = true;
     threadState(tid)
       .then(async (sn) => {
@@ -159,6 +167,18 @@ export default function ReviewPage() {
               <div className="mt-3">
                 <DimensionGrid domains={obs.domains} compact />
               </div>
+              {((v.caregiver_reports ?? []) as { question: string; answer: string; ts: string }[]).length > 0 && (
+                <div className="mt-3 rounded-[8px] bg-surface p-2 text-sm" aria-live="polite">
+                  <p className="font-medium">照護者目前回報（每 5 秒更新）</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {((v.caregiver_reports ?? []) as { question: string; answer: string; ts: string }[]).map((r, i) => (
+                      <li key={i}>
+                        <span className="text-ink-2">{fmtDateTime(r.ts)}</span> {r.question} → <span className="font-medium">{r.answer}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {obs.followups.length > 0 && (
                 <ul className="mt-2 text-sm text-ink-2">
                   {obs.followups.map((f, i) => (

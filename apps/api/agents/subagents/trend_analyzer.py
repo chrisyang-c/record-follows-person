@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from record_schema import (
     DIMENSION_LABELS,
     DIMENSIONS,
+    Baseline,
     Observation,
     TrendLine,
     TrendPoint,
@@ -31,6 +32,23 @@ _WORSE_DIRECTION = {
 }
 
 
+def _direction_vs_baseline(
+    dim: str, dv_value: float | None, dv_direction: str, baseline: Baseline | None
+) -> str:
+    """For counted dimensions compare with the baseline value instead of trusting the word cue."""
+    if baseline is None or dv_value is None:
+        return dv_direction
+    base = baseline.current(dim)
+    if base is None or not isinstance(base.value, int | float):
+        return dv_direction
+    b = float(base.value)
+    if dim == "intake":
+        return "down" if dv_value < b * 0.85 else ("up" if dv_value > b * 1.15 else "same")
+    if dim == "sleep":
+        return "up" if dv_value > b else "same"
+    return dv_direction
+
+
 def analyze(
     patient_id: str,
     observations: list[Observation],
@@ -38,6 +56,7 @@ def analyze(
     since: date,
     until: date,
     window_days: int = 7,
+    baseline: Baseline | None = None,
 ) -> TrendReport:
     win_start = until - timedelta(days=window_days - 1)
     lines: list[TrendLine] = []
@@ -48,8 +67,12 @@ def analyze(
         if d < since:
             continue
         for dim, dv in o.observation.domains.items():
-            val = float(dv.value) if isinstance(dv.value, int | float) else _DIR_SCORE[dv.direction]
-            per_dim_points[dim].append(TrendPoint(date=d, value=val, label=dv.raw_quote[:24]))
+            num = float(dv.value) if isinstance(dv.value, int | float) else None
+            direction = _direction_vs_baseline(dim, num, dv.direction, baseline)
+            val = num if num is not None else _DIR_SCORE[direction]
+            per_dim_points[dim].append(
+                TrendPoint(date=d, value=val, label=f"{direction}|{dv.raw_quote[:24]}")
+            )
     for dim in DIMENSIONS:
         pts = per_dim_points.get(dim, [])
         if not pts:
@@ -59,9 +82,7 @@ def analyze(
             o for o in observations if o.ts.date() >= win_start and dim in o.observation.domains
         ]
         worse = _WORSE_DIRECTION[dim]
-        worse_days = len(
-            {o.ts.date() for o in obs_in_window if o.observation.domains[dim].direction == worse}
-        )
+        worse_days = len({p.date for p in window if p.label.split("|", 1)[0] == worse})
         direction = (
             worse
             if worse_days >= max(2, len({p.date for p in window}) // 2 + 1)

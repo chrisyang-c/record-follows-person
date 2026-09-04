@@ -97,6 +97,8 @@ export interface InboxItem {
   escalation_level: number;
   updated_at: string | null;
   summary: string;
+  caregiver_reports: { question: string; answer: string; key: string; ts: string }[];
+  turn_count: number;
 }
 export interface Preview {
   observation: StructuredObservation;

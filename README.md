@@ -80,7 +80,7 @@ make api                           # http://localhost:8000  (/docs 有 OpenAPI)
 make web                           # http://localhost:3000
 ```
 
-三個介面：`/caregiver`（手機 390px 優先、LINE 式聊天引導：先講一句，系統依八維度一次問一題、快速回覆、上限 4 題，紅燈立即中止；zh-TW）、`/nurse`（平板／桌面：紅燈置頂、10 秒確認、ISBAR 編輯器、巡診準備）、`/doctor`（唯讀 RoundPage，可列印 A4）。逐步驗收指令見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
+三個介面：`/caregiver`（手機 390px 優先、LINE 式聊天引導：先講一句，每一題都由 intake_agent（LLM）依八維度缺口、profile、基線與已問過的題決定並附 reason，只有語音與文字輸入，上限 4 題；紅燈時程式先通知護理師、對話繼續由 agent 問關鍵事實並即時同步到護理師端；沒有模型就報錯停止；zh-TW）、`/trace` 與 `GET /debug/trace/{thread_id}`（每一次 LLM／agent 呼叫的紀錄）、`/nurse`（平板／桌面：紅燈置頂、10 秒確認、ISBAR 編輯器、巡診準備）、`/doctor`（唯讀 RoundPage，可列印 A4）。逐步驗收指令見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
 
 測試：`make test`（api：ruff + pytest；web：eslint + vitest）；評測：`make eval`。
 
@@ -148,7 +148,7 @@ mock 模式的 hallucination 在結構上不可能超過關鍵字命中（raw_qu
 | 紅燈規則＋推播 | 119／特約醫療機構通知（畫面提示）|
 | ISBAR 預填＋護理師確認畫面＋退回＋超時升級（worker）| LINE 家屬通知（未設 token 時只顯示）|
 | Incident Compiler → 兩區塊事故檔 + 後送頁 | 出院摘要 PDF（`ingest/discharge_pdf.py` mock）|
-| Familiarization Writer → 一頁 RoundPage，可列印 | 生命徵象量測（`ingest/vitals.py` 寫死）|
+| Familiarization Writer subagent 寫 RoundPage（①②③④ 由模型依 timeline／baseline 生成，程式驗證規則，可列印） | 生命徵象量測（`ingest/vitals.py` 寫死）|
 | Order Ingest → 照護者三件事（中文）＋ baseline 提案＋確認 | Roster 排序（3 位住民）|
 
 其他限制見 [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)。本機沒有 `OPENAI_API_KEY` 時所有流程以 mock（確定性抽取）跑完；`deepagents / langgraph / langchain` 鎖精確版本（alpha）。**只用合成資料**：`data/seed/` 的姓名為代號，repo 內沒有任何真實個資。

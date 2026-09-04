@@ -139,3 +139,53 @@ def test_resume_validation_rejects_missing_nurse_a_r():
         runner.resume(
             snap["thread_id"], {"action": "accept", "nurse_id": NURSE, "onsite_assessment": ONSITE}
         )
+
+
+def test_live_caregiver_reports_reach_the_interrupted_red_thread(monkeypatch):
+    """紅燈不結束對話：照護者的回答即時進入 Path A 的 caregiver_section，護理師端看得到。"""
+    import ingest.intake_dialog as dialog
+    from tests.scripted_llm import ScriptedLLM
+
+    monkeypatch.setattr(dialog, "get_llm", lambda: ScriptedLLM())
+    turns = [
+        {"text": "李阿公在走廊跌倒"},
+        {"text": "撞到頭", "question": "哪裡痛？", "phase": "routine"},
+    ]
+    snap = runner.start(
+        "path_a",
+        "P003",
+        {
+            "path": "incident",
+            "raw_input": {
+                "turns": turns,
+                "language": "zh-TW",
+                "caregiver_id": "cg_amei",
+                "dialog_id": "dlg_test",
+            },
+        },
+    )
+    assert snap["interrupt"]["type"] == "nurse_onsite_assessment"
+    assert snap["values"]["red_flags"]["notify_now"] is True
+    turns.append({"text": "站不起來", "question": "能不能自己站起來？", "phase": "red"})
+    out = runner.update_caregiver(snap["thread_id"], turns, [], False)
+    assert out["dialog"]["next_question"] is not None and out["dialog"]["red"] is True
+    s2 = out["snapshot"]
+    assert s2["status"] == "interrupted" and s2["interrupt"]["type"] == "nurse_onsite_assessment"
+    assert [r["answer"] for r in s2["values"]["caregiver_reports"]] == ["撞到頭", "站不起來"]
+    assert s2["values"]["structured_observation"]["flags"]["cannot_get_up_after_fall"] is True
+    assert s2["values"]["caregiver_section"]["followups"][-1]["answer"] == "站不起來"
+    assert {"RF05", "RF10"} <= {h["rule_id"] for h in s2["values"]["red_flags"]["hits"]}
+    snap = runner.resume(
+        s2["thread_id"],
+        {
+            "nurse_id": NURSE,
+            "onsite_assessment": {**ONSITE, "wound": "右額血腫"},
+            "nurse_assessment": "跌倒撞頭、站不起來。",
+            "nurse_recommendation": "後送急診。",
+        },
+    )
+    assert snap["interrupt"]["type"] == "nurse_route_choice"
+    import pytest
+
+    with pytest.raises(ValueError):
+        runner.update_caregiver(snap["thread_id"], turns, [], False)  # 護理師已接手

@@ -225,7 +225,12 @@ _INTAKE_FRACTION: list[tuple[re.Pattern[str], float]] = [
     ),
     (re.compile(r"三分之一|1/3|sepertiga|một phần ba", re.I), 0.33),
     (re.compile(r"三分之二|2/3|dua pertiga|hai phần ba", re.I), 0.67),
+    (re.compile(r"九分|九成", re.I), 0.9),
     (re.compile(r"八分|八成", re.I), 0.8),
+    (re.compile(r"七分|七成", re.I), 0.7),
+    (re.compile(r"六分|六成", re.I), 0.6),
+    (re.compile(r"不到一半|四分|四成", re.I), 0.4),
+    (re.compile(r"(?<![一二兩三四五六七八九])三分(?!之)|三成", re.I), 0.3),
     (re.compile(r"一半|半碗|半|setengah|separuh|một nửa|nửa|half", re.I), 0.5),
     (
         re.compile(

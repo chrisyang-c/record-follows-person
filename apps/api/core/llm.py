@@ -6,7 +6,10 @@ Two implementations behind one interface:
                    is missing.
   * ChatModelLLM — any LangChain chat model from settings.get_model() (ChatOpenAI when
                    MODEL_PROVIDER=openai, ChatAnthropic when anthropic), pinned to MODEL_PINNED,
-                   temperature=0. Falls back to MockLLM per-call if the model call fails.
+                   temperature=0. NEVER falls back: a failed or missing model raises
+                   LLMUnavailable, which the API turns into a visible error (HTTP 503).
+  MockLLM is a *test double* for pytest/CI only (MODEL_PROVIDER=mock); its question planner
+  raises LLMUnavailable so no rule-based questions can ever reach a user.
 
 Hard rules baked in regardless of implementation (CLAUDE.md §1.3):
   * extraction never adds judgement; every DimensionValue.raw_quote must be a substring
@@ -40,9 +43,15 @@ from record_schema import (
 
 from core.deidentify import deidentify
 from core.settings import get_settings
+from core.trace import timed, trace
 from ingest.lexicon import extract_with_lexicon
 
 log = logging.getLogger(__name__)
+
+
+class LLMUnavailable(RuntimeError):
+    """No model configured, or the model call failed. Surface it; do not fall back to rules."""
+
 
 INCIDENT_LABELS_ZH = {
     "fall": "跌倒",
@@ -130,6 +139,14 @@ class LLM:
         raise NotImplementedError
 
     def translate_lines(self, lines_zh: list[str], lang: Lang) -> list[str]:
+        raise NotImplementedError
+
+    def next_question(self, ctx: dict[str, Any]) -> NextQuestionOut:
+        """Decide the next follow-up (what to ask, how, and why). Raises LLMUnavailable."""
+        raise NotImplementedError
+
+    def caregiver_notes(self, order_text: str, profile: Profile) -> list[str]:
+        """Order Ingest Agent: turn an order into ≤3 everyday-language things for the caregiver."""
         raise NotImplementedError
 
 
@@ -259,19 +276,76 @@ class MockLLM(LLM):
 
         return [translate_instruction(line, lang) for line in lines_zh]
 
+    def next_question(self, ctx):
+        raise LLMUnavailable("MODEL_PROVIDER=mock：沒有模型，不產生追問（不退回規則版）")
+
+    def caregiver_notes(self, order_text, profile):  # test double
+        from ingest.doctor_order import caregiver_notes_zh, parse_order
+
+        return caregiver_notes_zh(parse_order(order_text))
+
+
+def invoke_with_backoff(fn: Any, *args: Any, attempts: int = 4, **kwargs: Any) -> Any:
+    """Provider 429 (TPM) → wait what the provider asks for, then retry (traced)."""
+    import re
+    import time
+
+    for i in range(attempts):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:  # noqa: BLE001
+            msg = str(e)
+            if ("429" not in msg and "rate limit" not in msg.lower()) or i == attempts - 1:
+                raise
+            m = re.search(r"try again in ([\d.]+)\s*(ms|s)", msg)
+            wait = float(m.group(1)) / (1000 if m and m.group(2) == "ms" else 1) if m else 15.0
+            wait = min(max(wait + 1.5, 3.0), 65.0)
+            trace("llm.rate_limited", attempt=i + 1, wait_s=wait, error=msg[:160])
+            time.sleep(wait)
+    raise RuntimeError("unreachable")
+
+
+class _Structured:
+    def __init__(self, runnable: Any) -> None:
+        self.runnable = runnable
+
+    def invoke(self, *args: Any, **kwargs: Any) -> Any:
+        return invoke_with_backoff(self.runnable.invoke, *args, **kwargs)
+
 
 def _structured(model: Any, schema: type[BaseModel]) -> Any:
     """Structured output that tolerates optional fields: OpenAI's default json_schema mode
     rejects schemas with defaults, so use tool/function calling on every provider."""
     try:
-        return model.with_structured_output(schema, method="function_calling")
+        return _Structured(model.with_structured_output(schema, method="function_calling"))
     except TypeError:  # provider without a `method` kwarg
-        return model.with_structured_output(schema)
+        return _Structured(model.with_structured_output(schema))
 
 
 # ---------------------------------------------------------------------------
 # ChatModelLLM — provider-agnostic, built on settings.get_model() (structured output)
 # ---------------------------------------------------------------------------
+
+
+class NextQuestionOut(BaseModel):
+    ask: bool = Field(description="還需要再問一題嗎？夠了就 false")
+    dimension: str | None = Field(
+        default=None, description="這題主要在補哪個維度（八維度 key），紅燈關鍵事實可為 null"
+    )
+    question: str = Field(default="", description="一句日常口語的問題，對照護者說")
+    reason: str = Field(default="", description="為什麼問這題（存進 trace，給護理師看）")
+
+
+class ISBARDraftOut(BaseModel):
+    situation: str
+    background: str
+    change_vs_baseline: str = Field(description="只寫與基線比的變化")
+    questions_for_nurse: list[str] = Field(description="只寫請護理師確認的事，問句")
+
+
+class MinimalOut(BaseModel):
+    s: str
+    a_change_vs_baseline: str
 
 
 class _ExtractedDim(BaseModel):
@@ -351,9 +425,10 @@ class ChatModelLLM(LLM):
         try:
             de = deidentify(text, profile)
             structured = _structured(self.model, _Extraction)
-            res: _Extraction = structured.invoke(
-                [("system", EXTRACT_SYSTEM), ("human", f"語言：{lang}\n原話：{de.text}")]
-            )
+            with timed() as tm:
+                res: _Extraction = structured.invoke(
+                    [("system", EXTRACT_SYSTEM), ("human", f"語言：{lang}\n原話：{de.text}")]
+                )
             ts = datetime.now(UTC)
             prov = Provenance(
                 source="ai_extracted", author="intake_agent", ts=ts, language_original=lang
@@ -379,6 +454,24 @@ class ChatModelLLM(LLM):
             vitals = Vitals(
                 **{k: v for k, v in res.vitals_reported.items() if k in Vitals.model_fields}
             )
+            trace(
+                "llm.extract",
+                provider=self.name,
+                input=de.text,
+                output={
+                    "domains": {
+                        d.dimension: [d.value, d.direction, d.raw_quote] for d in res.domains
+                    },
+                    "flags": [k for k, v in res.flags.items() if v],
+                    "incident_flags": res.incident_flags,
+                    "seems_different": res.seems_different,
+                    "vitals_reported": {
+                        k: v for k, v in res.vitals_reported.items() if v is not None
+                    },
+                    "followups": res.followups[:2],
+                },
+                duration_ms=tm.ms,
+            )
             obs = StructuredObservation(
                 raw_text=text,
                 language=lang,
@@ -397,43 +490,103 @@ class ChatModelLLM(LLM):
             )
             return _guard_quotes(obs)
         except Exception as e:  # noqa: BLE001
-            log.warning("%s extraction failed (%s); using mock", self.name, e)
-            return self.fallback.extract_observation(text, lang, profile, baseline)
+            trace("llm.extract", provider=self.name, input=text, error=str(e))
+            raise LLMUnavailable(f"模型抽取失敗（{self.name}）：{e}") from e
 
     def minimal_sbar(self, obs, deltas):
-        return self.fallback.minimal_sbar(obs, deltas)
+        base = self.fallback.minimal_sbar(obs, deltas)
+        prompt = (
+            "你是 Nurse Assist。用照護者的原話寫一行 S（現況）、一行 A（只寫與基線比的變化）。"
+            "不得新增事實、不得診斷、不得建議處置，各 ≤ 60 字。\n"
+            f"原話：{obs.raw_text}\n"
+            "抽取："
+            + "; ".join(f"{k}={dv.raw_quote}({dv.direction})" for k, dv in obs.domains.items())
+            + "\n"
+            f"與基線比：{'; '.join(_delta_text(d) for d in deltas) or '無明顯變化'}"
+        )
+        try:
+            with timed() as tm:
+                res: MinimalOut = _structured(self.model, MinimalOut).invoke(prompt)
+            s = scrub_clinical_language(res.s.strip()) or base.s
+            a = (
+                scrub_clinical_language(res.a_change_vs_baseline.strip())
+                or base.a_change_vs_baseline
+            )
+            trace(
+                "llm.minimal_sbar",
+                provider=self.name,
+                input=prompt,
+                output={"s": s, "a": a},
+                duration_ms=tm.ms,
+            )
+            return MinimalSBAR(s=s, a_change_vs_baseline=a, status="draft", author="ai")
+        except Exception as e:  # noqa: BLE001
+            trace("llm.minimal_sbar", provider=self.name, error=str(e))
+            raise LLMUnavailable(f"模型草擬 SBAR 失敗（{self.name}）：{e}") from e
 
     def draft_isbar(self, profile, baseline, obs, deltas, recent_lines):
         draft = self.fallback.draft_isbar(profile, baseline, obs, deltas, recent_lines)
+        answers = "; ".join(f"{q.question}→{q.answer or '不知道'}" for q in obs.followups) or "無"
+        flags = [k for k, v in obs.flags.model_dump().items() if v] + list(obs.incident_flags)
+        prompt = (
+            "你是 Nurse Assist，預填 ISBAR 草稿給護理師審核。規則：S 引用照護者原話與追問回答；"
+            "B 用 profile 與基線；change_vs_baseline 只寫「與基線比的變化」（不下判斷）；"
+            "questions_for_nurse 只寫請護理師現場確認的事，每條是問句、以「？」結尾，最多 4 條。"
+            "不得出現診斷詞、治療建議、檢傷等級。各段 ≤ 120 字。\n"
+            f"I：{draft.identity}\nS（事實）：{draft.situation}\nB（事實）：{draft.background}\n"
+            f"與基線比（規則計算）：{'; '.join(_delta_text(d) for d in deltas) or '無明顯變化'}\n"
+            f"照護者追問回答：{answers}\n紅燈／事件旗標：{flags}"
+        )
         try:
-            prompt = (
-                "你是 Nurse Assist。把以下 ISBAR 草稿的 S 與 B 改寫得更通順，但不得新增事實、"
-                '不得加入診斷或處置。只回傳 JSON {"situation":..., "background":...}。\n'
-                f"S: {draft.situation}\nB: {draft.background}"
+            with timed() as tm:
+                res: ISBARDraftOut = _structured(self.model, ISBARDraftOut).invoke(prompt)
+            qs = [scrub_clinical_language(q.strip()) for q in res.questions_for_nurse if q.strip()]
+            qs = [q if q.endswith("？") else q.rstrip("?。") + "？" for q in qs[:4]]
+            draft.situation = scrub_clinical_language(res.situation.strip()) or draft.situation
+            draft.background = scrub_clinical_language(res.background.strip()) or draft.background
+            draft.ai_change_vs_baseline = (
+                scrub_clinical_language(res.change_vs_baseline.strip())
+                or draft.ai_change_vs_baseline
             )
-
-            class _SB(BaseModel):
-                situation: str
-                background: str
-
-            res: _SB = _structured(self.model, _SB).invoke(prompt)
-            draft.situation = scrub_clinical_language(res.situation)
-            draft.background = scrub_clinical_language(res.background)
+            draft.ai_questions_for_nurse = qs or draft.ai_questions_for_nurse
+            trace(
+                "llm.draft_isbar",
+                provider=self.name,
+                input=prompt,
+                output={
+                    "situation": draft.situation,
+                    "background": draft.background,
+                    "ai_change_vs_baseline": draft.ai_change_vs_baseline,
+                    "ai_questions_for_nurse": draft.ai_questions_for_nurse,
+                },
+                duration_ms=tm.ms,
+            )
         except Exception as e:  # noqa: BLE001
-            log.warning("%s isbar polish failed (%s); keeping mock draft", self.name, e)
+            trace("llm.draft_isbar", provider=self.name, error=str(e))
+            raise LLMUnavailable(f"模型草擬 ISBAR 失敗（{self.name}）：{e}") from e
         return draft
 
     def family_notification(self, profile, what_happened, route_text):
         base = self.fallback.family_notification(profile, what_happened, route_text)
         try:
-            res = self.model.invoke(
+            prompt = (
                 "把下面這段通知改成更溫暖、白話、不含醫療術語的家屬訊息，長度相近，"
                 f"不得新增事實：\n{base}"
             )
-            return scrub_clinical_language(str(res.content))
+            with timed() as tm:
+                res = invoke_with_backoff(self.model.invoke, prompt)
+            out = scrub_clinical_language(str(res.content))
+            trace(
+                "llm.family_notification",
+                provider=self.name,
+                input=prompt,
+                output=out,
+                duration_ms=tm.ms,
+            )
+            return out
         except Exception as e:  # noqa: BLE001
-            log.warning("%s family notification failed (%s)", self.name, e)
-            return base
+            trace("llm.family_notification", provider=self.name, error=str(e))
+            raise LLMUnavailable(f"模型草擬家屬通知失敗（{self.name}）：{e}") from e
 
     def translate_lines(self, lines_zh, lang):
         try:
@@ -448,17 +601,99 @@ class ChatModelLLM(LLM):
             if len(res.lines) == len(lines_zh):
                 return res.lines
         except Exception as e:  # noqa: BLE001
-            log.warning("%s translate failed (%s)", self.name, e)
-        return self.fallback.translate_lines(lines_zh, lang)
+            raise LLMUnavailable(f"模型翻譯失敗（{self.name}）：{e}") from e
+        raise LLMUnavailable("模型翻譯行數不符")
+
+
+NEXT_Q_SYSTEM = """你是長照機構的 Intake Agent，正在用聊天跟照服員確認一位住民今天的狀況，
+   一次只問一題。
+你每一輪都會拿到：這個人的 profile 與基線、八個維度目前哪些已知／未知、已經問過的題目、
+   規則層的紅燈判定。
+你要決定：還要不要問（ask）、問哪個維度或哪個關鍵事實（dimension）、怎麼問（question）、
+   為什麼（reason）。
+
+原則：
+1. 一次只問一題，用台灣日常口語對照服員說（≤ 30 字），像「王伯今天有喝水嗎？大概幾杯？」，
+   不用醫療術語、不用表單語。
+2. 已知的維度不要再問；已問過的題目不要重複。
+3. 依這個人的慢性病、用藥與基線決定優先順序（COPD→呼吸咳嗽、失智→精神反應、
+   抗凝血劑→跌倒後的頭部／瘀青、
+   壓傷→皮膚、糖尿病→進食飲水），並考慮已知觀察之間的關聯（吃得少→問喝水、大小便）。
+4. phase=red（規則層已通知護理師）：改問護理師到場前最需要的關鍵事實（例：跌倒→怎麼跌、
+   哪裡痛、能不能自己站、
+   清不清醒、有沒有流血；發燒或意識改變→從何時開始、現在叫得醒嗎、有沒有喘），一題一件事，
+   dimension 可為 null。
+5. 預算用完、或八維度與關鍵事實已足夠，就 ask=false。
+6. 不下診斷、不建議處置、不安撫過頭。reason 一句話，給護理師看。"""
+
+
+def _next_question_impl(self: ChatModelLLM, ctx: dict[str, Any]) -> NextQuestionOut:
+    prompt = (
+        f"phase：{ctx.get('phase')}\n住民：{ctx.get('profile')}\n基線（平常）："
+        f"{ctx.get('baseline')}\n"
+        f"照服員第一句：{ctx.get('said')}\n已知維度：{ctx.get('known') or '無'}\n"
+        f"未知維度：{ctx.get('unknown')}\n事件／紅燈事實：{ctx.get('facts') or '無'}\n"
+        f"已問過（問→答）：{ctx.get('asked') or '無'}\n剩餘追問預算：{ctx.get('budget')} 題"
+    )
+    try:
+        with timed() as tm:
+            res: NextQuestionOut = _structured(self.model, NextQuestionOut).invoke(
+                [("system", NEXT_Q_SYSTEM), ("human", prompt)]
+            )
+        res.question = scrub_clinical_language(res.question.strip())
+        trace(
+            "llm.next_question",
+            provider=self.name,
+            input=prompt,
+            output={"ask": res.ask, "dimension": res.dimension, "question": res.question},
+            reason=res.reason,
+            duration_ms=tm.ms,
+        )
+        return res
+    except Exception as e:  # noqa: BLE001
+        trace("llm.next_question", provider=self.name, input=prompt, error=str(e))
+        raise LLMUnavailable(f"模型決定追問失敗（{self.name}）：{e}") from e
+
+
+class _NotesOut(BaseModel):
+    items: list[str] = Field(description="1–3 句，照服員看得懂、做得到的事")
+
+
+def _caregiver_notes_impl(self: ChatModelLLM, order_text: str, profile: Profile) -> list[str]:
+    prompt = (
+        "你是 Order Ingest Agent。把醫師醫囑翻成照服員這個月要注意的三件事（最多 3 句，"
+        "每句 ≤ 30 字，"
+        "日常口語、可執行、只講照服員做得到的觀察與記錄，不改藥、不下診斷）。\n"
+        f"住民：{profile.code_name}，"
+        f"{'、'.join(c.display for c in profile.conditions)}\n醫囑：{order_text}"
+    )
+    try:
+        with timed() as tm:
+            res: _NotesOut = _structured(self.model, _NotesOut).invoke(prompt)
+        items = [scrub_clinical_language(x.strip()) for x in res.items if x.strip()][:3]
+        trace(
+            "llm.caregiver_notes", provider=self.name, input=prompt, output=items, duration_ms=tm.ms
+        )
+        if not items:
+            raise LLMUnavailable("模型沒有產生注意事項")
+        return items
+    except LLMUnavailable:
+        raise
+    except Exception as e:  # noqa: BLE001
+        trace("llm.caregiver_notes", provider=self.name, input=prompt, error=str(e))
+        raise LLMUnavailable(f"模型產生注意事項失敗（{self.name}）：{e}") from e
+
+
+ChatModelLLM.next_question = _next_question_impl  # type: ignore[method-assign]
+ChatModelLLM.caregiver_notes = _caregiver_notes_impl  # type: ignore[method-assign]
 
 
 @lru_cache
 def get_llm() -> LLM:
     """MockLLM unless a provider AND its key are configured; then ChatModelLLM(get_model())."""
     s = get_settings()
-    if s.llm_enabled:
-        try:
-            return ChatModelLLM(s.get_model())
-        except Exception as e:  # noqa: BLE001
-            log.warning("%s model unavailable (%s); using MockLLM", s.MODEL_PROVIDER, e)
-    return MockLLM()
+    if s.MODEL_PROVIDER == "mock":
+        return MockLLM()  # explicit test double
+    if not s.llm_enabled:
+        raise LLMUnavailable(f"MODEL_PROVIDER={s.MODEL_PROVIDER} 但沒有 API key（.env）")
+    return ChatModelLLM(s.get_model())

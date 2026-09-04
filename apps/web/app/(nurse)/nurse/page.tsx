@@ -147,6 +147,7 @@ export default function NurseInbox() {
           <Button variant="outline" onClick={scan} disabled={scanning}>
             {scanning ? "掃描中…" : "立即掃描逾時"}
           </Button>
+          <Link href="/trace" className="inline-flex min-h-11 items-center rounded-[10px] px-3 text-sm text-ink-2 hover:bg-surface hover:text-ink">Agent 紀錄</Link>
           <Link href="/nurse/round" className="inline-flex min-h-11 items-center rounded-[10px] border border-line px-4 hover:border-primary hover:text-primary">巡診準備 →</Link>
         </span>
       </div>
@@ -165,6 +166,16 @@ export default function NurseInbox() {
             <li key={i.thread_id}>
               <Card variant={i.red_flag ? "red" : "ai"} title={<><span translate="no">{i.patient_id}</span> · {typeLabel(i.interrupt_type)}</>} meta={fmtDateTime(i.updated_at)}>
                 <p className="line-clamp-2 text-sm">{i.summary || i.red_flag_lines.join("；")}</p>
+                {i.caregiver_reports.length > 0 && (
+                  <div className="mt-2 rounded-[8px] bg-surface px-2 py-1 text-xs" aria-live="polite">
+                    <p className="font-medium">照護者目前回報（{i.turn_count}）</p>
+                    <ul>
+                      {i.caregiver_reports.slice(-3).map((r, k) => (
+                        <li key={k}>{r.question}：{r.answer}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-2">
                   {i.deadline && <span>期限 {fmtDateTime(i.deadline)}</span>}
                   {i.escalation_level > 0 && <Chip tone="warn">已升級 {i.escalation_level} 次</Chip>}

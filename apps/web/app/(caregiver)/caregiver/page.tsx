@@ -11,18 +11,20 @@ import { api, startPathA, startShift, useApi, type Resident, type Snapshot } fro
 import { SPEECH_LANG, T } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-type Turn = { text: string; dimension: string | null; quick: boolean };
+type Turn = { text: string; question?: string | null; dimension?: string | null; phase?: string | null; ts?: string };
 type Kind = "start" | "question" | "summary" | "red" | "final" | "plain";
-type Msg = { id: number; role: "sys" | "me"; text: string; kind?: Kind; quick?: string[]; qkey?: string; lines?: string[] };
+type Msg = { id: number; role: "sys" | "me"; text: string; kind?: Kind; qkey?: string; lines?: string[] };
 interface DialogResult {
   observation: StructuredObservation;
   red_flags: RedFlagResult;
   red_flag_lines: string[];
-  next_question: { key: string; text: string; quick_replies: string[] } | null;
+  next_question: { key: string; text: string; dimension: string | null; reason: string } | null;
   asked_dimensions: string[];
   turn_count: number;
   done: boolean;
   red: boolean;
+  intro: string | null;
+  closing: string | null;
   summary: string;
   transcript: string;
 }
@@ -91,7 +93,10 @@ function ChatInner() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [incidents, setIncidents] = useState<string[]>([]);
   const [seemsDifferent, setSeemsDifferent] = useState(false);
-  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ key: string; text: string; dimension: string | null } | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [dialogId, setDialogId] = useState<string>(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? `dlg_${crypto.randomUUID().slice(0, 8)}` : `dlg_${Date.now()}`));
+  const [wasRed, setWasRed] = useState(false);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -117,21 +122,24 @@ function ChatInner() {
     setTurns([]);
     setIncidents([]);
     setSeemsDifferent(false);
-    setPendingKey(null);
+    setPending(null);
+    setThreadId(null);
+    setWasRed(false);
+    setDialogId(`dlg_${Math.random().toString(36).slice(2, 10)}`);
     setFinished(false);
     setHint(null);
     setInput("");
   };
 
   const finish = async (mode: "shift" | "path_a", allTurns: Turn[], inc: string[], sd: boolean) => {
-    const body = { patient_id: patient, turns: allTurns, incidents: inc, seems_different: sd, caregiver_id: resident?.caregiver_code_name, caregiver_confirmed_meaning: true };
+    const body = { patient_id: patient, turns: allTurns, incidents: inc, seems_different: sd, caregiver_id: resident?.caregiver_code_name, caregiver_confirmed_meaning: true, dialog_id: dialogId };
     const snap: Snapshot = mode === "path_a" ? await startPathA(body) : await startShift(body);
     const red = mode === "path_a" || !!snap.handoff;
     push(mk("sys", red ? "已通知護理師，請留在他身邊。" : "已送出，護理師會在這一班確認。謝謝你。", { kind: "final" }));
     setFinished(true);
   };
 
-  const submitTurn = async (text: string, dimension: string | null, quick: boolean, inc = incidents, sd = seemsDifferent) => {
+  const submitTurn = async (text: string, inc = incidents, sd = seemsDifferent) => {
     const clean = text.trim();
     if (!clean) {
       setHint("先講一句或打幾個字。");
@@ -140,24 +148,57 @@ function ChatInner() {
     }
     setHint(null);
     setBusy(true);
-    const allTurns = [...turns, { text: clean, dimension, quick }];
+    const allTurns: Turn[] = [
+      ...turns,
+      { text: clean, question: pending?.text ?? null, dimension: pending?.dimension ?? null, phase: pending ? (wasRed ? "red" : "routine") : null, ts: new Date().toISOString() },
+    ];
     setTurns(allTurns);
-    setPendingKey(null);
+    setPending(null);
     push(mk("me", clean));
     setInput("");
     try {
-      const r = await api<DialogResult>("/intake/turn", { method: "POST", json: { patient_id: patient, turns: allTurns, seems_different: sd, incidents: inc } });
-      if (r.red) {
-        push(mk("sys", "已通知護理師。", { kind: "red", lines: r.red_flag_lines }));
-        await finish("path_a", allTurns, inc, sd);
-      } else if (r.next_question) {
-        setPendingKey(r.next_question.key);
-        push(mk("sys", r.next_question.text, { kind: "question", quick: r.next_question.quick_replies, qkey: r.next_question.key }));
+      let r: DialogResult;
+      let tid = threadId;
+      if (tid) {
+        // 紅燈後：對話繼續，每個回答即時寫進護理師看的 caregiver_section
+        const out = await api<{ dialog: DialogResult }>(`/threads/${encodeURIComponent(tid)}/caregiver-report`, {
+          method: "POST",
+          json: { turns: allTurns, incidents: inc, seems_different: sd },
+        });
+        r = out.dialog;
+      } else {
+        r = await api<DialogResult>("/intake/turn", { method: "POST", json: { patient_id: patient, turns: allTurns, seems_different: sd, incidents: inc, dialog_id: dialogId } });
+        if (r.red) {
+          // 程式已判定紅燈：立刻通知護理師（Path A 啟動）。照護者端只說一句；規則說明只給護理師看。
+          push(mk("sys", "已通知護理師，請留在他身邊。", { kind: "red" }));
+          const snap = await startPathA({ patient_id: patient, turns: allTurns, incidents: inc, seems_different: sd, caregiver_id: resident?.caregiver_code_name, dialog_id: dialogId });
+          tid = snap.thread_id;
+          setThreadId(tid);
+          setWasRed(true);
+          if (r.intro) push(mk("sys", r.intro));
+        }
+      }
+      if (r.red) setWasRed(true);
+      if (r.next_question) {
+        setPending({ key: r.next_question.key, text: r.next_question.text, dimension: r.next_question.dimension });
+        push(mk("sys", r.next_question.text, { kind: "question", qkey: r.next_question.key }));
+      } else if (tid) {
+        push(mk("sys", r.closing ?? "記下來了。有什麼變化再跟我說。", { kind: "plain" }));
       } else {
         push(mk("sys", r.summary, { kind: "summary" }));
       }
     } catch (e) {
-      push(mk("sys", `${t.errorRetry}（${(e as Error).message}）`, { kind: "plain" }));
+      const err = e as Error & { status?: number };
+      if (err.status === 409) {
+        push(mk("sys", "護理師已接手，接下來由護理師記錄。", { kind: "final" }));
+        setFinished(true);
+      } else if (err.status === 503) {
+        // 沒有模型或模型呼叫失敗：顯示錯誤並停止，不退回規則版
+        push(mk("sys", `無法繼續：${err.message}`, { kind: "red" }));
+        setFinished(true);
+      } else {
+        push(mk("sys", `${t.errorRetry}（${err.message}）`, { kind: "plain" }));
+      }
     } finally {
       setBusy(false);
     }
@@ -168,7 +209,7 @@ function ChatInner() {
     const sd = key === "seems_different" ? true : seemsDifferent;
     setIncidents(inc);
     setSeemsDifferent(sd);
-    void submitTurn(text, null, true, inc, sd);
+    void submitTurn(text, inc, sd);
   };
 
   const confirm = async (mode: "shift" | "path_a") => {
@@ -205,7 +246,6 @@ function ChatInner() {
     rec.start();
   };
 
-  const lastQuestion = [...view].reverse().find((m) => m.kind === "question");
   const lastSummary = view[view.length - 1]?.kind === "summary" ? view[view.length - 1] : null;
 
   return (
@@ -246,15 +286,6 @@ function ChatInner() {
                 ))}
               </div>
             )}
-            {m.kind === "question" && m === lastQuestion && m.qkey === pendingKey && (
-              <div className="mt-2 grid w-full max-w-[85%] grid-cols-2 gap-2">
-                {(m.quick ?? []).map((q) => (
-                  <Button key={q} variant={q === t.dontKnow ? "secondary" : "outline"} size="lg" className="text-base" disabled={busy} onClick={() => submitTurn(q, m.qkey ?? null, true)}>
-                    {q}
-                  </Button>
-                ))}
-              </div>
-            )}
             {m.kind === "summary" && m === lastSummary && !finished && (
               <div className="mt-2 grid w-full max-w-[85%] gap-2">
                 <Button variant="ok" size="lg" className="text-base" disabled={busy} onClick={() => confirm("shift")}>
@@ -285,7 +316,7 @@ function ChatInner() {
         className="sticky bottom-0 flex items-end gap-2 border-t border-line bg-bg px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
         onSubmit={(e) => {
           e.preventDefault();
-          void submitTurn(input, pendingKey, false);
+          void submitTurn(input);
         }}
       >
         <Button type="button" variant={listening ? "danger" : "secondary"} size="lg" className="size-14 shrink-0 rounded-full p-0" onClick={toggleListen} disabled={!speechOk || finished} aria-pressed={listening} aria-label={listening ? "說完了" : "按一下說話"}>
@@ -298,7 +329,7 @@ function ChatInner() {
           name="say"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={listening ? "聽你說…" : pendingKey ? "或打字回答…" : `${name}今天…`}
+          placeholder={listening ? "聽你說…" : pending ? "或打字回答…" : threadId ? "還有什麼要跟護理師說的…" : `${name}今天…`}
           autoComplete="off"
           disabled={finished}
           className="min-h-14 min-w-0 flex-1 rounded-[10px] border border-line bg-bg px-4 text-base text-ink placeholder:text-ink-2/70 focus-visible:border-primary"

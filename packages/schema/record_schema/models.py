@@ -513,6 +513,7 @@ class RoundPage(DocBase):
     chart: list[TrendSeries] = Field(default_factory=list, description="變化最大的兩個維度")
     since: date
     page_limit_ok: bool = True
+    agent_note: str = Field(default="", description="由哪個 subagent 產生、呼叫了哪些工具幾次")
 
 
 class CaregiverNotes(DocBase):

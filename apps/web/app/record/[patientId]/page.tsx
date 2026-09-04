@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import type { Observation, PersonRecord, TimelineEntry } from "@schema";
 import { DIMENSION_LABELS } from "@schema";
 import { ConfirmedChip } from "@/components/confirmed-chip";
@@ -86,13 +86,19 @@ function Entry({ e }: { e: TimelineEntry }) {
   );
 }
 
-export default function RecordPage() {
+function RecordInner() {
   const { patientId } = useParams<{ patientId: string }>();
+  const params = useSearchParams();
+  const idsKey = params.get("ids") ?? "";
+  const onlyIds = useMemo(() => idsKey.split(",").filter(Boolean), [idsKey]);
   const { data, error, loading } = useApi<PersonRecord>(`/records/${patientId}`);
   // 進頁時的 #hash（RoundPage 的 evidence 連結）；伺服器端為空字串，不影響首次 markup
   const [hash] = useState(() => (typeof window === "undefined" ? "" : window.location.hash.replace(/^#/, "")));
   const [extraPages, setExtraPages] = useState(0);
-  const timeline = useMemo(() => (data ? [...data.timeline].sort((a, b) => (a.ts < b.ts ? 1 : -1)) : []), [data]);
+  const timeline = useMemo(() => {
+    const all = data ? [...data.timeline].sort((a, b) => (a.ts < b.ts ? 1 : -1)) : [];
+    return onlyIds.length ? all.filter((e) => onlyIds.includes(e.id)) : all;
+  }, [data, onlyIds]);
   const hashIdx = hash ? timeline.findIndex((e) => e.id === hash) : -1;
   // 顯示到 hash 目標所在的那一頁為止（至少一頁）
   const shown = Math.max(PAGE * (1 + extraPages), hashIdx >= 0 ? Math.ceil((hashIdx + 1) / PAGE) * PAGE : 0);
@@ -140,6 +146,12 @@ export default function RecordPage() {
       </div>
       <section aria-labelledby="tl">
         <h2 id="tl" className="mb-2 text-lg font-medium">Timeline（只增不改，<span className="num">{timeline.length}</span> 筆）</h2>
+        {onlyIds.length > 0 && (
+          <p className="mb-2 rounded-[8px] bg-ai-fill px-3 py-2 text-sm">
+            只顯示 RoundPage 引用的 <span className="num">{timeline.length}</span> 筆紀錄。{" "}
+            <Link href={`/record/${patientId}`} className="text-primary hover:underline">顯示全部</Link>
+          </p>
+        )}
         <ul className="space-y-3">
           {visible.map((e) => (
             <Entry key={e.id} e={e} />
@@ -170,5 +182,13 @@ export default function RecordPage() {
         </ul>
       </section>
     </div>
+  );
+}
+
+export default function RecordPage() {
+  return (
+    <Suspense fallback={<p className="text-ink-2">Loading…</p>}>
+      <RecordInner />
+    </Suspense>
   );
 }

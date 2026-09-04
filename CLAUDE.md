@@ -152,7 +152,9 @@ class DimensionValue(BaseModel):
 - 所有 `◇` 節點用 `interrupt()`，前端以 `Command(resume={...})` 回覆。
 - checkpointer：`PostgresSaver`，`thread_id = f"{patient_id}:{graph}:{date}"`；`saver.setup()` 只在 migration 執行。
 - 超時：interrupt 前寫 `deadline` 進 state；背景 worker（APScheduler）掃逾期 thread，注入 `Command(resume={"action": "escalate"})`。
-- 紅燈路徑不經 `sbar_draft`，直接 `notify_nurse_urgent`。
+- 紅燈路徑不經 `sbar_draft`，直接 `notify_nurse_urgent`；對話不結束：照護者後續回答經 `POST /threads/{id}/caregiver-report` 以 `update_state` 寫回 interrupt 中的 thread（`caregiver_reports`、`caregiver_section`、`red_flags` 重算）。
+- 所有 LLM 呼叫、追問決定（含 reason）、deep agent 派工與 subagent 工具呼叫都寫 trace（`core/trace.py`，`GET /trace`、`GET /debug/trace/{thread_id}`，`records/_trace/*.jsonl`）；ACCEPTANCE 需附實際 trace。
+- RoundPage 由 `familiarization_writer` subagent 寫：①②③④ 的句子由模型依 timeline 與 baseline 生成（`get_round_context` → `submit_round_page`，程式只驗證規則），② 只列有變化的維度、每句附可點的「N 筆紀錄」連結（不露 obs id），沒變化寫「本期八維度皆與基線一致」，圖表只畫有變化的兩個維度，頁底 footer 寫由哪個 subagent 產生、呼叫了什麼幾次。
 - 大檔（音檔、圖片、PDF）不進 state，只放物件儲存的 reference。
 
 ---
@@ -209,7 +211,7 @@ agent = create_deep_agent(
 間距：8pt grid；卡片圓角 12px；陰影 0 1px 2px rgba(15,27,45,.06)
 ```
 **三個介面**
-- 照護者手機：LINE 式聊天引導（氣泡＋底部輸入列：麥克風＋文字），最少文字；先講一句，系統依八維度判斷缺什麼、一次只問一題、每題 2–4 個快速回覆、永遠有「不知道」；追問到八維度足夠，上限 4 題；已提到的維度不再問；紅燈關鍵字一出現立即中止追問並顯示「已通知護理師」；結束出「我理解的是這樣」摘要卡（照護者口吻）。390px 手機優先，按鈕 ≥56px。（demo 只用 zh-TW；多語為第二階段）
+- 照護者手機：LINE 式聊天引導（氣泡＋底部輸入列：麥克風＋文字），最少文字；先講一句，之後每一題都由 intake_agent（LLM）決定：每輪把「八維度目前狀態、profile、baseline、已問過的題、事件／紅燈事實、剩餘預算」交給模型，模型回傳問什麼、怎麼問與 reason（存 trace）。沒有寫死的問題清單與順序、沒有快速回覆按鈕，只有語音與文字輸入；追問到八維度足夠，上限 4 題（紅燈分岔 6 題）；已提到的維度不再問。禁止靜默 fallback：沒有 LLM key 或呼叫失敗時 API 回 503、畫面顯示錯誤並停止，不准退回規則版。紅燈不結束對話、只分岔：程式立即通知護理師，對話由 intake_agent 接手問規則必問題（怎麼跌、哪裡痛、能不能站、清不清醒、有沒有流血），答案即時寫進 caregiver_section、護理師端同步「照護者目前回報」；照護者端只顯示「已通知護理師，請留在他身邊」，規則說明只給護理師看。非紅燈結束出「我理解的是這樣」摘要卡（照護者口吻）。390px 手機優先，按鈕 ≥56px。（demo 只用 zh-TW；多語為第二階段）
 - 護理師平板／桌面：一屏看完異常優先＋趨勢小圖；ISBAR 編輯器中 AI 欄位用虛線框＋「AI 草稿，請確認」；A/R 欄空白待填；紅燈 banner 置頂；確認鍵 ≥56px。
 - 醫師唯讀：RoundPage 可列印 A4，print CSS 第一週就做。
 

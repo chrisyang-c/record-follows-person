@@ -443,6 +443,7 @@ export interface RoundPage {
   /** 變化最大的兩個維度 */ chart: TrendSeries[];
   since: string;
   page_limit_ok: boolean;
+  /** 由哪個 subagent 產生、呼叫了哪些工具幾次 */ agent_note: string;
 }
 
 export interface VisitPage {

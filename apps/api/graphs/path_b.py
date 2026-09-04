@@ -30,7 +30,6 @@ from record_schema import (
     Vitals,
 )
 
-from agents.subagents import familiarization_writer as fw
 from agents.subagents import trend_analyzer as ta
 from core.ids import new_id
 from core.llm import get_llm
@@ -268,6 +267,7 @@ class RoundState(TypedDict, total=False):
     roster: list[dict[str, Any]]
     trends: Annotated[list[dict[str, Any]], operator.add]
     round_pages: Annotated[list[dict[str, Any]], operator.add]
+    agent_runs: Annotated[list[dict[str, Any]], operator.add]
     head_nurse_decision: dict[str, Any]
     published: list[str]
     orders_input: list[dict[str, Any]]
@@ -289,6 +289,8 @@ class PersonTask(TypedDict, total=False):
     since: str
     until: str
     report: dict[str, Any]
+    thread_id: str
+    trend_meta: dict[str, Any]
 
 
 def _last_round_date(pid: str, fallback: date) -> date:
@@ -340,38 +342,53 @@ def fan_out_trends(state: RoundState) -> list[Send]:
     return [
         Send(
             "trend_analyzer",
-            {"patient_id": r["patient_id"], "since": r["since"], "until": state["round_date"]},
+            {
+                "patient_id": r["patient_id"],
+                "since": r["since"],
+                "until": state["round_date"],
+                "thread_id": state.get("thread_id", ""),
+            },
         )
         for r in state["roster"]
     ]
 
 
 def trend_analyzer(task: PersonTask) -> Command:
-    store = get_store()
+    """Personal deep agent → trend_analyzer subagent → analyze_trends (traced, run id)."""
+    from agents import personal
+
     pid = task["patient_id"]
-    since = date.fromisoformat(task["since"])
-    until = date.fromisoformat(task["until"])
-    obs = store.load_timeline(pid, since=since, kinds={"observation"})
-    inc = [e.id for e in store.load_timeline(pid, since=since, kinds={"incident"})]
-    report = ta.analyze(pid, obs, inc, since, until)  # type: ignore[arg-type]
+    artifact, meta = personal.run_task(
+        "trend", pid, thread_id=task.get("thread_id"), since=task["since"], until=task["until"]
+    )
+    report = TrendReport.model_validate(artifact)
     return Command(
-        update={"trends": [report.model_dump(mode="json")]},
+        update={"trends": [report.model_dump(mode="json")], "agent_runs": [meta]},
         goto=Send(
             "familiarization_writer",
-            {"patient_id": pid, "since": task["since"], "report": report.model_dump(mode="json")},
+            {
+                "patient_id": pid,
+                "since": task["since"],
+                "report": report.model_dump(mode="json"),
+                "thread_id": task.get("thread_id"),
+                "trend_meta": meta,
+            },
         ),
     )
 
 
 def familiarization_writer(task: PersonTask) -> dict[str, Any]:
-    store = get_store()
+    """Personal deep agent → familiarization_writer subagent writes the page (traced, run id)."""
+    from agents import personal
+
     pid = task["patient_id"]
-    report = TrendReport.model_validate(task["report"])
-    since = date.fromisoformat(task["since"])
-    orders = [o for o in store.load_timeline(pid, kinds={"order"}) if o.ts.date() <= since]
-    page = fw.write(store.load_profile(pid), store.load_baseline(pid), report, orders, since)  # type: ignore[arg-type]
+    artifact, meta = personal.run_task(
+        "round_page", pid, thread_id=task.get("thread_id"), since=task["since"]
+    )
+    page = RoundPage.model_validate(artifact)
     assert page.status == "draft"
-    return {"round_pages": [page.model_dump(mode="json")]}
+    page.agent_note = personal.agent_note(meta, task.get("trend_meta"))
+    return {"round_pages": [page.model_dump(mode="json")], "agent_runs": [meta]}
 
 
 def head_nurse_edit_list(state: RoundState) -> dict[str, Any]:
@@ -513,11 +530,11 @@ def order_to_caregiver_notes(state: RoundState) -> dict[str, Any]:
     for raw in state.get("orders", []):
         order = Order.model_validate(raw)
         profile = store.load_profile(order.patient_id)
-        items_zh = doctor_order.caregiver_notes_zh(order.items)
-        if not items_zh:
+        items = get_llm().caregiver_notes(order.raw_text, profile)
+        if not items:
             continue
+        items_zh = items
         lang = profile.caregiver_language
-        items = get_llm().translate_lines(items_zh, lang) if lang != "zh-TW" else items_zh
         notes.append(
             CaregiverNotes(
                 id=new_id("notes", ts),

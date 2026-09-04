@@ -78,7 +78,15 @@ def test_round_flow_three_pages_orders_notes_baseline():
         p1["who"].startswith("王伯") and p1["changes"] and p1["questions"] and p1["order_followup"]
     )
     assert all(q.endswith("？") for q in p1["questions"])
-    assert len(p1["chart"]) == 2 and p1["page_limit_ok"]
+    assert 1 <= len(p1["chart"]) <= 2 and p1["page_limit_ok"]
+    assert "familiarization_writer" in p1["agent_note"] and "scripted" in p1["agent_note"]
+    assert all(c["is_abnormal"] for c in p1["changes"])  # ② only changed dimensions
+    p3 = next(p for p in pages if p["patient_id"] == "P003")
+    assert p3["changes"] == [] and "皆與基線一致" in (p3["cross_dimension_signal"] or "")
+    from core.trace import recent
+
+    runs = [e for e in recent(kind="deep_agent.run") if e.get("thread_id") == snap["thread_id"]]
+    assert {r["task"] for r in runs} >= {"trend", "round_page"} and all(r["scripted"] for r in runs)
     assert roster[0]["patient_id"] in ("P001", "P003")  # abnormal first
 
     snap = runner.resume(

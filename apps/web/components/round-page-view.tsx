@@ -49,26 +49,26 @@ export function RoundPageView({
 
       <section className="mb-4">
         <Section className="text-base font-medium">② 自上次巡診變了什麼（異常優先）</Section>
-        {page.cross_dimension_signal && <p className="mt-1 rounded-[8px] bg-warn-fill px-2 py-1 text-sm text-warn-ink">{page.cross_dimension_signal}</p>}
+        {page.changes.length > 0 && page.cross_dimension_signal && <p className="mt-1 rounded-[8px] bg-warn-fill px-2 py-1 text-sm text-warn-ink">{page.cross_dimension_signal}</p>}
+        {page.changes.length === 0 && <p className="mt-1 text-sm">{page.cross_dimension_signal || "本期八維度皆與基線一致"}</p>}
         <ul className="mt-2 space-y-1 text-sm">
-          {page.changes.length === 0 && <li className="text-ink-2">自上次巡診沒有明顯變化。</li>}
           {page.changes.map((c) => (
             <li key={c.dimension} className="flex flex-wrap items-baseline gap-2">
-              <span className={c.is_abnormal ? "font-medium text-danger-ink" : "text-ink"}>
+              <span className="font-medium">
                 <span aria-hidden="true">{DIR[c.direction]}</span>
                 <span className="sr-only">{DIRECTION_LABEL[c.direction as Direction] ?? c.direction}</span> {c.summary}
               </span>
-              <span className="text-xs text-ink-2" translate="no">
-                {c.evidence_refs.slice(0, 3).map((r) =>
-                  showLinks ? (
-                    <Link key={r} href={`/record/${page.patient_id}#${r}`} className="mr-1 inline-flex min-h-6 items-center hover:text-primary hover:underline">
-                      [{r.slice(0, 19)}]
-                    </Link>
-                  ) : (
-                    <span key={r} className="mr-1 inline-flex min-h-6 items-center">[{r.slice(0, 19)}]</span>
-                  ),
-                )}
-              </span>
+              {c.evidence_refs.length > 0 &&
+                (showLinks ? (
+                  <Link
+                    href={`/record/${page.patient_id}?ids=${c.evidence_refs.join(",")}`}
+                    className="inline-flex min-h-6 items-center rounded-full border border-line px-2 text-xs text-primary hover:border-primary"
+                  >
+                    {c.evidence_refs.length} 筆紀錄
+                  </Link>
+                ) : (
+                  <span className="text-xs text-ink-2">（{c.evidence_refs.length} 筆紀錄）</span>
+                ))}
             </li>
           ))}
         </ul>
@@ -113,6 +113,7 @@ export function RoundPageView({
         <ProvenanceBadge source={page.provenance.source} author={page.provenance.author} />
         <span>generated_from {page.generated_from.length} 筆 timeline</span>
         <span className="ml-auto">AI 只起草，護理長定稿；④ 為提問，非診斷或處置建議。</span>
+        {page.agent_note && <span className="basis-full text-xs text-ink-2" translate="no">{page.agent_note}</span>}
       </footer>
     </article>
   );
