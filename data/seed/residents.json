@@ -41,7 +41,7 @@
       "vitals_usual": {"temp_c": 36.6, "sbp": 138, "dbp": 82, "hr": 76, "rr": 18, "spo2": 96},
       "last_order": {
         "text": "飲食：每餐記錄進食量；每週量體重一次。血壓維持目前用藥。",
-        "follow_up": {"done": true, "effective": false, "note": "有記錄，進食量仍下降"}
+        "follow_up": {"done": true, "effective": null, "note": "有記錄；進食量仍下降（依維度趨勢判斷）"}
       },
       "days": [
         ["Kakek makan habis, minum enam gelas, tidur nyenyak", "Malam bangun satu kali ke kamar mandi, tidur lagi"],

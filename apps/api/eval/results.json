@@ -59,15 +59,15 @@
   "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
-  "omitted": [
-   "cognition"
-  ],
+  "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
-   "dims": [],
+   "dims": [
+    "cognition"
+   ],
    "flags": [],
    "incidents": []
   }
