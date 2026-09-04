@@ -224,13 +224,42 @@ def intake_preview(body: PreviewIn) -> dict[str, Any]:
     }
 
 
+class TurnIn(BaseModel):
+    patient_id: str
+    turns: list[dict[str, Any]]
+    seems_different: bool = False
+    incidents: list[str] = Field(default_factory=list)
+
+
+@app.post("/intake/turn")
+def intake_turn(body: TurnIn) -> dict[str, Any]:
+    """One dialog step: merged observation, red flags, and the next question (or done)."""
+    from ingest.intake_dialog import Turn, run_dialog
+
+    store = get_store()
+    if not store.exists(body.patient_id):
+        raise HTTPException(404, "unknown patient")
+    if not body.turns:
+        raise HTTPException(400, "turns must contain the caregiver's first sentence")
+    res = run_dialog(
+        [Turn.model_validate(x) for x in body.turns],
+        store.load_profile(body.patient_id),
+        store.load_baseline(body.patient_id),
+        seems_different=body.seems_different,
+        incidents=body.incidents,
+    )
+    return res.model_dump(mode="json")
+
+
 # --- graph threads ----------------------------------------------------------------------------
 
 
 class StartIn(BaseModel):
     patient_id: str
-    text: str
+    text: str = ""
     language: str = "zh-TW"
+    turns: list[dict[str, Any]] = Field(default_factory=list)
+    incidents: list[str] = Field(default_factory=list)
     caregiver_id: str | None = None
     shift: str | None = None
     seems_different: bool = False
@@ -240,8 +269,11 @@ class StartIn(BaseModel):
 
 
 def _raw(body: StartIn) -> dict[str, Any]:
+    text = body.text or "。".join(str(x.get("text", "")) for x in body.turns if x.get("text"))
     return {
-        "text": body.text,
+        "text": text,
+        "turns": body.turns,
+        "incidents": body.incidents,
         "language": body.language,
         "caregiver_id": body.caregiver_id,
         "shift": body.shift,

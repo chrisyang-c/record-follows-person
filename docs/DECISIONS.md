@@ -17,7 +17,8 @@
 ## 環境與實作決定
 | 日期 | 決定 | 理由 | 誰 |
 |---|---|---|---|
-| 2026-09-04 | LLM 呼叫全部集中在 `apps/api/llm.py`；`LLM_MODE=mock` 時走確定性規則抽取（關鍵字→八維度），`LLM_MODE=anthropic` 時走 Claude。本機沒有 `ANTHROPIC_API_KEY`，預設 mock。 | 這台機器環境中沒有 API key；紅燈、閘門、圖流程、UI、eval 都不依賴 LLM，先把可驗收的部分做完。真 LLM 路徑只差填 key。 | Claude |
+| 2026-09-04 | LLM 呼叫全部集中在 `apps/api/core/llm.py`；沒有 key 時走確定性規則抽取（關鍵字→八維度）。 | 這台機器環境中沒有 API key；紅燈、閘門、圖流程、UI、eval 都不依賴 LLM，先把可驗收的部分做完。真 LLM 路徑只差填 key。 | Claude |
+| 2026-09-05 | 模型供應者統一為 `MODEL_PROVIDER`（預設 `openai`）；`settings.get_model()` 是唯一模型工廠，回 `ChatOpenAI(model=MODEL_PINNED, temperature=0)`；`create_deep_agent` 與所有 graph 節點（經 `core/llm.py::ChatModelLLM`）都只走它。key 為空時退回 mock 並警告，讓 demo／CI 不需要 key。 | 使用者指示（2026-09-05）。單一工廠讓換模型只改 `.env`。 | Claude |
 | 2026-09-04 | Postgres 用 Homebrew `postgresql@17` 本機跑（`make db-local`），同時保留 `docker-compose.yml` 給有 Docker 的人。 | 這台機器沒有 Docker；Docker Desktop 需要 GUI 與管理員權限，無法非互動安裝。 | Claude |
 | 2026-09-04 | checkpointer：有 `DATABASE_URL` 且連得上就用 `PostgresSaver`；pytest 圖測用 `InMemorySaver`（同一組 graph 程式碼）。 | 圖測要在 CI 沒 Postgres 時也能跑；生產／demo 路徑仍是 PostgresSaver。 | Claude |
 | 2026-09-04 | 超時升級：interrupt 前把 `deadline` 寫進 state；APScheduler worker 每 30 秒掃逾期 thread，注入 `Command(resume={"action":"escalate"})`。圖測用縮短的 deadline 直接驗證。 | 依 CLAUDE.md §4。 | Claude |
@@ -27,3 +28,19 @@
 | 2026-09-04 | 照護者「看一眼是不是這個意思」：紅燈不做、其他做（ARCHITECTURE §11 建議）。實作為 `caregiver_section_writer` 輸出後在照護者端顯示「是這個意思嗎」確認卡，不擋流程。 | 採納設計稿建議。 | Claude |
 | 2026-09-04 | RoundPage 趨勢圖：放一張，八維度中變化最大的兩個（ARCHITECTURE §11 建議）。 | 一頁上限。 | Claude |
 | 2026-09-04 | Path A 追蹤只問一次，時間由護理師在 `schedule_follow_up` 設定（預設 4 小時）。 | ARCHITECTURE §11。 | Claude |
+
+## 實作期間的決定（2026-09-05，Claude）
+| 日期 | 決定 | 理由 | 誰 |
+|---|---|---|---|
+| 2026-09-05 | Path B 圖的 `sA[→ 轉入 Path A]` 命名為 `to_path_a`；`doctor_round` 與 `nurse_onsite_assessment` 在 mermaid 標為 ◇（interrupt）。先改圖再改程式；`tests/test_mermaid_sync.py` 比對兩邊節點名。 | 醫囑要等護理師輸入、紅燈路徑沒有 AI 草稿可審，這兩點都需要人輸入才能往下走。 | Claude |
+| 2026-09-05 | 紅燈路徑：`nurse_onsite_assessment` 自己 `interrupt()` 收現場評估＋A/R；非紅燈路徑的資料在 `◇nurse_review` 一次收齊，`nurse_onsite_assessment` 只套用。 | 同一個護理師畫面兩條路徑共用；紅燈時不經 `sbar_draft`（§4）。ISBAR 的 I/S/B 在紅燈路徑由事實組成、`author=nurse`。 | Claude |
+| 2026-09-05 | `sbar_final` 用 assert 擋「A／R 空白」；API 層 `validate_resume` 先回 400。 | §1.3：A/R 由護理師撰寫。 | Claude |
+| 2026-09-05 | ROUND 圖用 `Send` 做 `trend_analyzer ×N` 與 `familiarization_writer ×N`（node 內回 `Command(goto=Send(...))`），`order_to_caregiver_notes ∥ baseline_update_proposal` 平行分支不寫同一個 state key。 | 忠於 mermaid 的 ×N；LangGraph 的 LastValue channel 不接受平行寫入。 | Claude |
+| 2026-09-05 | documents 允許同 id 更新（`update_document`：事故檔補 notifications／follow_up）；timeline 仍只增不改。 | mermaid 中 `timeline_write` 在 `send_line`／`schedule_follow_up` 之前，事故檔要能補上後續。 | Claude |
+| 2026-09-05 | Seed 時間戳用台灣時區（UTC+8）；thread_id 用 UTC 日期。 | 避免「今天」與 seed 的第 14 天夜班互相超前。 | Claude |
+| 2026-09-05 | Web 用 Turbopack `root` 指到 monorepo 根，`@schema` alias 指向 `packages/schema/ts/index.ts`；codegen 以 serialization 模式輸出，所有欄位非 optional。 | Turbopack 不允許 import 專案外檔案；API 回傳永遠含所有欄位。 | Claude |
+| 2026-09-05 | 每個 §13 步驟開 `feat/*` 分支 + PR 合進 main（同一帳號建立與合併；無第二人 review）。PR 內容依 §8。 | 單一 agent 無法滿足「至少一人 review」，但保留可事後審閱的 PR 軌跡。記在 KNOWN_ISSUES #5。 | Claude |
+| 2026-09-05 | `render_lines()` 的輸出只有「觀察到：事實 → 建議」與免責句；`test_render_has_no_level_or_score` 檢查不含等級／分數字眼；`core/llm.py::scrub_clinical_language` 對 AI 產出的 A/R/問句再掃一次診斷詞。 | §6、§1.3。 | Claude |
+| 2026-09-05 | 照護者端改為 LINE 式聊天引導：`ingest/intake_dialog.py` 規則式規劃追問（依八維度缺什麼、一次一題、2–4 個快速回覆、永遠有「不知道」、上限 4 題、已提到不再問、紅燈立即中止），每句仍走同一個抽取；graph state 加 `asked_dimensions`、`turn_count`；CLAUDE.md §4／§7 與 ARCHITECTURE §4.1 同步改為「追問到八維度足夠，上限 4 題」。 | 使用者指示（2026-09-05）。追問規劃用規則而非 LLM，行為可測、可重現。 | Claude |
+| 2026-09-05 | Demo 語言只用 zh-TW：介面移除語言切換與翻譯步驟，seed 與 eval 語句全改中文；schema 的 `lang` / `language_original` 保留、預設 `zh-TW`；多語（id／vi）為第二階段。 | 使用者指示（2026-09-05）。 | Claude |
+| 2026-09-05 | 新增 §7 的衍生 tokens：*-ink（填色上的文字）、*-hover、*-fill；§7 原色只用於邊框、填色、圖示。 | §7 的 --ok 白字對比 3.0:1，低於 §7 自己的 ≥4.5:1；衍生色記錄於 docs/design.md §1。 | Claude |

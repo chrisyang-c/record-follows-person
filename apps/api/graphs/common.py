@@ -17,7 +17,6 @@ from record_schema import (
 
 from agents.comparator import compare
 from core.settings import get_settings
-from ingest import caregiver_speech
 from record.store import UnapprovedWriteError, get_store
 from red_flags.rules import RedFlagInput, evaluate, render_lines
 
@@ -29,6 +28,9 @@ class RawInput(TypedDict, total=False):
     language: str
     media_refs: list[str]
     followup_answers: list[dict[str, Any]]
+    turns: list[dict[str, Any]]  # multi-turn dialog: [{text, dimension, quick}]
+    seems_different: bool
+    incidents: list[str]
     caregiver_id: str
     shift: str
 
@@ -73,26 +75,44 @@ def load_person_record(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def intake_agent(state: dict[str, Any]) -> dict[str, Any]:
+    """Multi-turn intake: replays the caregiver dialog (first sentence + up to MAX_TURNS answers).
+
+    A nurse 退回 adds the caregiver's addendum as one more free-text turn. State records
+    asked_dimensions and turn_count so the nurse can see what was asked."""
+    from ingest.intake_dialog import Turn, run_dialog
+
     raw: RawInput = state["raw_input"]
     profile = Profile.model_validate(state["profile"])
     baseline = Baseline.model_validate(state["baseline"])
-    answers = [FollowupQA.model_validate(a) for a in raw.get("followup_answers", [])]
-    text = raw["text"]
-    addendum = state.get("caregiver_addendum")
-    if addendum:
-        text = f"{text}。{addendum}"
-    obs = caregiver_speech.ingest(
-        text,
-        raw.get("language", "zh-TW"),  # type: ignore[arg-type]
+    turns = [Turn.model_validate(x) for x in raw.get("turns") or []]
+    if not turns:
+        turns = [Turn(text=raw.get("text", ""))]
+        for a in raw.get("followup_answers", []):
+            fa = FollowupQA.model_validate(a)
+            if fa.answer and not fa.answered_unknown:
+                turns.append(Turn(text=fa.answer))
+    for extra in state.get("caregiver_addenda") or []:
+        turns.append(Turn(text=extra))
+    result = run_dialog(
+        turns,
         profile,
         baseline,
-        followup_answers=answers,
-        media_refs=raw.get("media_refs"),
+        seems_different=bool(raw.get("seems_different")),
+        incidents=list(raw.get("incidents") or []),
     )
-    if raw.get("seems_different"):
-        obs.seems_different = True
+    obs = result.observation
+    if raw.get("media_refs"):
+        obs.followups.append(
+            FollowupQA(
+                question="影像摘要（固定 mock）",
+                answer="影像已附上，摘要由護理師確認",
+                lang="zh-TW",
+            )
+        )
     return {
         "structured_observation": obs.model_dump(mode="json"),
+        "asked_dimensions": result.asked_dimensions,
+        "turn_count": result.turn_count,
         "status": "intake_done",
         "updated_at": now_iso(),
     }

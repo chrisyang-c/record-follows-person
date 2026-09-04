@@ -2,7 +2,7 @@
 %% 實線＝主流程，虛線＝條件分支，◇＝interrupt（人決定）
 flowchart TD
     START([START]) --> load[load_person_record<br/>讀 profile / baseline / 近期 timeline]
-    load --> intake[intake_agent<br/>語音→文字→八維度<br/>最多 1–2 追問，永遠有「不知道」]
+    load --> intake[intake_agent<br/>語音→文字→八維度<br/>多輪追問到八維度足夠，上限 4 題，永遠有「不知道」]
     intake --> cmp[baseline_comparator<br/>算 delta：方向／幅度／持續天數]
     cmp --> rf{red_flag_rules<br/>純程式，無 LLM}
     rf -- 命中紅燈 --> alert[notify_nurse_urgent<br/>跳過草稿，直接推播]

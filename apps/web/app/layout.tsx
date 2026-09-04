@@ -27,14 +27,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <a href="#main" className="skip-link">跳到主要內容</a>
         <header className="no-print border-b border-line bg-bg">
           <nav aria-label="主要" className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2">
-            <Link href="/" className="mr-auto font-medium text-ink hover:text-primary" translate="no">
+            <Link href="/" className="mr-auto min-w-0 truncate text-sm font-medium text-ink hover:text-primary sm:text-base" translate="no">
               一份能跟著人走的紀錄
             </Link>
             {NAV.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
-                className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-ink-2 hover:bg-surface hover:text-ink"
+                className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-lg px-2 text-sm text-ink-2 hover:bg-surface hover:text-ink sm:px-3"
               >
                 {n.label}
               </Link>

@@ -62,6 +62,9 @@ class ShiftState(TypedDict, total=False):
     path: str
     raw_input: dict[str, Any]
     caregiver_addendum: str | None
+    caregiver_addenda: Annotated[list[str], operator.add]
+    asked_dimensions: list[str]
+    turn_count: int
     profile: dict[str, Any]
     baseline: dict[str, Any]
     recent_lines: list[str]
@@ -129,6 +132,8 @@ def nurse_10s_confirm(state: ShiftState) -> dict[str, Any]:
     }
     if action == "return":
         update["caregiver_addendum"] = decision.get("caregiver_addendum")
+        if decision.get("caregiver_addendum"):
+            update["caregiver_addenda"] = [decision["caregiver_addendum"]]
         update["status"] = "returned_to_intake"
     else:
         update["status"] = "confirmed"

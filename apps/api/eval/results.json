@@ -159,18 +159,14 @@
   "id": 9,
   "lang": "zh-TW",
   "leading": false,
-  "hallucinated": [
-   "intake"
-  ],
+  "hallucinated": [],
   "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
-   "dims": [
-    "intake"
-   ],
+   "dims": [],
    "flags": [],
    "incidents": [
     "medication_issue"
@@ -181,9 +177,7 @@
   "id": 10,
   "lang": "zh-TW",
   "leading": false,
-  "hallucinated": [
-   "intake"
-  ],
+  "hallucinated": [],
   "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
@@ -204,14 +198,18 @@
   "id": 11,
   "lang": "zh-TW",
   "leading": false,
-  "hallucinated": [],
+  "hallucinated": [
+   "cognition"
+  ],
   "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
-   "dims": [],
+   "dims": [
+    "cognition"
+   ],
    "flags": [],
    "incidents": [
     "behavior"
@@ -310,7 +308,9 @@
   "id": 17,
   "lang": "zh-TW",
   "leading": false,
-  "hallucinated": [],
+  "hallucinated": [
+   "pain"
+  ],
   "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
@@ -318,6 +318,7 @@
   "vitals_ok": true,
   "predicted": {
    "dims": [
+    "pain",
     "vitals"
    ],
    "flags": [
@@ -347,7 +348,9 @@
   "id": 19,
   "lang": "zh-TW",
   "leading": false,
-  "hallucinated": [],
+  "hallucinated": [
+   "pain"
+  ],
   "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
@@ -355,6 +358,7 @@
   "vitals_ok": true,
   "predicted": {
    "dims": [
+    "pain",
     "vitals"
    ],
    "flags": [],
@@ -384,15 +388,16 @@
   "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
-  "omitted": [],
+  "omitted": [
+   "sleep"
+  ],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
    "dims": [
-    "cognition",
-    "sleep"
+    "cognition"
    ],
    "flags": [
     "new_confusion_or_drowsiness"
@@ -422,7 +427,7 @@
  },
  {
   "id": 23,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -440,7 +445,7 @@
  },
  {
   "id": 24,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -461,7 +466,7 @@
  },
  {
   "id": 25,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -483,7 +488,7 @@
  },
  {
   "id": 26,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -501,7 +506,7 @@
  },
  {
   "id": 27,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -519,7 +524,7 @@
  },
  {
   "id": 28,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -538,7 +543,7 @@
  },
  {
   "id": 29,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -558,7 +563,7 @@
  },
  {
   "id": 30,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -576,7 +581,7 @@
  },
  {
   "id": 31,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -594,7 +599,7 @@
  },
  {
   "id": 32,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": true,
   "hallucinated": [],
   "omitted": [],
@@ -610,7 +615,7 @@
  },
  {
   "id": 33,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -630,7 +635,7 @@
  },
  {
   "id": 34,
-  "lang": "id",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -652,7 +657,7 @@
  },
  {
   "id": 35,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -671,7 +676,7 @@
  },
  {
   "id": 36,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -690,7 +695,7 @@
  },
  {
   "id": 37,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -708,7 +713,7 @@
  },
  {
   "id": 38,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -717,9 +722,7 @@
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
-   "dims": [
-    "function"
-   ],
+   "dims": [],
    "flags": [
     "cannot_get_up_after_fall",
     "fall_head_strike"
@@ -731,7 +734,7 @@
  },
  {
   "id": 39,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -753,7 +756,7 @@
  },
  {
   "id": 40,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -771,7 +774,7 @@
  },
  {
   "id": 41,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": true,
   "hallucinated": [],
   "omitted": [],
@@ -787,7 +790,7 @@
  },
  {
   "id": 42,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -803,7 +806,7 @@
  },
  {
   "id": 43,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],
@@ -823,7 +826,7 @@
  },
  {
   "id": 44,
-  "lang": "vi",
+  "lang": "zh-TW",
   "leading": false,
   "hallucinated": [],
   "omitted": [],

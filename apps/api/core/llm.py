@@ -260,6 +260,15 @@ class MockLLM(LLM):
         return [translate_instruction(line, lang) for line in lines_zh]
 
 
+def _structured(model: Any, schema: type[BaseModel]) -> Any:
+    """Structured output that tolerates optional fields: OpenAI's default json_schema mode
+    rejects schemas with defaults, so use tool/function calling on every provider."""
+    try:
+        return model.with_structured_output(schema, method="function_calling")
+    except TypeError:  # provider without a `method` kwarg
+        return model.with_structured_output(schema)
+
+
 # ---------------------------------------------------------------------------
 # ChatModelLLM — provider-agnostic, built on settings.get_model() (structured output)
 # ---------------------------------------------------------------------------
@@ -283,17 +292,52 @@ class _Extraction(BaseModel):
     followups: list[str] = Field(default_factory=list)
 
 
-EXTRACT_SYSTEM = """你是長照機構的 Intake Agent。照護者用任何語言講一句話，你只做抽取，不做判斷。
+EXTRACT_SYSTEM = """你是長照機構的 Intake Agent。
+照護者講一句話，你只做「抽取」，不判斷、不推論、不補充。
+
+八個維度（只有原文字面上提到對應內容才可以填）：
+- intake 進食與飲水：吃多少、喝多少、體重、吞嚥（例：「只吃一半」「水喝很少」「喝水嗆到」）
+- elimination 排泄：大便、尿、便秘、拉肚子、失禁、尿布
+- function 活動與日常功能：走路、站、轉位、需要人扶、比較沒力（「跌倒」本身不算 function）
+- cognition 意識、認知、情緒、溝通：混亂、嗜睡、一直睡、叫不醒、反應慢、
+   認不得人、講話變少、不講話、情緒
+- sleep 睡眠：夜間醒來幾次、睡不著、日夜顛倒（「一直睡／嗜睡」是 cognition，不是 sleep）
+- skin 皮膚與傷口：紅、破皮、壓瘡、腫、水腫、瘀青
+- pain 疼痛：痛、喊痛、不舒服（含部位）
+- vitals 生命徵象與呼吸症狀：咳、痰、喘、發燒、燙、體溫、血壓、心跳、血氧、呼吸快
+
+direction：down＝比平常少或變差、up＝比平常多或新出現、same＝跟平常一樣、unknown＝有提到但看不出方向。
+value：intake 用比例（吃完 1.0、一半 0.5、幾口 0.2、都沒吃 0）；sleep 用夜間醒來次數；其他可空。
+
 規則：
-1. 只能填八個維度：intake, elimination, function, cognition, sleep, skin, pain, vitals。
-2. 每個維度的 raw_quote 必須是原文的逐字子字串；找不到就不要填。
-3. 不改照護者口吻，不加診斷、不加建議、不加嚴重程度。
-4. flags 只能是這些布林事實：consciousness_change, new_confusion_or_drowsiness,
-   breathing_difficulty, chest_pain, fall_head_strike, cannot_get_up_after_fall,
-   no_urine_24h, intake_sudden_drop, fever_feel。
-5. incident_flags 只能是 fall, medication_issue, choking, behavior。
-6. followups 最多兩題，用照護者的語言，只問缺的事實。
-7. translation_zh：非中文時給忠實翻譯。"""
+1. 一個維度只在原文有對應字詞時才填；沒提到就不填。不要因為「跌倒」就推論 function 或 pain。
+2. 照護者的猜測、問句、診斷用語（「應該是感冒了吧」「是不是中風」「可以吃止痛藥嗎」「肺炎」）
+   不是觀察：這種句子 domains 全空、flags 全 false、incident_flags 空。
+3. raw_quote 必須是原文逐字子字串（複製原文片段，不改字）。
+4. flags 只在原文字面出現對應事實時才 true：
+   consciousness_change（叫不醒／叫不太醒／意識不清／沒反應）、
+   new_confusion_or_drowsiness（混亂／胡言亂語／認不得／嗜睡／一直睡）、
+   breathing_difficulty（喘／呼吸困難／呼吸很快）、chest_pain（胸痛／胸口悶／胸口痛）、
+   fall_head_strike（撞到頭／頭撞到）、cannot_get_up_after_fall（爬不起來／站不起來）、
+   no_urine_24h（整天沒尿／尿布是乾的）、intake_sudden_drop（一口都沒吃／都不吃）、
+   fever_feel（發燒／燙）。
+5. incident_flags 只能是 fall（跌倒／摔倒）、medication_issue（拒藥／吐藥／不肯吃藥／漏藥）、
+   choking（嗆到）、behavior（打人／遊走／想跑出去）。
+6. vitals_reported 只填原文出現的數字：temp_c、sbp、dbp、hr、rr、spo2。
+7. seems_different 只在原文有「跟平常不一樣／怪怪的／不太對／不像平常」時 true。
+8. followups 最多兩題，只問缺的事實，用照護者的日常口語；translation_zh 只在原文不是中文時填。
+
+範例：
+「王伯這三天飯只吃一半，晚上起來三次」→ intake(0.5, down, "飯只吃一半")、
+  sleep(3, up, "晚上起來三次")
+「他應該是感冒了吧」→ domains {}、flags 全 false
+「剛剛在浴室跌倒，撞到頭，自己爬不起來」→ domains {}；
+  flags fall_head_strike、cannot_get_up_after_fall；incident_flags [fall]
+「喝水嗆到，咳了很久」→ intake("喝水嗆到")、vitals("咳了很久")；incident_flags [choking]
+「早上的藥吐出來了，不肯再吃」→ domains {}；incident_flags [medication_issue]
+「跟平常不一樣，說不上來哪裡怪」→ domains {}；seems_different true
+「晚上起來三次，白天嗜睡」→ sleep(3, up, "晚上起來三次")、cognition(null, up, "白天嗜睡")；
+  flags new_confusion_or_drowsiness"""
 
 
 class ChatModelLLM(LLM):
@@ -306,7 +350,7 @@ class ChatModelLLM(LLM):
     def extract_observation(self, text, lang, profile=None, baseline=None):
         try:
             de = deidentify(text, profile)
-            structured = self.model.with_structured_output(_Extraction)
+            structured = _structured(self.model, _Extraction)
             res: _Extraction = structured.invoke(
                 [("system", EXTRACT_SYSTEM), ("human", f"語言：{lang}\n原話：{de.text}")]
             )
@@ -372,7 +416,7 @@ class ChatModelLLM(LLM):
                 situation: str
                 background: str
 
-            res: _SB = self.model.with_structured_output(_SB).invoke(prompt)
+            res: _SB = _structured(self.model, _SB).invoke(prompt)
             draft.situation = scrub_clinical_language(res.situation)
             draft.background = scrub_clinical_language(res.background)
         except Exception as e:  # noqa: BLE001
@@ -397,7 +441,7 @@ class ChatModelLLM(LLM):
             class _T(BaseModel):
                 lines: list[str]
 
-            res: _T = self.model.with_structured_output(_T).invoke(
+            res: _T = _structured(self.model, _T).invoke(
                 f"把以下每一行忠實翻成 {lang}（照服員看得懂的簡單句子），保持行數：\n"
                 + "\n".join(lines_zh)
             )

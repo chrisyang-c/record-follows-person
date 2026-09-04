@@ -15,8 +15,8 @@ ONSITE = {
 
 
 def _start(
-    text="Kakek makan cuma setengah tiga hari ini, malam bangun tiga kali, hari ini badannya panas",
-    lang="id",
+    text="王伯這三天飯只吃一半，晚上起來三次，今天身體有點燙",
+    lang="zh-TW",
 ):
     return runner.start(
         "path_a",
@@ -26,7 +26,7 @@ def _start(
             "raw_input": {
                 "text": text,
                 "language": lang,
-                "caregiver_id": "cg_siti",
+                "caregiver_id": "cg_xiaofang",
                 "seems_different": True,
             },
         },
@@ -50,11 +50,11 @@ def test_path_a_full_run_with_return_and_timeout_escalation():
             "action": "return",
             "nurse_id": NURSE,
             "return_reason": "請補充喝水量",
-            "caregiver_addendum": "minum cuma dua gelas",
+            "caregiver_addendum": "水只喝兩杯",
         },
     )
     assert snap["interrupt"]["type"] == "nurse_review"
-    assert "dua gelas" in snap["values"]["structured_observation"]["raw_text"]
+    assert "兩杯" in snap["values"]["structured_observation"]["raw_text"]
     assert any(r["action"] == "return" for r in snap["values"]["review_log"])
 
     # 2) 超時 → worker injects escalate → escalate node → back to nurse_review with level 1
@@ -111,7 +111,7 @@ def test_path_a_full_run_with_return_and_timeout_escalation():
 
 
 def test_path_a_red_flag_skips_draft_and_goes_to_onsite():
-    snap = _start("Kakek jatuh di kamar mandi, kepalanya terbentur, sekarang bicaranya aneh")
+    snap = _start("王伯在浴室跌倒，頭撞到洗手台，現在講話怪怪的")
     assert snap["interrupt"]["type"] == "nurse_onsite_assessment"
     assert snap["values"].get("sbar") is None  # no AI draft on the red path
     assert snap["values"]["red_flags"]["notify_now"] is True

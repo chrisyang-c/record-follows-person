@@ -17,7 +17,7 @@ migrate:       ## PostgresSaver.setup() + thread registry table (only place setu
 	cd $(API_DIR) && uv run python -m graphs.migrate
 
 seed:          ## 3 residents × 14 days + 1 acute incident → records/{patient_id}
-	cd $(API_DIR) && uv run python -m data_seed
+	cd $(API_DIR) && uv run python ../../data/seed/seed.py
 
 api:           ## FastAPI dev server on :8000
 	cd $(API_DIR) && uv run fastapi dev main.py --port 8000

@@ -1,4 +1,4 @@
-"""Extraction eval — hallucination rate, omission rate, provenance correctness.
+"""Extraction eval — hallucination rate, omission rate, provenance correctness (zh-TW demo set).
 
     uv run python -m eval.run          # writes eval/results.md (CI runs this)
 
