@@ -24,3 +24,4 @@
 | 20 | 護理師的病人頁同時有三個 5 秒輪詢（全站紅燈橫幅、護理站、Path A 審核面板），分頁隱藏時不暫停。 | 多開分頁時 API 負載。 | `visibilitychange` 暫停；或改 SSE。 |
 | 21 | 10 秒確認的「改一句／退回」在文字為空時按鈕 disabled，沒有就地提示（review-panel 的確認鍵是「不鎖、就地列缺什麼」）。 | 一致性。 | 改成同一種作法。 |
 | 22 | SSE 串流（對話、巡診）在客戶端中途斷線時不會取消後端的 graph：worker thread 會跑完（結果照樣寫進 checkpoint／registry），只是沒人收事件。 | 重新整理頁面後從 registry／conversation 讀到結果。 | 需要取消時可在 `core/trace.run_in_thread` 加 cancel flag。 |
+| 23 | gpt-4.1 偶爾把文字放進數字欄（`vitals_reported.rr = "呼吸很快"`），以前會讓整句抽取失敗（503）。現在 `_Extraction` 只留數字、其餘丟掉，文字仍在 vitals 維度的 raw_quote。 | eval 第一次跑到這句時中斷，修後重跑。 | — |

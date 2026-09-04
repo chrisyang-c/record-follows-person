@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from record_schema import (
     DIMENSION_LABELS,
     ISBAR,
@@ -364,6 +364,24 @@ class _Extraction(BaseModel):
     flags: dict[str, bool] = Field(default_factory=dict)
     vitals_reported: dict[str, float | None] = Field(default_factory=dict)
     followups: list[str] = Field(default_factory=list)
+
+    @field_validator("vitals_reported", mode="before")
+    @classmethod
+    def _numbers_only(cls, v: Any) -> dict[str, float | None]:
+        """The model sometimes puts words in a number slot（「呼吸很快」）: keep the number
+        or drop the value — the wording still lands in the vitals dimension's raw_quote."""
+        if not isinstance(v, dict):
+            return {}
+        out: dict[str, float | None] = {}
+        for k, x in v.items():
+            if x is None or isinstance(x, (int, float)):
+                out[k] = None if x is None else float(x)
+            else:
+                try:
+                    out[k] = float(str(x).strip())
+                except ValueError:
+                    out[k] = None
+        return out
 
 
 EXTRACT_SYSTEM = """你是長照機構的 Intake Agent。
