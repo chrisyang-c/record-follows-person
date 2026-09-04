@@ -13,6 +13,7 @@ calls the same tools in order and the trace says `scripted: true`.
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from collections import Counter
@@ -38,6 +39,9 @@ from record.store import get_store
 READ_ONLY_TOOLS = ["read_file", "ls", "glob", "grep"]
 
 # (patient_id, tool_name) -> last structured output of that tool in this process
+# One deep-agent run at a time (trend_analyzer ×N / familiarization_writer ×N): each run is several
+# model calls and parallel runs trip the provider TPM limit (30k). Streams keep flowing meanwhile.
+_DEEP_AGENT_LOCK = threading.Lock()
 ARTIFACTS: dict[tuple[str, str], dict[str, Any]] = {}
 # (patient_id, key) -> inputs a tool needs that are not yet in the record
 PENDING: dict[tuple[str, str], Any] = {}
@@ -411,7 +415,7 @@ def run_task(
                 "plain": label,
             }
         )
-    with tagged(thread_id=thread_id, run_id=run_id):
+    with _DEEP_AGENT_LOCK, tagged(thread_id=thread_id, run_id=run_id):
         if s.MODEL_PROVIDER == "mock":
             meta["scripted"] = True
             _scripted(kind, patient_id, **kw)

@@ -108,6 +108,7 @@ export default function NurseHome() {
             ))}
         </ul>
       </section>
+      <p className="text-sm"><Link href="/" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink">切換角色</Link></p>
     </div>
   );
 }

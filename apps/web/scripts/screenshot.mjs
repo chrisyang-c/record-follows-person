@@ -11,7 +11,8 @@ const browser = await chromium.launch();
 const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "zh-TW" });
 const page = await mobile.newPage();
 const idle = async () => {
-  await page.waitForFunction(() => !document.querySelector("#say")?.disabled, null, { timeout: 180000 });
+  await page.waitForTimeout(200);
+  await page.waitForFunction(() => !document.querySelector('button[aria-label="送出"]')?.disabled, null, { timeout: 180000 });
   await page.waitForTimeout(300);
 };
 const say = async (text) => {

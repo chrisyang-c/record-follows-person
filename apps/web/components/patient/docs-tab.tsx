@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { PatientSummary } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
-import { typeLabel } from "@/lib/labels";
 import type { Role } from "@/lib/role";
 
 /**
@@ -84,7 +83,7 @@ export function DocsTab({ summary, role, onChanged }: { summary: PatientSummary;
       </section>
 
       {role === "nurse" && pending.length === 0 && (
-        <p className="no-print text-sm text-ink-2">目前沒有待確認的草稿。{pending.map((p) => typeLabel(p.interrupt_type)).join("")}</p>
+        <p className="no-print text-sm text-ink-2">目前沒有待確認的草稿。</p>
       )}
     </div>
   );

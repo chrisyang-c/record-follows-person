@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useSyncExternalStore } from "react";
 import { DocsTab } from "@/components/patient/docs-tab";
 import { TalkTab } from "@/components/patient/talk-tab";
 import { TimelineTab } from "@/components/patient/timeline-tab";
@@ -21,7 +21,9 @@ function PatientInner() {
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
   const router = useRouter();
-  const role: Role = readRole() ?? "nurse";
+  // cookie 只在瀏覽器讀得到：伺服器先給 null，hydrate 後換成真正角色（避免 SSR/CSR 不一致）
+  const roleCookie = useSyncExternalStore(() => () => {}, () => readRole(), () => null);
+  const role: Role = roleCookie ?? "nurse";
   const tabParam = params.get("tab");
   const tab: Tab = isTab(tabParam) && ROLE_TABS[role].includes(tabParam) ? tabParam : ROLE_TABS[role][0];
   const onlyIds = useMemo(() => (params.get("ids") ?? "").split(",").filter(Boolean), [params]);
@@ -36,6 +38,7 @@ function PatientInner() {
     if (role === "nurse" && data && !isTab(tabParam) && data.pending.length === 0) router.replace(`/p/${id}?tab=timeline`);
   }, [role, data, tabParam, id, router]);
 
+  if (roleCookie === null) return <p className="text-ink-2">Loading…</p>;
   if (error && status === 404) return <p role="alert" className="text-danger-ink">找不到這位住民。</p>;
   if (error) return <p role="alert" className="text-danger-ink">無法連線到 API，請確認 make api 已啟動。<span className="block text-xs text-ink-2" translate="no">{error}</span></p>;
   if (!data) return <p className="text-ink-2">Loading…</p>;

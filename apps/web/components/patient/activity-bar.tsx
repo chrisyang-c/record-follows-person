@@ -47,8 +47,8 @@ export function ActivityBar({ events, role, live = false, defaultOpen = false, c
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         className={cn(
-          "inline-flex min-h-8 items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-left",
-          hasRed ? "border-danger text-danger-ink" : "border-primary/40 text-ink-2 hover:text-ink",
+          "inline-flex min-h-11 items-center gap-1 rounded-full border border-dashed px-3 py-0.5 text-left",
+          hasRed ? "border-danger text-danger-ink" : "border-primary text-ink-2 hover:text-ink",
         )}
       >
         {live && running && <span className="size-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />}
@@ -56,7 +56,7 @@ export function ActivityBar({ events, role, live = false, defaultOpen = false, c
         <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} aria-hidden="true" />
       </button>
       {open && (
-        <ol className="mt-1 space-y-1 rounded-[10px] border border-dashed border-primary/40 bg-ai-fill/60 p-2" aria-live={live ? "polite" : undefined}>
+        <ol className="mt-1 space-y-1 rounded-[10px] border border-dashed border-primary bg-ai-fill p-2" aria-live={live ? "polite" : undefined}>
           {steps.map((e, i) => (
             <li key={i} className={cn("grid grid-cols-[auto_1fr_auto] gap-x-2", e.type === "red" && "text-danger-ink")}>
               <span className={cn("font-mono", e.type === "llm_call" && "text-primary", e.type === "tool_call" && "text-warn-ink")} translate="no">

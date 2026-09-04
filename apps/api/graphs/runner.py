@@ -42,12 +42,10 @@ def compiled(graph: str):
 
 
 def _config(thread_id: str) -> dict[str, Any]:
-    cfg: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
-    if graph_of(thread_id) == "round":
-        # trend_analyzer ×N / familiarization_writer ×N run one resident at a time: each is a
-        # deep-agent run with several model calls, and parallel runs trip the provider TPM limit.
-        cfg["max_concurrency"] = 1
-    return cfg
+    # No ``max_concurrency`` here: combined with ``stream_mode="custom"`` it deadlocks LangGraph
+    # (the stream consumer shares the executor). Deep-agent runs are serialised in
+    # ``agents.personal.run_task`` with a lock instead (same TPM protection, streams still flow).
+    return {"configurable": {"thread_id": thread_id}}
 
 
 def graph_of(thread_id: str) -> str:

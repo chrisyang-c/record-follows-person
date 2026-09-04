@@ -83,6 +83,7 @@ html {
   line-height: 1.5;
   /* 紅燈 banner 為 sticky top：焦點元素捲入時不被蓋住 */
   scroll-padding-top: 96px;
+  scroll-padding-bottom: 96px;
   -webkit-tap-highlight-color: transparent;
   text-size-adjust: 100%;
 }
@@ -124,7 +125,7 @@ button, a, [role="button"] { touch-action: manipulation; }
   html, body { background: #fff !important; color: #000 !important; font-size: 11pt; }
   .no-print { display: none !important; }
   /* 病人頁「文件」tab：只印 RoundPage 那一張 */
-  main > * > section:not(:has(.print-page)) { display: none !important; }
+  body:has(.print-page) main section:not(:has(.print-page)):not(.print-page section) { display: none !important; }
   .print-page { box-shadow: none !important; border: none !important; margin: 0 !important; max-width: none !important; padding: 0 !important; }
   a { color: inherit; text-decoration: none; }
   .ai-draft { border-style: dashed; background: #fff; }

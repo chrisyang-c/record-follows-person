@@ -37,11 +37,13 @@ export default function DoctorHome() {
       <h1 className="text-2xl font-medium">今天巡診</h1>
       <p className="text-sm text-ink-2">每人一頁：這是誰、變了什麼、上次醫囑做了沒、請你確認什麼。</p>
       {error && <p role="alert" className="text-danger-ink">無法連線到 API，請確認 make api 已啟動。</p>}
+      {residents && residents.length === 0 && <p className="text-ink-2">還沒有住民資料，先跑 <code>make seed</code>。</p>}
       <ul>
         {(residents ?? []).map((r) => (
           <Row key={r.patient_id} r={r} />
         ))}
       </ul>
+      <p className="pt-4 text-sm"><Link href="/" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink">切換角色</Link></p>
     </div>
   );
 }

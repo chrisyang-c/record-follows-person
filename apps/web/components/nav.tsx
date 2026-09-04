@@ -19,13 +19,10 @@ export function Nav({ role }: { role: Role | null }) {
         </Link>
       )}
       {patient && (
-        <span className="min-w-0 truncate text-base text-ink-2" aria-current="page">
+        <span className="min-w-0 truncate text-base text-ink-2">
           · {patient}
         </span>
       )}
-      <Link href="/" className="ml-auto inline-flex min-h-11 items-center rounded-lg px-2 text-sm text-ink-2 hover:bg-surface hover:text-ink">
-        {role ? "切換角色" : "關於"}
-      </Link>
     </nav>
   );
 }

@@ -148,7 +148,7 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-9rem)] w-full max-w-[390px] flex-col">
-      <div className="flex-1 space-y-3 px-1 py-3" aria-live="polite">
+      <div className="flex-1 space-y-3 px-1 py-3">
         {messages.length === 0 && !live && <p className="rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-base">{name}今天怎麼樣？講一句就好。</p>}
         {rows.map((r) =>
           "day" in r ? (
@@ -160,7 +160,7 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
           ),
         )}
         {live && (
-          <div className="flex flex-col items-start gap-1">
+          <div className="flex flex-col items-start gap-1" aria-live="polite">
             <ActivityBar events={live.events} role={role} live defaultOpen={role !== "caregiver"} />
             {live.system.map((s, i) => (
               <p key={i} className="w-full text-center text-xs text-ink-2">{s}</p>
@@ -190,8 +190,9 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
           onChange={(e) => setInput(e.target.value)}
           placeholder={placeholder}
           autoComplete="off"
-          disabled={busy}
-          className="min-h-14 min-w-0 flex-1 rounded-[10px] border border-line bg-bg px-4 text-base text-ink placeholder:text-ink-2/70 focus-visible:border-primary"
+          inputMode="text"
+          enterKeyHint="send"
+          className="min-h-14 min-w-0 flex-1 rounded-[10px] border border-line bg-bg px-4 text-base text-ink placeholder:text-ink-2 focus-visible:border-primary"
         />
         <Button type="submit" variant="primary" size="lg" className="size-14 shrink-0 p-0" disabled={busy} aria-label="送出">
           <SendHorizontal className="size-6" aria-hidden="true" />

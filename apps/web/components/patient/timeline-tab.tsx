@@ -105,21 +105,21 @@ export function TimelineTab({ summary, role, onlyIds }: { summary: PatientSummar
       return true;
     });
   }, [summary, showConv, onlyIds, dim]);
-  const hash = typeof window === "undefined" ? "" : window.location.hash.replace(/^#/, "");
   useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, "");
     if (hash) document.getElementById(hash)?.scrollIntoView();
-  }, [hash]);
+  }, [rows.length]);
   const shown = rows.slice(0, PAGE * pages);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="維度篩選">
-        <button type="button" onClick={() => setDim(null)} className={cn("min-h-9 rounded-full border px-3 text-sm", dim === null ? "border-primary bg-ai-fill" : "border-line")}>全部</button>
+        <button type="button" onClick={() => setDim(null)} aria-pressed={dim === null} className={cn("min-h-11 rounded-full border px-3 text-sm", dim === null ? "border-primary bg-ai-fill" : "border-line")}>全部</button>
         {DIMENSIONS.map((d) => (
-          <button key={d} type="button" onClick={() => setDim(d)} className={cn("min-h-9 rounded-full border px-3 text-sm", dim === d ? "border-primary bg-ai-fill" : "border-line", summary.changed_dimensions.includes(d) && "text-warn-ink")} aria-pressed={dim === d}>
+          <button key={d} type="button" onClick={() => setDim(d)} className={cn("min-h-11 rounded-full border px-3 text-sm", dim === d ? "border-primary bg-ai-fill" : "border-line", summary.changed_dimensions.includes(d) && "text-warn-ink")} aria-pressed={dim === d}>
             {DIMENSION_LABELS[d]["zh-TW"]}
           </button>
         ))}
-        <label className="ml-auto flex min-h-9 items-center gap-2 text-sm">
+        <label className="ml-auto flex min-h-11 items-center gap-2 text-sm">
           <input type="checkbox" checked={showConv} onChange={(e) => setShowConv(e.target.checked)} className="size-4 accent-[var(--primary)]" /> 含對話
         </label>
       </div>

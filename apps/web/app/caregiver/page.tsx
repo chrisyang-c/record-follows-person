@@ -39,11 +39,13 @@ export default function CaregiverHome() {
     <div className="mx-auto max-w-[390px] space-y-4">
       <h1 className="text-2xl font-medium">今天照顧誰？</h1>
       {error && <p role="alert" className="text-danger-ink">無法連線到 API，請確認 make api 已啟動。</p>}
+      {residents && residents.length === 0 && <p className="text-ink-2">還沒有住民資料，先跑 <code>make seed</code>。</p>}
       <ul className="grid gap-3">
         {(residents ?? []).map((r) => (
           <li key={r.patient_id}><ResidentCard r={r} /></li>
         ))}
       </ul>
+      <p className="pt-4 text-center text-sm"><Link href="/" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink">切換角色</Link></p>
     </div>
   );
 }
