@@ -60,7 +60,8 @@ _DIM_PATTERNS: dict[str, list[str]] = {
         r"混亂|胡言亂語|嗜睡|一直睡|叫不醒|叫不太醒|認不得|認不出|講話變少|不講話|不太講話|躁動|情緒|不理人|"
         r"反應(?:比較|變|很|有點)?慢|意識|不清楚|怪怪的|亂講|發呆|不太對|心情|哭|生氣|罵人|理人",
         r"bingung|ngantuk terus|mengantuk|susah dibangunkan|tidak sadar|tidak kenal|lupa|gelisah|"
-        r"diam saja|tidak mau bicara|bicara(?:nya)? aneh|ngomong(?:nya)? aneh|bengong|marah|"
+        r"diam saja|tidak mau bicara|bicara(?:nya)?(?: agak| sedikit)? aneh|"
+        r"ngomong(?:nya)?(?: agak| sedikit)? aneh|bengong|marah|"
         r"nangis|linglung|ngaco",
         r"lú lẫn|lẫn|buồn ngủ|ngủ gà|gọi không dậy|không tỉnh|lơ mơ|không nhận ra|ít nói|"
         r"không nói|kích động|bồn chồn|khóc|cáu|la hét|ngơ ngác|nói lung tung",
@@ -180,6 +181,10 @@ _SEEMS_DIFFERENT = re.compile(
     re.IGNORECASE,
 )
 
+_SLEPT_WELL = re.compile(
+    r"睡得好|睡得很好|一覺到天亮|沒有醒|nyenyak|tidak bangun|ngủ ngon|ngủ yên|slept well",
+    re.IGNORECASE,
+)
 _MED_WORD = re.compile(r"藥|obat|thuốc|medic|pill", re.IGNORECASE)
 _PAINKILLER = re.compile(r"止痛|obat nyeri|thuốc giảm đau|painkiller", re.IGNORECASE)
 
@@ -367,6 +372,8 @@ def extract_with_lexicon(
                 value = _count(clause)
                 if value is not None:
                     direction = "up"
+                elif _SLEPT_WELL.search(clause):
+                    value, direction = 0.0, "same"
             if dim == "elimination":
                 c = _count(clause)
                 if c is not None:

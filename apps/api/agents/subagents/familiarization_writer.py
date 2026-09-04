@@ -54,16 +54,18 @@ def write(
     for o in last_orders:
         for item in o.items:
             fu = o.follow_up
-            effective = fu.effective if fu else None
             done = fu.done if fu else None
             note = fu.note if fu else ""
-            if effective is None and item.target_dimension:
+            effective = None
+            if item.target_dimension:  # per-item: judge by that dimension's own trend
                 t = next(
                     (line for line in report.lines if line.dimension == item.target_dimension), None
                 )
                 if t is not None and t.direction != "unknown":
                     effective = not t.is_abnormal
-                    note = note or f"依趨勢：{t.summary}"
+                    note = f"依趨勢：{t.summary}" + (f"；{fu.note}" if fu and fu.note else "")
+            if effective is None and fu is not None:  # fall back to the order-level follow-up
+                effective = fu.effective
             order_lines.append(
                 OrderFollowUpLine(
                     order_id=o.id, text=item.text, done=done, effective=effective, note=note

@@ -22,6 +22,7 @@ from functools import lru_cache
 
 from pydantic import BaseModel, Field
 from record_schema import (
+    DIMENSION_LABELS,
     ISBAR,
     Baseline,
     BaselineDelta,
@@ -39,6 +40,13 @@ from core.settings import get_settings
 from ingest.lexicon import extract_with_lexicon
 
 log = logging.getLogger(__name__)
+
+INCIDENT_LABELS_ZH = {
+    "fall": "跌倒",
+    "medication_issue": "拒藥／吐藥",
+    "choking": "嗆咳",
+    "behavior": "攻擊／遊走",
+}
 
 BANNED_DIAGNOSTIC_TERMS = (
     "肺炎",
@@ -128,8 +136,6 @@ class LLM:
 
 
 def _delta_text(d: BaselineDelta) -> str:
-    from record_schema import DIMENSION_LABELS
-
     label = DIMENSION_LABELS[d.domain]["zh-TW"]
     arrow = {
         "down": "較平常減少",
@@ -139,8 +145,7 @@ def _delta_text(d: BaselineDelta) -> str:
     }[d.direction]
     mag = f"（幅度約 {d.magnitude:.0%}）" if d.magnitude is not None else ""
     days = f"，持續 {d.days} 天" if d.days > 1 else ""
-    note = f"：{d.note}" if d.note else ""
-    return f"{label}{arrow}{mag}{days}{note}"
+    return f"{label}{arrow}{mag}{days}"  # the baseline description itself is shown next to it
 
 
 class MockLLM(LLM):
@@ -174,7 +179,9 @@ class MockLLM(LLM):
         )
         situation = f"照護者（{profile.caregiver_code_name}，{obs.language}）回報：{quotes}"
         if obs.incident_flags:
-            situation += "；事件：" + "、".join(obs.incident_flags)
+            situation += "；事件：" + "、".join(
+                INCIDENT_LABELS_ZH.get(i, i) for i in obs.incident_flags
+            )
         if obs.vitals_reported and any(
             v is not None for v in obs.vitals_reported.model_dump().values()
         ):
@@ -187,7 +194,9 @@ class MockLLM(LLM):
             ]
             situation += "；照護者報的數值：" + "、".join(p for p in parts if p)
         base_lines = [
-            f"{e.dimension}：{e.description}" for e in baseline.entries if e.valid_to is None
+            f"{DIMENSION_LABELS[e.dimension]['zh-TW']}：{e.description}"
+            for e in baseline.entries
+            if e.valid_to is None
         ]
         meds = "、".join(f"{m.name} {m.dose} {m.schedule}" for m in profile.medications) or "無"
         allergies = "、".join(a.substance for a in profile.allergies) or "無"

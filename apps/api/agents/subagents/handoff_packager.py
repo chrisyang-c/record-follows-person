@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from record_schema import (
+    DIMENSION_LABELS,
     ISBAR,
     Baseline,
     HandoffPage,
@@ -20,7 +21,11 @@ from core.ids import new_id
 
 
 def _usual(baseline: Baseline) -> list[str]:
-    return [f"{e.dimension}：{e.description}" for e in baseline.entries if e.valid_to is None]
+    return [
+        f"{DIMENSION_LABELS[e.dimension]['zh-TW']}：{e.description}"
+        for e in baseline.entries
+        if e.valid_to is None
+    ]
 
 
 def _isbar_text(isbar: ISBAR) -> str:
