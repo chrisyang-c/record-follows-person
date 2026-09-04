@@ -154,7 +154,8 @@ def session_turns(patient_id: str, session_id: str) -> list[dict[str, Any]]:
             turns.append(
                 {
                     "text": m.text,
-                    "question": last_q.text if last_q else None,
+                    # the bare question (the shown reply may carry the red-flag intro line)
+                    "question": (last_q.meta.get("question") or last_q.text) if last_q else None,
                     "dimension": (last_q.meta.get("dimension") if last_q else None),
                     "phase": (last_q.meta.get("phase") if last_q else None),
                     "ts": m.ts,

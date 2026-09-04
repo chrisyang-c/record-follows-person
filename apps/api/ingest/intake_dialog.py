@@ -33,7 +33,7 @@ from record_schema import (
     StructuredObservation,
 )
 
-from core.llm import LLMUnavailable, get_llm
+from core.llm import LLMUnavailable, NextQuestionOut, get_llm
 from core.trace import trace
 from record.store import get_store
 from red_flags.rules import RedFlagInput, evaluate, render_lines
@@ -106,7 +106,8 @@ def _extract(
     text: str, profile: Profile | None, baseline: Baseline | None
 ) -> StructuredObservation:
     pid = profile.patient_id if profile else ""
-    obs = StructuredObservation.model_validate_json(_extract_cached(text, pid))
+    # normalise the cache key: the same sentence must not be extracted twice (one model call)
+    obs = StructuredObservation.model_validate_json(_extract_cached(text.strip(), pid))
     ts = datetime.now(UTC)
     for dv in obs.domains.values():
         dv.provenance = Provenance(
@@ -265,10 +266,13 @@ def _context(
     facts += [k for k, v in obs.flags.model_dump().items() if v]
     if obs.seems_different:
         facts.append("照護者說跟平常不一樣")
+    from core.llm import record_prefix
+
     return {
         "phase": phase,
         "profile": prof,
         "baseline": base,
+        "record": record_prefix(profile, baseline),
         "said": obs.raw_text.split("。")[0],
         "known": known,
         "unknown": [label(d) for d in DIMENSIONS if d not in obs.domains],
@@ -278,26 +282,55 @@ def _context(
     }
 
 
+_LABEL_TO_KEY = {v["zh-TW"]: k for k, v in DIMENSION_LABELS.items()}
+
+
+def _norm_dim(d: str | None) -> str | None:
+    """The model may answer with the zh label instead of the key; accept both."""
+    if not d:
+        return None
+    d = d.strip()
+    return d if d in DIMENSIONS else _LABEL_TO_KEY.get(d)
+
+
+def _same_question(a: str, b: str) -> bool:
+    x, y = a.strip().rstrip("？?。"), b.strip().rstrip("？?。")
+    return bool(x) and (x == y or x in y or y in x)
+
+
 def _plan(ctx: dict, known_dims: set[str], phase: str, n: int) -> NextQuestion | None:
+    """Ask the model; validate its choice (known dimension / repeated question) and give it one
+    retry with the constraint restated. A second invalid decision is an error, not a fallback."""
     llm = get_llm()
+    asked_q = [a.split("→", 1)[0] for a in ctx.get("asked") or []]
+
+    def invalid(o: NextQuestionOut) -> str | None:
+        if not o.ask:
+            return None
+        if not o.question.strip():
+            return "question 是空的"
+        if any(_same_question(o.question, q) for q in asked_q):
+            return f"「{o.question.strip()}」已經問過（照護者已回答），不要重複，換一題或 ask=false"
+        d = _norm_dim(o.dimension)
+        if phase != "red" and d in known_dims:
+            return f"「{DIMENSION_LABELS[d]['zh-TW']}」已知，不要再問，換一個未知維度或 ask=false"
+        return None
+
     out = llm.next_question(ctx)
-    if out.ask and phase != "red" and out.dimension in known_dims:
-        # one retry with the constraint restated; an invalid decision is an error, not a fallback
-        out = llm.next_question(
-            {
-                **ctx,
-                "note": (
-                    f"「{DIMENSION_LABELS[out.dimension]['zh-TW']}」已知，不要再問，"
-                    "換一個未知維度或 ask=false"
-                ),
-            }
-        )
+    why = invalid(out)
+    if why:
+        out = llm.next_question({**ctx, "note": why})
+        why = invalid(out)
     if not out.ask:
         return None
-    if not out.question.strip() or (phase != "red" and out.dimension in known_dims):
-        raise LLMUnavailable("agent 回傳無效的追問決定（見 /trace）")
-    dim = out.dimension if out.dimension in DIMENSIONS else None
-    return NextQuestion(key=f"q{n}", text=out.question.strip(), dimension=dim, reason=out.reason)
+    if why:
+        raise LLMUnavailable(f"agent 回傳無效的追問決定：{why}（見 /trace）")
+    return NextQuestion(
+        key=f"q{n}",
+        text=out.question.strip(),
+        dimension=_norm_dim(out.dimension),
+        reason=out.reason,
+    )
 
 
 def build_observation(

@@ -425,6 +425,7 @@ def decide_next(state: TalkState) -> dict[str, Any]:
             "reply_kind": "question",
             "next_question": nq.model_dump(),
             "reply_meta": {
+                "question": nq.text,  # the bare question (the reply may carry RED_INTRO)
                 "dimension": nq.dimension,
                 "reason": nq.reason,
                 "phase": "red" if red else "routine",

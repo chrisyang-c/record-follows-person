@@ -327,6 +327,82 @@ def _structured(model: Any, schema: type[BaseModel]) -> Any:
 # ---------------------------------------------------------------------------
 
 
+def record_prefix(profile: Profile | None, baseline: Baseline | None, days: int = 14) -> str:
+    """The resident's record as one fixed block: profile, baseline, last ``days`` days of timeline.
+
+    Prompt caching: this block is appended to the (fixed) system prompt and does not change
+    between turns of the same day, so every later call reuses the cached prefix. Only the turn
+    state (what was said / asked) comes after it. Never put timestamps or per-turn data here."""
+    if profile is None:
+        return "（無住民紀錄）"
+    from datetime import UTC, datetime, timedelta
+
+    from record_schema import DIMENSION_LABELS
+
+    from record.store import get_store
+
+    label = lambda d: DIMENSION_LABELS[d]["zh-TW"]  # noqa: E731
+    age = datetime.now(UTC).year - profile.birth_year
+    meds = "、".join(
+        f"{m.name} {m.dose} {m.schedule}{'（抗凝血）' if m.is_anticoagulant else ''}"
+        for m in profile.medications
+    )
+    lines = [
+        f"住民：{profile.code_name}，{age} 歲，{profile.room}；"
+        f"慢性病：{'、'.join(c.display for c in profile.conditions) or '無'}；"
+        f"過敏：{'、'.join(a.substance for a in profile.allergies) or '無'}；用藥：{meds or '無'}；"
+        f"DNR：{'是' if profile.dnr else '否'}。{profile.one_liner}",
+    ]
+    if baseline is not None:
+        lines.append(
+            "基線（平常）："
+            + "；".join(
+                f"{label(e.dimension)}：{e.description}"
+                for e in baseline.entries
+                if e.valid_to is None
+            )
+        )
+    store = get_store()
+    if store.exists(profile.patient_id):
+        since = datetime.now(UTC).date() - timedelta(days=days)
+        rows = []
+        for e in store.load_timeline(profile.patient_id, since=since):
+            day = e.ts.astimezone().strftime("%m/%d")
+            if e.kind == "observation":
+                dims = "、".join(
+                    f"{label(k)}「{v.raw_quote}」({v.direction})"
+                    for k, v in e.observation.domains.items()
+                )
+                rows.append(f"{day} 觀察：{dims or e.observation.raw_text[:40]}")
+            elif e.kind == "incident":
+                rows.append(f"{day} 事故：{e.summary[:60]}")
+            elif e.kind == "order":
+                rows.append(f"{day} 醫囑：{e.raw_text[:80]}")
+            elif e.kind == "encounter":
+                rows.append(f"{day} 巡診：{e.summary[:60]}")
+        if rows:
+            lines.append(f"timeline（近 {days} 天，只增不改）：\n" + "\n".join(rows))
+    return "\n".join(lines)
+
+
+RECORD_SEP = "\n\n住民紀錄（固定，一天內不變）：\n"
+
+
+def _system_with_record(system: str, profile: Profile | None, baseline: Baseline | None) -> str:
+    """system prompt + the resident's record as ONE system message.
+
+    Probed 2026-09-05 on gpt-5.6-luna: the prompt cache is only served when the stable prefix
+    is inside the system message; a short system followed by a fixed user message never hits
+    (0 cached tokens on identical requests). So the record block lives here, not in a human
+    message, and the per-turn state is the only human message."""
+    return system + RECORD_SEP + record_prefix(profile, baseline)
+
+
+def _cfg(kind: str) -> dict[str, Any]:
+    """Tag a call so core.usage can attribute tokens / cost to it."""
+    return {"tags": [kind]}
+
+
 class NextQuestionOut(BaseModel):
     ask: bool = Field(description="還需要再問一題嗎？夠了就 false")
     dimension: str | None = Field(
@@ -445,7 +521,11 @@ class ChatModelLLM(LLM):
             structured = _structured(self.model, _Extraction)
             with timed() as tm:
                 res: _Extraction = structured.invoke(
-                    [("system", EXTRACT_SYSTEM), ("human", f"語言：{lang}\n原話：{de.text}")]
+                    [
+                        ("system", _system_with_record(EXTRACT_SYSTEM, profile, baseline)),
+                        ("human", f"語言：{lang}\n原話：{de.text}"),
+                    ],
+                    _cfg("llm.extract"),
                 )
             ts = datetime.now(UTC)
             prov = Provenance(
@@ -514,8 +594,6 @@ class ChatModelLLM(LLM):
     def minimal_sbar(self, obs, deltas):
         base = self.fallback.minimal_sbar(obs, deltas)
         prompt = (
-            "你是 Nurse Assist。用照護者的原話寫一行 S（現況）、一行 A（只寫與基線比的變化）。"
-            "不得新增事實、不得診斷、不得建議處置，各 ≤ 60 字。\n"
             f"原話：{obs.raw_text}\n"
             "抽取："
             + "; ".join(f"{k}={dv.raw_quote}({dv.direction})" for k, dv in obs.domains.items())
@@ -524,7 +602,9 @@ class ChatModelLLM(LLM):
         )
         try:
             with timed() as tm:
-                res: MinimalOut = _structured(self.model, MinimalOut).invoke(prompt)
+                res: MinimalOut = _structured(self.model, MinimalOut).invoke(
+                    [("system", MINIMAL_SYSTEM), ("human", prompt)], _cfg("llm.minimal_sbar")
+                )
             s = scrub_clinical_language(res.s.strip()) or base.s
             a = (
                 scrub_clinical_language(res.a_change_vs_baseline.strip())
@@ -547,17 +627,19 @@ class ChatModelLLM(LLM):
         answers = "; ".join(f"{q.question}→{q.answer or '不知道'}" for q in obs.followups) or "無"
         flags = [k for k, v in obs.flags.model_dump().items() if v] + list(obs.incident_flags)
         prompt = (
-            "你是 Nurse Assist，預填 ISBAR 草稿給護理師審核。規則：S 引用照護者原話與追問回答；"
-            "B 用 profile 與基線；change_vs_baseline 只寫「與基線比的變化」（不下判斷）；"
-            "questions_for_nurse 只寫請護理師現場確認的事，每條是問句、以「？」結尾，最多 4 條。"
-            "不得出現診斷詞、治療建議、檢傷等級。各段 ≤ 120 字。\n"
             f"I：{draft.identity}\nS（事實）：{draft.situation}\nB（事實）：{draft.background}\n"
             f"與基線比（規則計算）：{'; '.join(_delta_text(d) for d in deltas) or '無明顯變化'}\n"
             f"照護者追問回答：{answers}\n紅燈／事件旗標：{flags}"
         )
         try:
             with timed() as tm:
-                res: ISBARDraftOut = _structured(self.model, ISBARDraftOut).invoke(prompt)
+                res: ISBARDraftOut = _structured(self.model, ISBARDraftOut).invoke(
+                    [
+                        ("system", _system_with_record(ISBAR_SYSTEM, profile, baseline)),
+                        ("human", prompt),
+                    ],
+                    _cfg("llm.draft_isbar"),
+                )
             qs = [scrub_clinical_language(q.strip()) for q in res.questions_for_nurse if q.strip()]
             qs = [q if q.endswith("？") else q.rstrip("?。") + "？" for q in qs[:4]]
             draft.situation = scrub_clinical_language(res.situation.strip()) or draft.situation
@@ -587,12 +669,13 @@ class ChatModelLLM(LLM):
     def family_notification(self, profile, what_happened, route_text):
         base = self.fallback.family_notification(profile, what_happened, route_text)
         try:
-            prompt = (
-                "把下面這段通知改成更溫暖、白話、不含醫療術語的家屬訊息，長度相近，"
-                f"不得新增事實：\n{base}"
-            )
+            prompt = base
             with timed() as tm:
-                res = invoke_with_backoff(self.model.invoke, prompt)
+                res = invoke_with_backoff(
+                    self.model.invoke,
+                    [("system", FAMILY_SYSTEM), ("human", prompt)],
+                    _cfg("llm.family_notification"),
+                )
             out = scrub_clinical_language(str(res.content))
             trace(
                 "llm.family_notification",
@@ -623,6 +706,25 @@ class ChatModelLLM(LLM):
         raise LLMUnavailable("模型翻譯行數不符")
 
 
+MINIMAL_SYSTEM = (
+    "你是 Nurse Assist。用照護者的原話寫一行 S（現況）、一行 A（只寫與基線比的變化）。"
+    "不得新增事實、不得診斷、不得建議處置，各 ≤ 60 字。"
+)
+ISBAR_SYSTEM = (
+    "你是 Nurse Assist，預填 ISBAR 草稿給護理師審核。規則：S 引用照護者原話與追問回答；"
+    "B 用 profile 與基線；change_vs_baseline 只寫「與基線比的變化」（不下判斷）；"
+    "questions_for_nurse 只寫請護理師現場確認的事，每條是問句、以「？」結尾，最多 4 條。"
+    "不得出現診斷詞、治療建議、檢傷等級。各段 ≤ 120 字。"
+)
+FAMILY_SYSTEM = (
+    "把使用者給的這段通知改成更溫暖、白話、不含醫療術語的家屬訊息，長度相近，不得新增事實。"
+)
+NOTES_SYSTEM = (
+    "你是 Order Ingest Agent。把醫師醫囑翻成照服員這個月要注意的三件事（最多 3 句，"
+    "每句 ≤ 30 字，日常口語、可執行、只講照服員做得到的觀察與記錄，不改藥、不下診斷）。"
+)
+
+
 NEXT_Q_SYSTEM = """你是長照機構的 Intake Agent，正在用聊天跟照服員確認一位住民今天的狀況，
    一次只問一題。
 你每一輪都會拿到：這個人的 profile 與基線、八個維度目前哪些已知／未知、已經問過的題目、
@@ -646,17 +748,23 @@ NEXT_Q_SYSTEM = """你是長照機構的 Intake Agent，正在用聊天跟照服
 
 
 def _next_question_impl(self: ChatModelLLM, ctx: dict[str, Any]) -> NextQuestionOut:
+    # message order is fixed for prompt caching: system → 住民紀錄 (unchanged all day) → this turn
+    record = ctx.get("record") or f"住民：{ctx.get('profile')}\n基線（平常）：{ctx.get('baseline')}"
     prompt = (
-        f"phase：{ctx.get('phase')}\n住民：{ctx.get('profile')}\n基線（平常）："
-        f"{ctx.get('baseline')}\n"
+        f"phase：{ctx.get('phase')}\n"
         f"照服員第一句：{ctx.get('said')}\n已知維度：{ctx.get('known') or '無'}\n"
         f"未知維度：{ctx.get('unknown')}\n事件／紅燈事實：{ctx.get('facts') or '無'}\n"
         f"已問過（問→答）：{ctx.get('asked') or '無'}\n剩餘追問預算：{ctx.get('budget')} 題"
+        + (f"\n注意：{ctx['note']}" if ctx.get("note") else "")
     )
     try:
         with timed() as tm:
             res: NextQuestionOut = _structured(self.model, NextQuestionOut).invoke(
-                [("system", NEXT_Q_SYSTEM), ("human", prompt)]
+                [
+                    ("system", NEXT_Q_SYSTEM + RECORD_SEP + record),
+                    ("human", prompt),
+                ],
+                _cfg("llm.next_question"),
             )
         res.question = scrub_clinical_language(res.question.strip())
         trace(
@@ -679,15 +787,14 @@ class _NotesOut(BaseModel):
 
 def _caregiver_notes_impl(self: ChatModelLLM, order_text: str, profile: Profile) -> list[str]:
     prompt = (
-        "你是 Order Ingest Agent。把醫師醫囑翻成照服員這個月要注意的三件事（最多 3 句，"
-        "每句 ≤ 30 字，"
-        "日常口語、可執行、只講照服員做得到的觀察與記錄，不改藥、不下診斷）。\n"
         f"住民：{profile.code_name}，"
         f"{'、'.join(c.display for c in profile.conditions)}\n醫囑：{order_text}"
     )
     try:
         with timed() as tm:
-            res: _NotesOut = _structured(self.model, _NotesOut).invoke(prompt)
+            res: _NotesOut = _structured(self.model, _NotesOut).invoke(
+                [("system", NOTES_SYSTEM), ("human", prompt)], _cfg("llm.caregiver_notes")
+            )
         items = [scrub_clinical_language(x.strip()) for x in res.items if x.strip()][:3]
         trace(
             "llm.caregiver_notes", provider=self.name, input=prompt, output=items, duration_ms=tm.ms
