@@ -1,20 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
-import type { TrendReport } from "@schema";
 import { TenSecondConfirm } from "@/components/nurse/ten-second-confirm";
 import { Sparkline } from "@/components/sparkline";
 import { Chip } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { useApi, type InboxItem, type Resident } from "@/lib/api";
+import { useApi, usePolling, type HomeData, type HomeResident, type InboxItem } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { typeLabel } from "@/lib/labels";
 
-function ResidentRow({ r, items }: { r: Resident; items: InboxItem[] }) {
-  const { data } = useApi<TrendReport>(`/trends/${r.patient_id}`);
-  const abnormal = data?.lines.filter((l) => l.is_abnormal) ?? [];
-  const series = data?.series.filter((s) => abnormal.slice(0, 2).some((a) => a.dimension === s.dimension)) ?? [];
+function ResidentRow({ r, items }: { r: HomeResident; items: InboxItem[] }) {
+  const abnormal = r.card.abnormal ?? [];
+  const series = r.card.series ?? [];
   const mine = items.filter((i) => i.patient_id === r.patient_id);
   return (
     <Card title={<Link href={`/p/${r.patient_id}`} className="hover:text-primary">{r.code_name} · {r.room}</Link>} headingLevel={3} className={abnormal.length ? "border-warn" : ""}>
@@ -40,11 +37,9 @@ function ResidentRow({ r, items }: { r: Resident; items: InboxItem[] }) {
 /** 護理站：紅燈橫幅（全站 layout）→ 等我確認 → 今日總覽；右上「巡診準備」。 */
 export default function NurseHome() {
   const { data: inbox, reload } = useApi<{ items: InboxItem[] }>("/nurse/inbox");
-  const { data: residents } = useApi<Resident[]>("/residents");
-  useEffect(() => {
-    const id = setInterval(reload, 5000);
-    return () => clearInterval(id);
-  }, [reload]);
+  const { data: home } = useApi<HomeData>("/home/nurse");
+  const residents = home?.residents;
+  usePolling(reload, 5000);
   const items = inbox?.items ?? [];
   const pathA = items.filter((i) => i.graph === "path_a");
   const tens = items.filter((i) => i.interrupt_type === "nurse_10s_confirm");
@@ -53,7 +48,7 @@ export default function NurseHome() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-medium">護理站</h1>
-        <span className="text-sm text-ink-2" aria-live="polite">待辦 <span className="num">{items.length}</span> · 每 5 秒更新</span>
+        <span className="text-sm text-ink-2" aria-live="polite">待辦 <span className="num">{items.length}</span> · 每 5 秒更新（分頁隱藏時暫停）</span>
         <Link href="/nurse/round" className="ml-auto inline-flex min-h-11 items-center rounded-[10px] border border-line px-4 hover:border-primary hover:text-primary">
           巡診準備{round.length > 0 ? `（${typeLabel(round[0].interrupt_type)}）` : ""} →
         </Link>

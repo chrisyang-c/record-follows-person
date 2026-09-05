@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
 import { Chip } from "@/components/ui/badge";
-import { useApi } from "@/lib/api";
+import { useApi, usePolling } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 
 type Entry = Record<string, unknown> & { ts: string; kind: string };
@@ -18,10 +17,7 @@ const brief = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v, nul
 
 export default function TracePage() {
   const { data, reload, error } = useApi<Entry[]>("/trace?limit=80");
-  useEffect(() => {
-    const id = setInterval(reload, 5000);
-    return () => clearInterval(id);
-  }, [reload]);
+  usePolling(reload, 5000);
   const rows = [...(data ?? [])].reverse();
   return (
     <div className="space-y-3">

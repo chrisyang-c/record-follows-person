@@ -1,17 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
 import { RedFlagBanner } from "@/components/red-flag-banner";
-import { useApi, type InboxItem } from "@/lib/api";
+import { useApi, usePolling, type InboxItem } from "@/lib/api";
 
 /** 護理師的每一頁都壓在紅燈橫幅之下：住民、規則事實、照護者目前回報、一鍵進病人頁。 */
 export function RedBannerGlobal() {
   const { data, reload } = useApi<{ items: InboxItem[] }>("/nurse/inbox");
-  useEffect(() => {
-    const id = setInterval(reload, 5000);
-    return () => clearInterval(id);
-  }, [reload]);
+  usePolling(reload, 5000);
   const all = (data?.items ?? []).filter((i) => i.red_flag);
   // 同一位住民只顯示最新一件；其餘件數併在標題
   const latest = new Map<string, InboxItem>();

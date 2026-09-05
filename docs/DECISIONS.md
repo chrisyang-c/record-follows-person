@@ -61,3 +61,4 @@
 | 2026-09-05 | 對話 session 過期：`SESSION_EXPIRY_H`（預設 4 小時）或跨台灣日期，`open_session` 自動關閉舊 session（`closed_reason=expired`）並在對話串加系統事件；`close_session(reason=)` 記錄關閉原因（confirmed／nurse_took_over／expired）。 | KNOWN_ISSUES #18。 | Claude |
 | 2026-09-05 | 追問規則放寬：已知維度可追問一次，條件是仍有缺口（子欄位未填或原話有未抽到的線索），planner 必須在 gap／reason 指出缺口；第二次無效改 ask=false 出摘要卡而非 503；503 只留給 LLM 失敗（文案「系統暫時無法回覆，請直接告訴護理師」）。CLAUDE.md §7 同步。 | 使用者指示（2026-09-05）：luna low 約每 6 輪 1 次因連續選已知維度而中斷對話；缺口是可驗證的放行條件。 | 使用者 |
 | 2026-09-05 | `_apply_answer`：已知維度不再被追問回答整句覆寫（只有「跟平常一樣」類回答才改 direction=same，且保留原 raw_quote）；未知維度才用回答原話建值。 | 原本追問進食、回答排便，進食的 raw_quote 會變成「有大便，但比較硬」，缺口計算與摘要都錯。 | Claude |
+| 2026-09-05 | 角色首頁改打 `GET /home/{role}`（一次回住民＋卡片資料），`/residents`、`/patients/{id}/summary`、`/trends/{id}`、`/round-pages/{id}` 保留給病人頁與其他用途；輪詢統一經 `usePolling`（分頁隱藏暫停、回前景先刷新）。 | KNOWN_ISSUES #19／#20；不改 SSE 是因為 5 秒輪詢在 demo 規模夠用，改 SSE 要多一個長連線管理。 | Claude |

@@ -19,7 +19,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 
 1. ~~extract 與 next_question 改 `reasoning_effort="low"` 重跑 eval~~ **已做（2026-09-05）**：`INTAKE_REASONING_EFFORT`（預設 low → Responses API）、ACCEPTANCE Eval 表三欄、KNOWN_ISSUES #26。結論：low 在這兩個 prompt 上 reasoning tokens 為 0，成本不變，hallucination 8.7%→6.5%（gpt-4.1 仍 4.3%）。**定案**：luna + intake low（README 評測段三欄表）。
 2. ~~對話 session 過期（KNOWN_ISSUES #18）~~ **已做（2026-09-05）**：`SESSION_EXPIRY_H`＝4 小時或跨台灣日期自動關閉；順手把抽取快取持久化到 `records/{id}/extract_cache.json`（每輪只抽新的一句）。
-3. 角色首頁批次 summary 端點（#19）、輪詢在分頁隱藏時暫停或改 SSE（#20）。 ← 進行中
+3. ~~角色首頁批次 summary 端點（#19）、輪詢在分頁隱藏時暫停（#20）~~ **已做（2026-09-05）**：`GET /home/{role}`、`usePolling`。
 4. 10 秒確認「改一句／退回」改成不鎖鍵、就地提示（#21）。
 5. SSE 客戶端斷線取消後端 graph（#22，`core/trace.run_in_thread` 加 cancel flag）。
 6. 若全隊同意改 CLAUDE.md §1：對話每輪直接寫 timeline（#15，改 `record/conversation.py::append` 一處）。

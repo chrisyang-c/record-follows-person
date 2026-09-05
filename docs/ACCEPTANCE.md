@@ -104,6 +104,8 @@ luna none 多抽 pain×2、cognition×2（「不舒服」「沒精神」類句�
 - **追問規則放寬（#26 修）**：`known_gaps` 列出已知維度的缺口交給模型；真模型三輪（P002）：「今天早餐沒吃完，說肚子脹」→ 第一題「說肚子脹，大概脹得多嚴重？」（gap=原話「說肚子脹」還沒記到）→ 答「有大便，但比較硬」→ 模型想再問進食，planner 擋「已經追問過一次」→ 改問「肚子脹，現在會痛嗎？」→ 答「脹了一整天，摸起來硬硬的」→ 問生命徵象。連續兩次無效 → 摘要卡（`tests/test_planner_gaps.py::test_two_invalid_decisions_give_summary_not_error`）。503 只在 LLM 失敗，照護者端文案「系統暫時無法回覆，請直接告訴護理師」。api 95 passed、web typecheck + vitest 綠。
 - **（已修，見上）觀察到的失敗**：同日第二段對話「今天早餐沒吃完，說肚子脹」→ 問排便 → 答「有大便，但比較硬」，planner 兩次都選「進食與飲水」→ 依既有規則 503「無法繼續」（conversation 留有 error 行）；重送同一句後正常。記在 KNOWN_ISSUES #26。
 
+- **角色首頁一次呼叫（#19）＋輪詢暫停（#20）**：`GET /home/{role}`；瀏覽器實測護理站只打 `/home/nurse` ×1 與 `/nurse/inbox`（不再每人一次 `/trends`），照護者／醫師首頁各只打 `/home/{role}`；console 無錯誤。`usePolling` 取代四處 `setInterval`，`lib/polling.test.tsx` 驗證隱藏時暫停、回前景立即刷新。api 99 passed；web typecheck／lint／vitest（3）綠。
+
 ## §12 逐項
 
 | # | 項目 | 結果 | 怎麼驗證 |

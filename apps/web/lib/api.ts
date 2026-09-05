@@ -1,6 +1,6 @@
 "use client";
 
-import type { Baseline, Document, PersonRecord, Profile, StructuredObservation, TimelineEntry, RedFlagResult, TrendLine } from "@schema";
+import type { Baseline, Document, PersonRecord, Profile, StructuredObservation, TimelineEntry, RedFlagResult, TrendLine, TrendReport } from "@schema";
 import { useCallback, useEffect, useState } from "react";
 import { readRole } from "@/lib/role";
 
@@ -39,6 +39,37 @@ export async function api<T>(path: string, init?: RequestInit & { json?: unknown
     throw new ApiError(res.status, detail);
   }
   return (await res.json()) as T;
+}
+
+/**
+ * 輪詢：分頁隱藏（document.hidden）時暫停，回到前景時立刻 reload 一次再繼續（KNOWN_ISSUES #20）。
+ * `enabled=false` 時不輪詢（例如 thread 已不在 interrupted）。
+ */
+export function usePolling(reload: () => void, ms: number, enabled = true) {
+  useEffect(() => {
+    if (!enabled) return;
+    let id: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (id === null) id = setInterval(reload, ms);
+    };
+    const stop = () => {
+      if (id !== null) clearInterval(id);
+      id = null;
+    };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else {
+        reload();
+        start();
+      }
+    };
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [reload, ms, enabled]);
 }
 
 export function useApi<T>(path: string | null, deps: unknown[] = []) {
@@ -92,6 +123,22 @@ export interface Resident {
   timeline_count: number;
   last_entry_ts: string | null;
   incident_count: number;
+}
+/** GET /home/{role}：角色首頁一次拿全部住民＋卡片資料（不再每人各打一次） */
+export interface HomeResident extends Resident {
+  card: {
+    recorded_today?: boolean;
+    notes_count?: number;
+    session_phase?: "intake" | "confirm" | "red" | null;
+    abnormal?: TrendLine[];
+    series?: TrendReport["series"];
+    round_page?: { first: string; generated_at: string; status: string; confirmed_by: string | null } | null;
+  };
+}
+export interface HomeData {
+  role: "caregiver" | "nurse" | "doctor";
+  generated_at: string;
+  residents: HomeResident[];
 }
 export interface InboxItem {
   thread_id: string;

@@ -20,8 +20,8 @@
 | 16 | 串流回覆是「先算完再逐字吐」：talk graph 節點跑完後 API 以 3 字／20ms 送 token，不是模型 token 級串流（追問是 structured output，無法邊生成邊顯示）；活動事件則是即時的。 | 使用者看到活動列在動、再看到字打出來。 | 若要真 token 串流，需把追問改成非結構化輸出再解析。 |
 | 17 | 同一位住民的紅燈 Path A thread 若重複啟動（測試時常見），護理站會出現多張卡；全站紅燈橫幅只顯示每位住民最新一件並註明「另 N 件」。`make reset` 清空。 | 錄影前先 `make reset`。 | — |
 | 18 | ~~對話 session 不會自動過期~~ **已修（2026-09-05）**：`open_session` 在 session 超過 `SESSION_EXPIRY_H`（預設 4）小時或跨台灣日期時自動關閉（`closed_reason=expired`），對話串加一行系統事件「上一段對話已自動結束（超過 4 小時／跨日）」，並開新的一段。 | 同一天 4 小時內連續測試仍共用同一段。 | 說「不對」重新開始；或 `make reset`。`tests/test_session_expiry.py`。 |
-| 19 | 角色首頁每位住民各打一次 `/patients/{id}/summary`（照護者）／`/trends/{id}`（護理師、醫師）：N+1。 | 三位住民可接受；十位以上首屏會慢。 | 加一個批次 summary 端點。 |
-| 20 | 護理師的病人頁同時有三個 5 秒輪詢（全站紅燈橫幅、護理站、Path A 審核面板），分頁隱藏時不暫停。 | 多開分頁時 API 負載。 | `visibilitychange` 暫停；或改 SSE。 |
+| 19 | ~~角色首頁 N+1~~ **已修（2026-09-05）**：`GET /home/{role}` 一次回全部住民＋該角色卡片需要的資料（照護者：今天記了沒／注意事項數／session；護理師：異常趨勢句＋前兩個異常維度的曲線；醫師：RoundPage 首句／狀態）。三個角色首頁各只打一次（護理站另有 `/nurse/inbox` 輪詢）。 | 十位以上住民首屏仍要算 N 次趨勢，但在同一個請求裡。 | `tests/test_home.py`。 |
+| 20 | ~~輪詢在分頁隱藏時不暫停~~ **已修（2026-09-05）**：`lib/api.ts::usePolling(reload, ms, enabled)` 統一四處輪詢（護理站 inbox、全站紅燈橫幅、trace 頁、Path A 審核面板）：`document.hidden` 時停，回前景先 reload 一次再繼續。 | 同一分頁仍是 5 秒輪詢，未改 SSE。 | `lib/polling.test.tsx`。 |
 | 21 | 10 秒確認的「改一句／退回」在文字為空時按鈕 disabled，沒有就地提示（review-panel 的確認鍵是「不鎖、就地列缺什麼」）。 | 一致性。 | 改成同一種作法。 |
 | 22 | SSE 串流（對話、巡診）在客戶端中途斷線時不會取消後端的 graph：worker thread 會跑完（結果照樣寫進 checkpoint／registry），只是沒人收事件。 | 重新整理頁面後從 registry／conversation 讀到結果。 | 需要取消時可在 `core/trace.run_in_thread` 加 cancel flag。 |
 | 23 | gpt-4.1 偶爾把文字放進數字欄（`vitals_reported.rr = "呼吸很快"`），以前會讓整句抽取失敗（503）。現在 `_Extraction` 只留數字、其餘丟掉，文字仍在 vitals 維度的 raw_quote。 | eval 第一次跑到這句時中斷，修後重跑。 | — |

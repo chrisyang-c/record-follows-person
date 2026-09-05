@@ -107,24 +107,90 @@ def red_flags_meta() -> list[dict[str, Any]]:
 @app.get("/residents")
 def residents() -> list[dict[str, Any]]:
     store = get_store()
-    out = []
-    for pid in store.list_patients():
-        p = store.load_profile(pid)
-        tl = store.load_timeline(pid)
-        out.append(
-            {
-                "patient_id": pid,
-                "code_name": p.code_name,
-                "room": p.room,
-                "caregiver_language": p.caregiver_language,
-                "caregiver_code_name": p.caregiver_code_name,
-                "primary_nurse": p.primary_nurse,
-                "timeline_count": len(tl),
-                "last_entry_ts": tl[-1].ts.isoformat() if tl else None,
-                "incident_count": sum(1 for e in tl if e.kind == "incident"),
+    return [_resident_row(store, pid) for pid in store.list_patients()]
+
+
+def _resident_row(store: Any, pid: str) -> dict[str, Any]:
+    p = store.load_profile(pid)
+    tl = store.load_timeline(pid)
+    return {
+        "patient_id": pid,
+        "code_name": p.code_name,
+        "room": p.room,
+        "caregiver_language": p.caregiver_language,
+        "caregiver_code_name": p.caregiver_code_name,
+        "primary_nurse": p.primary_nurse,
+        "timeline_count": len(tl),
+        "last_entry_ts": tl[-1].ts.isoformat() if tl else None,
+        "incident_count": sum(1 for e in tl if e.kind == "incident"),
+    }
+
+
+def _home_card(store: Any, pid: str, role: str) -> dict[str, Any]:
+    """What one resident card on a role home page needs — computed here so the page is one call
+    (KNOWN_ISSUES #19: was /residents + one /summary, /trends or /round-pages per resident)."""
+    from datetime import date, timedelta
+
+    if role == "caregiver":
+        msgs = conv.messages(pid)
+        today = date.today().isoformat()
+        s = conv.session(pid)
+        notes = next((d.items for d in reversed(store.load_documents(pid, "caregiver_notes"))), [])
+        return {
+            "recorded_today": any(m.role == "caregiver" and m.ts[:10] == today for m in msgs)
+            or any(
+                e.ts.date().isoformat() == today
+                for e in store.load_timeline(pid, kinds={"observation"})
+            ),
+            "notes_count": len(notes),
+            "session_phase": s.phase if s and s.phase != "closed" else None,
+        }
+    if role == "doctor":
+        pages = store.load_documents(pid, "round_page")
+        if not pages:
+            return {"round_page": None}
+        pg = pages[-1]
+        return {
+            "round_page": {
+                "first": (pg.changes[0].summary if pg.changes else "本期八維度皆與基線一致"),
+                "generated_at": pg.generated_at.isoformat()
+                if hasattr(pg.generated_at, "isoformat")
+                else pg.generated_at,
+                "status": pg.status,
+                "confirmed_by": pg.confirmed_by,
             }
-        )
-    return out
+        }
+    # nurse: abnormal trend lines + the series of (at most) the first two abnormal dimensions
+    from agents.subagents import trend_analyzer
+
+    until = datetime.now(UTC).date()
+    since = until - timedelta(days=14)
+    obs = store.load_timeline(pid, since=since, kinds={"observation"})
+    inc = [e.id for e in store.load_timeline(pid, since=since, kinds={"incident"})]
+    rep = trend_analyzer.analyze(pid, obs, inc, since, until, 7)  # type: ignore[arg-type]
+    abnormal = [line for line in rep.lines if line.is_abnormal]
+    dims = {line.dimension for line in abnormal[:2]}
+    return {
+        "abnormal": [line.model_dump(mode="json") for line in abnormal],
+        "series": [s.model_dump(mode="json") for s in rep.series if s.dimension in dims],
+    }
+
+
+@app.get("/home/{role}")
+def home(role: str) -> dict[str, Any]:
+    """Role home page in one call: every resident + the card data that role shows."""
+    role = role.lower()
+    if role not in ("caregiver", "nurse", "doctor"):
+        raise HTTPException(404, "unknown role")
+    store = get_store()
+    return {
+        "role": role,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "residents": [
+            {**_resident_row(store, pid), "card": _home_card(store, pid, role)}
+            for pid in store.list_patients()
+        ],
+    }
 
 
 @app.get("/records/{patient_id}")

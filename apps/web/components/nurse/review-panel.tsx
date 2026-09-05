@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type { BaselineDelta, ISBAR, RouteDecision, StructuredObservation } from "@schema";
 import { DIMENSION_LABELS } from "@schema";
 import { ConfirmedChip } from "@/components/confirmed-chip";
@@ -11,7 +11,7 @@ import { Chip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/field";
-import { api, resumeThread, threadState, type Snapshot } from "@/lib/api";
+import { api, resumeThread, threadState, usePolling, type Snapshot } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { DIRECTION_LABEL, ROUTE_LABEL, typeLabel } from "@/lib/labels";
 
@@ -54,13 +54,10 @@ export function ReviewPanel({ tid, codeName, onChanged }: { tid: string; codeNam
     return sn;
   });
 
-  useEffect(() => {
-    if (!snap || snap.status !== "interrupted") return;
-    const id = setInterval(() => {
-      threadState(tid).then((sn) => setSnap((prev) => (prev && prev.status !== "interrupted" ? prev : sn))).catch(() => {});
-    }, 5000);
-    return () => clearInterval(id);
-  }, [tid, snap]);
+  const pollState = useCallback(() => {
+    threadState(tid).then((sn) => setSnap((prev) => (prev && prev.status !== "interrupted" ? prev : sn))).catch(() => {});
+  }, [tid]);
+  usePolling(pollState, 5000, !!snap && snap.status === "interrupted");
 
   useEffect(() => {
     let alive = true;
