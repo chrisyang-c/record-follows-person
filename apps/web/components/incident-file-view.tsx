@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { fmtDateTime } from "@/lib/format";
 import { INCIDENT_LABEL, ROUTE_LABEL } from "@/lib/labels";
 
-/** 事故檔（照護者區塊原話 + 護理師現場評估與 ISBAR + 通知追蹤），嵌在病人頁「文件」tab。 */
+/** 事件資訊包（照護者區塊原話 + 護理師現場評估與 ISBAR + 通知追蹤），嵌在病人頁「文件」tab。 */
 export function IncidentFileView({ d, codeName }: { d: IncidentFile; codeName: string }) {
   const cs = d.caregiver_section;
   const ns = d.nurse_section;
@@ -17,7 +17,7 @@ export function IncidentFileView({ d, codeName }: { d: IncidentFile; codeName: s
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-xl font-medium">事故檔 · {codeName}</h2>
+        <h2 className="text-xl font-medium">事件資訊包 · {codeName}</h2>
         <ConfirmedChip by={d.confirmed_by} at={ns.confirmed_at} />
         <span className="text-sm text-ink-2">{fmtDateTime(d.generated_at)} · 路徑：{d.route_decision ? ROUTE_LABEL[d.route_decision] : "—"}</span>
       </div>

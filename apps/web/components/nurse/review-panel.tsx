@@ -260,9 +260,9 @@ export function ReviewPanel({ tid, codeName, onChanged }: { tid: string; codeNam
 
           {type === "nurse_approve_notification" && (
             <>
-              <Card variant="confirmed" title="事故檔已寫入紀錄" meta={<span translate="no">{docs.incident_file}</span>}>
+              <Card variant="confirmed" title="事件資訊包已寫入紀錄" meta={<span translate="no">{docs.incident_file}</span>}>
                 <p className="flex flex-wrap items-center gap-3 text-sm">
-                  <span className="text-ink-2">事故檔會出現在下方「文件」清單</span>
+                  <span className="text-ink-2">事件資訊包會出現在下方「文件」清單</span>
                   {docs.handoff_page_id && <span className="text-ink-2">後送頁 <span translate="no">{docs.handoff_page_id}</span></span>}
                 </p>
               </Card>
@@ -280,7 +280,7 @@ export function ReviewPanel({ tid, codeName, onChanged }: { tid: string; codeNam
             <Card variant="confirmed" title="流程完成">
               <ul className="space-y-1 text-sm">
                 <li>路徑：{route ? (ROUTE_LABEL[route] ?? route) : "—"}</li>
-                <li>事故檔：<span translate="no">{docs.incident_file}</span>（見下方文件）</li>
+                <li>事件資訊包：<span translate="no">{docs.incident_file}</span>（見下方文件）</li>
                 <li>家屬通知：{(v.family_notification as { status: string })?.status}</li>
                 <li>追蹤：{fmtDateTime((v.follow_up as { due_at: string })?.due_at)} 再問照護者一次</li>
                 <li>

@@ -1,8 +1,10 @@
-# 一份能跟著人走的紀錄
+# Personal Health Twin — 一份能跟著人走的紀錄
 
-> 每個人有一份跟著他走的紀錄，和一個替這份紀錄說話的 agent。今天，它先學會聽照顧他的人說話。
+> 每個人有一份屬於自己、跟著他一輩子的健康紀錄（Personal Health ID），和一個替這份紀錄說話的 agent。**今天先做通道 1**：它先學會聽照顧他的人說話。
 
-BUILDMODE 2026 × SITCON ・ Healthcare AI 賽道。照服員講一句話（demo 為中文；多語為第二階段）→ AI 只抽取成八個觀察維度、不判斷 → 護理師按一下 → 醫師巡診看一頁。紀錄是唯一資產；AI 只起草，人才定稿；每一行都有來源。
+BUILDMODE 2026 × SITCON ・ Healthcare AI 賽道。紀錄屬於本人，誰能看由本人在 Care Circle 決定；家與機構都是場域：住宿式長照機構是這份紀錄今天接上的第一個場域，同一份紀錄回到家裡、進到醫院都跟著人走。照服員講一句話 → AI 只抽取成八個觀察維度、不判斷 → 護理師按一下 → 醫師巡診看一頁；穿戴訊號進來時先問人「可能跌倒了嗎」，再由護理師看事件資訊包。AI 只起草，人才定稿；每一行都有來源；任何信心值、機率、分數不出現在照護者與醫師介面。
+
+四扇門：本人（`/me`：今天、終身時間軸、問我的紀錄、Care Circle）・家屬／照護者（`/caregiver`：對話、四鍵驗證）・護理師（`/nurse`：Clinical Queue）・醫師（`/doctor`：一人一頁）。願景全文：[docs/VISION_personal_health_twin.md](docs/VISION_personal_health_twin.md)（實作範圍以 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 與 [docs/HANDOFF.md](docs/HANDOFF.md) 為準）。
 
 ![ci](https://github.com/chrisyang-c/record-follows-person/actions/workflows/ci.yml/badge.svg)
 
@@ -164,6 +166,8 @@ mock 模式的 hallucination 在結構上不可能超過關鍵字命中（raw_qu
 | Incident Compiler → 兩區塊事故檔 + 後送頁 | 出院摘要 PDF（`ingest/discharge_pdf.py` mock）|
 | Familiarization Writer subagent 寫 RoundPage（①②③④ 由模型依 timeline／baseline 生成，程式驗證規則，可列印） | 生命徵象量測（`ingest/vitals.py` 寫死）|
 | Order Ingest → 照護者三件事（中文）＋ baseline 提案＋確認 | Roster 排序（3 位住民）|
+| Health ID + Care Circle（本人授權／撤銷、access log）；本人 App（終身時間軸、問我的紀錄只引用既有行）| Health Graph：第二階段（不做）|
+| 通道 4 模擬跌倒訊號 → 「可能跌倒」→ 照護者四鍵 → 事件資訊包 | 真實穿戴裝置、醫院 EHR／FHIR 對接：第二階段（不做）|
 
 其他限制見 [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)。本機沒有 `OPENAI_API_KEY` 時所有流程以 mock（確定性抽取）跑完；`deepagents / langgraph / langchain` 鎖精確版本（alpha）。**只用合成資料**：`data/seed/` 的姓名為代號，repo 內沒有任何真實個資。
 

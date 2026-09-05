@@ -36,7 +36,7 @@ export const DOC_TYPE_LABEL: Record<Document["doc_type"], string> = {
   round_page: "RoundPage 熟悉頁",
   handoff_page: "後送頁",
   visit_page: "陪診頁",
-  incident_file: "事故檔",
+  incident_file: "事件資訊包",
   caregiver_notes: "照護者注意事項",
 };
 

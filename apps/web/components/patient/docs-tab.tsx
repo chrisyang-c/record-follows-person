@@ -15,8 +15,8 @@ import type { Role } from "@/lib/role";
 
 /**
  * 文件 tab（病人頁的單一入口）：
- * 護理師：紅燈／草稿先（Path A 審核、每班 10 秒確認）→ RoundPage（展開＋列印）→ 事故檔 → 注意事項
- * 醫師：RoundPage 展開＋列印 A4 → 事故檔（唯讀）
+ * 護理師：紅燈／草稿先（Path A 審核、每班 10 秒確認）→ RoundPage（展開＋列印）→ 事件資訊包 → 注意事項
+ * 醫師：RoundPage 展開＋列印 A4 → 事件資訊包（唯讀）
  * 照護者：本月注意事項
  */
 export function DocsTab({ summary, role, onChanged }: { summary: PatientSummary; role: Role; onChanged: () => void }) {
@@ -59,7 +59,7 @@ export function DocsTab({ summary, role, onChanged }: { summary: PatientSummary;
 
       {role !== "caregiver" && incidents.length > 0 && (
         <section aria-labelledby="inc" className="no-print space-y-4">
-          <h2 id="inc" className="text-lg font-medium">事故檔（<span className="num">{incidents.length}</span>）</h2>
+          <h2 id="inc" className="text-lg font-medium">事件資訊包（<span className="num">{incidents.length}</span>）</h2>
           {incidents.map((d) => (
             <IncidentFileView key={d.id} d={d} codeName={name} />
           ))}
