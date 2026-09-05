@@ -3,35 +3,32 @@
 import Link from "next/link";
 import { SensorEventCard } from "@/components/nurse/sensor-event-card";
 import { TenSecondConfirm } from "@/components/nurse/ten-second-confirm";
-import { Sparkline } from "@/components/sparkline";
+import { DIMENSION_LABELS, DIMENSIONS, type Dimension } from "@schema";
 import { Chip } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { useApi, usePolling, type HomeData, type HomeResident, type InboxItem, type SensorEvent } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { typeLabel } from "@/lib/labels";
+import { cn } from "@/lib/utils";
 
+/** 今日總覽一列：住民、八維度小點（有變化者亮 --accent-2、紅燈 --danger）、一句變化、待辦數。 */
 function ResidentRow({ r, items }: { r: HomeResident; items: InboxItem[] }) {
-  const abnormal = r.card.abnormal ?? [];
-  const series = r.card.series ?? [];
+  const abnormal = new Set((r.card.abnormal ?? []).map((l) => l.dimension));
   const mine = items.filter((i) => i.patient_id === r.patient_id);
+  const red = mine.some((i) => i.red_flag);
+  const first = r.card.abnormal?.[0]?.summary;
   return (
-    <Card title={<Link href={`/p/${r.patient_id}`} className="hover:text-primary">{r.code_name} · {r.room}</Link>} headingLevel={3} className={abnormal.length ? "border-warn" : ""}>
-      <div className="mb-2 flex flex-wrap gap-1">
-        {abnormal.length === 0 && <Chip tone="ok">近 7 天無異常趨勢</Chip>}
-        {abnormal.map((l) => (
-          <Chip key={l.dimension} tone="warn">{l.summary}</Chip>
+    <li className={cn("flex flex-wrap items-center gap-3 rounded-[12px] border bg-surface px-4 py-3", red ? "border-danger" : abnormal.size ? "border-warn/60" : "border-line")}>
+      <Link href={`/p/${r.patient_id}`} className="min-w-[7rem] text-base font-medium hover:text-primary">{r.code_name} <span className="text-sm font-normal text-ink-2">{r.room}</span></Link>
+      <ul className="flex items-center gap-1.5" aria-label="八維度">
+        {DIMENSIONS.map((d) => (
+          <li key={d} title={`${DIMENSION_LABELS[d as Dimension]["zh-TW"]}${abnormal.has(d) ? "：有變化" : ""}`} className={cn("size-2.5 rounded-full", red && abnormal.has(d) ? "bg-danger" : abnormal.has(d) ? "bg-accent-2" : "bg-line")} />
         ))}
-        {mine.map((i) => (
-          <Chip key={i.thread_id} tone={i.red_flag ? "danger" : "primary"}>{typeLabel(i.interrupt_type)}</Chip>
-        ))}
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {series.map((s) => (
-          <Sparkline key={s.dimension} series={s} height={56} />
-        ))}
-      </div>
-      <p className="mt-2 text-xs text-ink-2">最近 {fmtDateTime(r.last_entry_ts)} · 紀錄 <span className="num">{r.timeline_count}</span> 筆</p>
-    </Card>
+      </ul>
+      <span className="min-w-0 flex-1 truncate text-sm text-ink-2">{first ?? "近 7 天無異常趨勢"}</span>
+      {mine.length > 0 && <Chip tone={red ? "danger" : "primary"}>{red ? "紅燈" : "待辦"} {mine.length}</Chip>}
+      <span className="num text-xs text-ink-2">{fmtDateTime(r.last_entry_ts)}</span>
+    </li>
   );
 }
 
@@ -73,7 +70,7 @@ export default function NurseHome() {
           {pathA.map((i) => (
             <li key={i.thread_id}>
               <Card variant={i.red_flag ? "red" : "ai"} title={<>{i.code_name ?? i.patient_id} · {typeLabel(i.interrupt_type)}</>} meta={fmtDateTime(i.updated_at)}>
-                <p className="line-clamp-2 text-sm">{i.summary || i.red_flag_lines[0]}</p>
+                <p className="truncate text-sm" title={i.summary || i.red_flag_lines[0]}><span className="label-caps mr-2">S</span>{i.summary || i.red_flag_lines[0]}</p>
                 {i.caregiver_reports.length > 0 && (
                   <div className="mt-2 rounded-[8px] bg-surface px-2 py-1 text-xs" aria-live="polite">
                     <p className="font-medium">照護者目前回報（{i.turn_count}）</p>
@@ -104,14 +101,12 @@ export default function NurseHome() {
 
       <section aria-labelledby="h-t">
         <h2 id="h-t" className="mb-2 text-lg font-medium">今日總覽（異常優先）</h2>
-        <ul className="grid gap-3 lg:grid-cols-3">
+        <ul className="space-y-2">
           {(residents ?? [])
             .slice()
-            .sort((a, b) => Number(items.some((i) => i.patient_id === b.patient_id && i.red_flag)) - Number(items.some((i) => i.patient_id === a.patient_id && i.red_flag)))
+            .sort((a, b) => Number(items.some((i) => i.patient_id === b.patient_id && i.red_flag)) - Number(items.some((i) => i.patient_id === a.patient_id && i.red_flag)) || (b.card.abnormal?.length ?? 0) - (a.card.abnormal?.length ?? 0))
             .map((r) => (
-              <li key={r.patient_id}>
-                <ResidentRow r={r} items={items} />
-              </li>
+              <ResidentRow key={r.patient_id} r={r} items={items} />
             ))}
         </ul>
       </section>

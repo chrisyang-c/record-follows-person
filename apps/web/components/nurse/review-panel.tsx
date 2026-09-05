@@ -146,10 +146,10 @@ export function ReviewPanel({ tid, codeName, onChanged }: { tid: string; codeNam
         </span>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+      <div className="grid gap-4 lg:grid-cols-[45fr_55fr]">
         <div className="space-y-3">
           {obs && (
-            <Card title="照護者區塊（原話＋AI 結構化）" meta={<span translate="no">{obs.language}</span>}>
+            <Card title="照護者區塊（原話＋AI 抽取欄位）" meta={<span translate="no">{obs.language}</span>}>
               <p lang={obs.language}>“{obs.raw_text}”</p>
               <div className="mt-3">
                 <DimensionGrid domains={obs.domains} compact />
@@ -214,7 +214,7 @@ export function ReviewPanel({ tid, codeName, onChanged }: { tid: string; codeNam
                   <Textarea name="return_reason" aria-label="退回原因" value={returnReason} onChange={(e) => setReturnReason(e.target.value)} placeholder="例如：請補充昨晚到今早喝了多少水…" className="min-h-14" autoComplete="off" />
                 </Card>
               )}
-              <div className="sticky bottom-0 flex flex-wrap gap-2 bg-bg pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+              <div className="sticky bottom-14 flex flex-wrap gap-2 border-t border-line bg-bg pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:bottom-0">
                 {missing.length > 0 && (
                   <p role="alert" className="basis-full text-sm text-danger-ink">
                     請先填寫：{missing.join("、")}。

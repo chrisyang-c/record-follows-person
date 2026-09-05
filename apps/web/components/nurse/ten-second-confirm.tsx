@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Chip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/field";
@@ -10,20 +11,26 @@ import { typeLabel } from "@/lib/labels";
 
 const NURSE = "nurse_lin";
 
-/** 每班 10 秒確認：住民、S、A，接受／改一句／退回（CLAUDE.md §4 ◇nurse_10s_confirm）。 */
-export function TenSecondConfirm({ item, onDone, title }: { item: Pick<InboxItem, "thread_id" | "interrupt_type" | "red_flag_lines" | "updated_at" | "patient_id" | "code_name">; onDone: () => void; title?: React.ReactNode }) {
+/**
+ * 每班 10 秒確認（◇nurse_10s_confirm）：住民、S 一行、A 一行，三鍵「確認／改一句／退回」。
+ * 改一句與退回都就地展開輸入，不鎖其他鍵（docs/UIUX_OMNI_TWIN.md §4.4；KNOWN_ISSUES #21）。
+ * 超時升級：卡片 --warn 邊，標「已升級至護理長」。
+ */
+export function TenSecondConfirm({ item, onDone, title }: { item: Pick<InboxItem, "thread_id" | "interrupt_type" | "red_flag_lines" | "updated_at" | "patient_id" | "code_name"> & { escalation_level?: number }; onDone: () => void; title?: React.ReactNode }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [mode, setMode] = useState<"idle" | "edit" | "return">("idle");
+  const [editing, setEditing] = useState(false);
+  const [returning, setReturning] = useState(false);
   const [a, setA] = useState("");
   const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"accept" | "return" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     threadState(item.thread_id).then(setSnap).catch((e: Error) => setErr(e.message));
   }, [item.thread_id]);
   const ms = (snap?.interrupt?.minimal_sbar ?? null) as { s: string; a_change_vs_baseline: string } | null;
-  const act = async (payload: Record<string, unknown>) => {
-    setBusy(true);
+  const escalated = (item.escalation_level ?? 0) > 0;
+  const act = async (kind: "accept" | "return", payload: Record<string, unknown>) => {
+    setBusy(kind);
     setErr(null);
     try {
       await resumeThread(item.thread_id, { nurse_id: NURSE, ...payload });
@@ -31,47 +38,46 @@ export function TenSecondConfirm({ item, onDone, title }: { item: Pick<InboxItem
     } catch (e) {
       setErr((e as Error).message);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
+  const confirm = () => act("accept", editing && a.trim() ? { action: "edit", edited_a: a.trim() } : { action: "accept" });
   return (
-    <Card variant="ai" title={title ?? <>{item.code_name ?? item.patient_id} · {typeLabel(item.interrupt_type)}</>} meta={fmtDateTime(item.updated_at)}>
+    <Card variant="ai" className={escalated ? "border-warn" : undefined} title={title ?? <>{item.code_name ?? item.patient_id} · {typeLabel(item.interrupt_type)}</>} meta={<>{escalated && <Chip tone="warn" className="mr-2">已升級至護理長</Chip>}{fmtDateTime(item.updated_at)}</>}>
       {!ms && !err && <p className="text-sm text-ink-2">Loading…</p>}
       {ms && (
         <div className="space-y-1 text-sm">
-          <p><span className="mr-1 rounded bg-bg px-1 text-xs text-ink-2">S</span>{ms.s}</p>
-          <p><span className="mr-1 rounded bg-bg px-1 text-xs text-ink-2">A</span>{ms.a_change_vs_baseline}</p>
+          <p className="truncate" title={ms.s}><span className="label-caps mr-2">S</span>{ms.s}</p>
+          <p className="truncate" title={ms.a_change_vs_baseline}><span className="label-caps mr-2">A</span>{ms.a_change_vs_baseline}</p>
           {item.red_flag_lines.length > 0 && <p className="text-warn-ink">{item.red_flag_lines.join("；")}</p>}
         </div>
       )}
-      {mode === "edit" && (
-        <Textarea name="edited_a" aria-label="改一句 A（與基線比的變化）" value={a} onChange={(e) => setA(e.target.value)} placeholder="例如：進食量較平常少一半，已持續三天…" className="mt-2 min-h-14 text-sm" autoComplete="off" />
+      {editing && (
+        <div className="fade-in mt-2">
+          <label htmlFor={`a-${item.thread_id}`} className="label-caps">改一句 A（與基線比的變化）</label>
+          <Textarea id={`a-${item.thread_id}`} name="edited_a" value={a} onChange={(e) => setA(e.target.value)} placeholder="例如：進食量較平常少一半，已持續三天…" className="mt-1 min-h-14 text-sm" autoComplete="off" autoFocus />
+        </div>
       )}
-      {mode === "return" && (
-        <Textarea name="return_reason" aria-label="退回原因" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="例如：請補充喝水量…" className="mt-2 min-h-14 text-sm" autoComplete="off" />
+      {returning && (
+        <div className="fade-in mt-2">
+          <label htmlFor={`r-${item.thread_id}`} className="label-caps">退回原因（照護者會看到）</label>
+          <Textarea id={`r-${item.thread_id}`} name="return_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="例如：請補充喝水量…" className="mt-1 min-h-14 text-sm" autoComplete="off" autoFocus />
+        </div>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
-        {mode === "idle" && (
-          <>
-            <Button variant="ok" size="lg" className="min-w-40 flex-1" onClick={() => act({ action: "accept" })} disabled={busy || !ms}>
-              {busy ? "確認中…" : "接受"}
-            </Button>
-            <Button variant="outline" size="lg" onClick={() => setMode("edit")} disabled={busy || !ms}>改一句</Button>
-            <Button variant="ghost" size="lg" onClick={() => setMode("return")} disabled={busy || !ms}>退回</Button>
-          </>
-        )}
-        {mode === "edit" && (
-          <>
-            <Button variant="ok" size="lg" className="flex-1" onClick={() => act({ action: "edit", edited_a: a })} disabled={busy || !a.trim()}>{busy ? "確認中…" : "修改並確認"}</Button>
-            <Button variant="ghost" size="lg" onClick={() => setMode("idle")}>取消</Button>
-          </>
-        )}
-        {mode === "return" && (
-          <>
-            <Button variant="danger" size="lg" className="flex-1" onClick={() => act({ action: "return", return_reason: reason, caregiver_addendum: reason })} disabled={busy || !reason.trim()}>{busy ? "退回中…" : "退回照護者"}</Button>
-            <Button variant="ghost" size="lg" onClick={() => setMode("idle")}>取消</Button>
-          </>
-        )}
+        <Button variant="ok" size="lg" className="min-w-40 flex-1" onClick={confirm} disabled={!ms || busy !== null || (editing && !a.trim())}>
+          {busy === "accept" ? "確認中…" : editing ? "修改並確認" : "確認"}
+        </Button>
+        <Button variant="secondary" size="lg" aria-pressed={editing} onClick={() => setEditing((v) => !v)} disabled={!ms}>改一句</Button>
+        <Button
+          variant="danger"
+          size="lg"
+          aria-pressed={returning}
+          onClick={() => (returning && reason.trim() ? act("return", { action: "return", return_reason: reason.trim(), caregiver_addendum: reason.trim() }) : setReturning((v) => !v))}
+          disabled={!ms || busy !== null}
+        >
+          {busy === "return" ? "退回中…" : returning ? (reason.trim() ? "退回照護者" : "退回（先填原因）") : "退回"}
+        </Button>
       </div>
       {err && <p role="alert" className="mt-2 text-sm text-danger-ink">{err}</p>}
     </Card>
