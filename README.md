@@ -176,7 +176,7 @@ mock 模式的 hallucination 在結構上不可能超過關鍵字命中（raw_qu
 
 ## 文件
 
-[CLAUDE.md](CLAUDE.md)（開發規則）・[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)・[docs/DECISIONS.md](docs/DECISIONS.md)・[docs/design.md](docs/design.md)・[docs/UI_AUDIT.md](docs/UI_AUDIT.md)・[docs/VIDEO.md](docs/VIDEO.md)・[docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)・[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
+[docs/OVERVIEW.md](docs/OVERVIEW.md)（全貌，給第一次接觸的人）・[CLAUDE.md](CLAUDE.md)（開發規則）・[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)・[docs/DECISIONS.md](docs/DECISIONS.md)・[docs/design.md](docs/design.md)・[docs/UI_AUDIT.md](docs/UI_AUDIT.md)・[docs/VIDEO.md](docs/VIDEO.md)・[docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)・[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
 
 ## LICENSE
 
