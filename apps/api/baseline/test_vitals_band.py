@@ -11,12 +11,7 @@ from datetime import UTC, datetime, timedelta
 from record_schema import Observation, Provenance, StructuredObservation, Vitals
 
 from baseline.stats import consecutive_outside, mad, percentile
-from baseline.vitals_band import (
-    compute_band,
-    departure,
-    from_timeline,
-    propose_vitals_usual,
-)
+from baseline.vitals_band import compute_band, departure, from_timeline
 
 NOW = datetime(2026, 9, 5, 21, 0, tzinfo=UTC)
 
@@ -135,20 +130,19 @@ def test_departure_text_has_no_score():
         assert banned not in line.replace("／分", "")
 
 
-# --- proposal ---------------------------------------------------------------------
+# --- the module must not offer a way to write the baseline back -------------------
 
 
-def test_proposal_is_none_when_nurse_value_matches_measurements():
-    bands = from_timeline("P001", _series([134 + (i % 9) for i in range(30)]), now=NOW)
-    assert propose_vitals_usual(bands, Vitals(sbp=138)) is None
+def test_module_offers_no_baseline_proposal():
+    """ARCHITECTURE §11：baseline 不自動漂移，否則「平常」會被慢慢惡化帶走。
 
+    A band answers "how does this reading compare with what was measured". It must not
+    grow a path back into `vitals_usual` — for someone deteriorating, every such
+    proposal looks reasonable on the day it appears, and after a few confirmations
+    nothing is ever outside the band again.
+    """
+    import baseline
+    from baseline import vitals_band
 
-def test_proposal_explains_the_drift_and_never_writes():
-    """§1.6：只能提案，寫入仍要走 ◇nurse_confirm_baseline。"""
-    bands = from_timeline("P001", _series([116 + (i % 7) for i in range(30)]), now=NOW)
-    result = propose_vitals_usual(bands, Vitals(sbp=138))
-    assert result is not None
-    proposed, reason = result
-    assert proposed.sbp is not None and 110 <= proposed.sbp <= 125
-    assert "原本記 138mmHg" in reason
-    assert proposed.measured_by == "system_derived"
+    assert not hasattr(vitals_band, "propose_vitals_usual")
+    assert not [n for n in dir(baseline) if "propose" in n or "usual" in n]

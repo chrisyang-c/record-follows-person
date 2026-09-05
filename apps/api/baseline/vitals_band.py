@@ -224,38 +224,19 @@ def departure(
 
 
 # ---------------------------------------------------------------------------
-# Proposal — goes to ◇nurse_confirm_baseline, never straight into baseline (§1.6)
+# Why there is no propose_vitals_usual() here
 # ---------------------------------------------------------------------------
-
-
-def propose_vitals_usual(bands: VitalsBands, current: Vitals | None) -> tuple[Vitals, str] | None:
-    """Suggest an updated ``vitals_usual`` from the measured bands.
-
-    Returns ``(proposed, reason)`` or ``None`` when nothing worth proposing changed.
-    The nurse confirms — this function must never write.
-    """
-    established = {m: b for m, b in bands.bands.items() if b.established}
-    if not established:
-        return None
-
-    data: dict[str, Any] = (current.model_dump() if current else Vitals().model_dump())
-    drifted: list[str] = []
-
-    for metric, band in established.items():
-        centre = band.center
-        old = data.get(metric)
-        data[metric] = centre if metric == "temp_c" else int(round(centre))
-        if old is None:
-            drifted.append(f"{band.label}：原本沒有紀錄，量測顯示 {band.text}")
-        elif not (band.low <= float(old) <= band.high):
-            drifted.append(
-                f"{band.label}：原本記 {_fmt(metric, float(old))}{band.unit}，"
-                f"近 {band.days} 天量測落在 {band.text}"
-            )
-
-    if not drifted:
-        return None
-
-    data["measured_by"] = "system_derived"
-    data["ts"] = bands.computed_at
-    return Vitals(**data), "；".join(drifted)
+#
+# It is tempting to turn a band back into a proposed `vitals_usual` and let the nurse
+# confirm it. ARCHITECTURE §11 rules that out, and it is right:
+#
+#   「baseline 多久滾動一次？只在醫囑或護理師確認時更新，不自動漂移，
+#     否則『平常』會被慢慢惡化帶走。」
+#
+# For someone who is slowly deteriorating, every such proposal looks reasonable on the
+# day it appears. Confirm a few of them and "usual" has followed the disease down —
+# and then nothing is ever outside the band again. `baseline_update_proposal` in
+# graphs/path_b.py deliberately proposes only from doctor's orders.
+#
+# So the band and `vitals_usual` stay separate: the band only ever answers "how does
+# this reading compare with what has actually been measured", and never writes back.
