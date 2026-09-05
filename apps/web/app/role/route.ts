@@ -11,7 +11,9 @@ export function GET(req: NextRequest) {
   const next = req.nextUrl.searchParams.get("next");
   if (!me) return NextResponse.redirect(new URL("/", req.url));
   const role = IDENTITIES[me].role;
-  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : ROLE_HOME[role];
+  // 登入後直接落在 01（本人）或 05 的某一艙（docs/UIUX_OMNI_TWIN.md §2）
+  const landing = role === "patient" ? "/twin" : ROLE_HOME[role];
+  const target = next && next.startsWith("/") && !next.startsWith("//") ? next : landing;
   const res = NextResponse.redirect(new URL(target, req.url));
   res.cookies.set("me", me, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 30 });
   res.cookies.delete("role");

@@ -2,10 +2,10 @@ import Link from "next/link";
 import { IDENTITIES, ROLE_LABEL, ROLES } from "@/lib/role";
 
 const HINT: Record<string, string> = {
-  patient: "我的紀錄、我的時間軸、問我的紀錄",
-  caregiver: "講一句今天怎麼樣；家屬也從這裡進",
-  nurse: "Clinical Queue：新事件、待審核、今日總覽",
-  doctor: "巡診名單，一人一頁",
+  patient: "01 活體數位孿生 → 05 本人艙：時間軸、問我的紀錄、Care Circle",
+  caregiver: "05 家屬艙：講一句今天怎麼樣；家屬也從這裡進",
+  nurse: "05 護理站：Clinical Queue（新事件、待審核、今日總覽）",
+  doctor: "05 醫師艙：巡診名單，一人一頁",
 };
 const PATIENTS = ["P001", "P002", "P003"];
 
@@ -17,8 +17,9 @@ export default async function Entry({ searchParams }: PageProps<"/">) {
   return (
     <div className="mx-auto flex max-w-[390px] flex-col gap-6 py-6">
       <header>
+        <p className="label-caps">OMNI-TWIN · 進入</p>
         <h1 className="text-2xl font-medium leading-tight">你是誰？</h1>
-        <p className="mt-1 text-ink-2">每個人有一份跟著他走的紀錄。紀錄屬於本人；誰能看，由本人決定。</p>
+        <p className="mt-1 text-ink-2">外殼是一個人的生命作業系統，核心是一條經得起醫療審視的照護鏈。本人進 01 活體數位孿生；家屬、護理師、醫師進 05 照護與醫療艙。</p>
       </header>
       <ul className="grid gap-3">
         {ROLES.map((r) =>
