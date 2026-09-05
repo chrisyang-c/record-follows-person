@@ -94,8 +94,8 @@ export default function MeHomePage() {
   const age = new Date().getFullYear() - p.birth_year;
   const dims = data.today.dimensions;
   return (
-    <div className="space-y-4">
-      <header className="text-center">
+    <div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
+      <header className="text-center lg:col-span-2">
         <p className="text-xs text-ink-2">MY HEALTH TWIN</p>
         <h1 className="text-balance text-2xl font-medium">{p.code_name}</h1>
         <p className="text-sm text-ink-2">{age} 歲 · <span className="num" translate="no">Health ID {p.health_id}</span></p>
@@ -106,13 +106,16 @@ export default function MeHomePage() {
       </header>
 
       <Card title="今天" headingLevel={2} meta={data.today.ts ? fmtDateTime(data.today.ts) : "還沒有今天的紀錄"}>
-        <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        {/* 8 個小卡：名稱＋一個詞（docs/UIUX_OMNI_TWIN.md §4.2） */}
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {DIMENSIONS.map((d) => {
             const v = dims[d];
+            const changed = !!v && v.direction !== "unknown" && v.direction !== "same";
+            const word = !v ? "如常" : changed ? DIRECTION_LABEL[v.direction as "up" | "down"] : "如常";
             return (
-              <li key={d} className="flex items-baseline justify-between gap-2 border-b border-line py-1">
-                <span className="text-ink-2">{DIMENSION_LABELS[d as Dimension]["zh-TW"]}</span>
-                <span className="text-right">{v ? `「${v.raw_quote}」` : "跟平常一樣"}{v && v.direction !== "unknown" && v.direction !== "same" ? <Chip tone="warn" className="ml-1">{DIRECTION_LABEL[v.direction as "up" | "down"]}</Chip> : null}</span>
+              <li key={d} className={`rounded-[10px] border p-3 ${changed ? "border-accent-2/60 bg-surface-2" : "border-line bg-surface-2"}`} title={v ? `「${v.raw_quote}」` : undefined}>
+                <p className="text-xs text-ink-2">{DIMENSION_LABELS[d as Dimension]["zh-TW"]}</p>
+                <p className={`mt-1 text-lg font-medium ${changed ? "text-accent-2" : ""}`}>{word}</p>
               </li>
             );
           })}
@@ -136,7 +139,7 @@ export default function MeHomePage() {
           {data.recent_events.slice(0, 3).map((e) => (
             <li key={e.id} className="flex items-center gap-2 py-2">
               <Chip tone={e.type === "fall" ? "danger" : "neutral"}>{LIFE_EVENT_LABEL[e.type as keyof typeof LIFE_EVENT_LABEL] ?? e.type}</Chip>
-              <Link href={`/p/${pid}?tab=timeline#${e.id}`} className="min-w-0 flex-1 truncate hover:text-primary">{e.title}</Link>
+              <Link href={e.id.startsWith("inc_") ? `/p/${pid}?tab=docs` : `/p/${pid}?tab=timeline#${e.id}`} className="min-w-0 flex-1 truncate hover:text-primary">{e.title}</Link>
               <span className="text-xs text-ink-2">{fmtDay(e.ts)}</span>
               <ChevronRight className="size-4 text-ink-2" aria-hidden="true" />
             </li>
@@ -144,7 +147,7 @@ export default function MeHomePage() {
         </ul>
       </Card>
 
-      <AskBox pid={pid} />
+      <div className="lg:col-span-2"><AskBox pid={pid} /></div>
     </div>
   );
 }

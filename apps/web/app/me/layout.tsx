@@ -14,7 +14,7 @@ const NAV: { href: string; label: string; soon?: boolean }[] = [
 /** 本人 App：手機優先（390px），子頁只做時間軸／事件／Care Circle；用藥、影像、檢驗為第二階段。 */
 export default function MeLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-[390px] space-y-4">
+    <div className="mx-auto w-full max-w-[390px] space-y-4 lg:max-w-4xl">
       <nav aria-label="本人" className="-mx-4 overflow-x-auto px-4">
         <ul className="flex gap-1 border-b border-line">
           {NAV.map((n) =>
