@@ -751,27 +751,23 @@ def _sse(event: str, data: Any) -> str:
     return f"event: {event}\ndata: {_json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
-@app.post("/patients/{patient_id}/talk")
-def patient_talk(
-    patient_id: str, body: TalkIn, x_who: str | None = Header(default=None)
+def _talk_stream(
+    patient_id: str,
+    text: str,
+    role_view: str,
+    event_id: str | None = None,
+    event_choice: str | None = None,
 ) -> StreamingResponse:
-    """One caregiver message → SSE: activity events (node/llm/tool/red), streamed reply, done."""
+    """SSE for one caregiver turn (talk or four-button verification): activity events, streamed
+    reply, done. Errors are surfaced, never a rule fallback."""
     from graphs.talk import run_turn
-
-    if not get_store().exists(patient_id):
-        raise HTTPException(404, "unknown patient")
-    if x_who and "talk" not in cc.scopes_for(patient_id, x_who):
-        raise HTTPException(403, "未獲授權：沒有對話權限")
-    cc.log_access(patient_id, x_who, cc.role_of(patient_id, x_who), "talk")
-    if not body.text.strip():
-        raise HTTPException(400, "empty message")
 
     def gen():
         import time as _time
 
         final: dict[str, Any] | None = None
         try:
-            for kind, data in run_turn(patient_id, body.text, body.role_view):
+            for kind, data in run_turn(patient_id, text, role_view, event_id, event_choice):
                 if kind == "event":
                     yield _sse("event", data)
                 elif kind == "error":
@@ -788,15 +784,15 @@ def patient_talk(
             return
         for line in final.get("system_lines") or []:
             yield _sse("system", {"text": line})
-        text = final.get("reply") or ""
-        for i in range(0, len(text), 3):  # 逐字串流
-            yield _sse("token", {"text": text[i : i + 3]})
+        reply = final.get("reply") or ""
+        for i in range(0, len(reply), 3):  # 逐字串流
+            yield _sse("token", {"text": reply[i : i + 3]})
             _time.sleep(0.02)
         events = final.get("events") or []
         yield _sse(
             "done",
             {
-                "reply": text,
+                "reply": reply,
                 "kind": final.get("reply_kind"),
                 "meta": final.get("reply_meta"),
                 "phase": final.get("phase"),
@@ -816,6 +812,67 @@ def patient_talk(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/patients/{patient_id}/talk")
+def patient_talk(
+    patient_id: str, body: TalkIn, x_who: str | None = Header(default=None)
+) -> StreamingResponse:
+    """One caregiver message → SSE: activity events (node/llm/tool/red), streamed reply, done."""
+    if not get_store().exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    if x_who and "talk" not in cc.scopes_for(patient_id, x_who):
+        raise HTTPException(403, "未獲授權：沒有對話權限")
+    cc.log_access(patient_id, x_who, cc.role_of(patient_id, x_who), "talk")
+    if not body.text.strip():
+        raise HTTPException(400, "empty message")
+    return _talk_stream(patient_id, body.text, body.role_view)
+
+
+# 照護者四鍵（唯一允許出現按鈕的地方）：選項 → 一句照護者原話，立即進現有追問流程
+VERIFY_TEXT: dict[str, str] = {
+    "with_patient": "我在他身邊，他剛剛可能跌倒了",
+    "fine": "他沒事，跟平常一樣，站得起來，人清醒",
+    "maybe_injured": "他可能跌倒受傷了",
+    "unreachable": "聯絡不上他",
+}
+
+
+def verify_event(
+    patient_id: str, event_id: str, choice: str, text: str = "", who: str | None = None
+) -> tuple[str, str]:
+    """Record the four-button answer on the sensor event; return (caregiver sentence, by)."""
+    from record_schema import VERIFY_LABELS
+
+    if choice not in VERIFY_TEXT:
+        raise HTTPException(400, f"choice must be one of {list(VERIFY_TEXT)}")
+    ev = sensor_events.get(patient_id, event_id)
+    if ev is None:
+        raise HTTPException(404, "unknown event")
+    by = who or get_store().load_profile(patient_id).caregiver_code_name
+    sensor_events.verify(patient_id, event_id, choice, text.strip(), by)
+    s = conv.session(patient_id)
+    if s and s.pending_event_id == event_id:
+        s.pending_event_id = None
+        conv.save_session(patient_id, s)
+    sentence = VERIFY_TEXT[choice] + (f"。{text.strip()}" if text.strip() else "")
+    cc.log_access(patient_id, who, cc.role_of(patient_id, who), f"verify:{VERIFY_LABELS[choice]}")
+    return sentence, by
+
+
+@app.post("/patients/{patient_id}/events/{event_id}/verify")
+def patient_verify_event(
+    patient_id: str, event_id: str, body: VerifyIn, x_who: str | None = Header(default=None)
+) -> StreamingResponse:
+    """Four-button verification of a「可能跌倒」event (我在他身邊／他沒事／他可能受傷／聯絡不上).
+    The answer becomes a caregiver turn and enters the existing follow-up flow;「聯絡不上」trips
+    RF12 and notifies the nurse at once. The reply lands in the IncidentFile's caregiver block."""
+    if not get_store().exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    if x_who and "talk" not in cc.scopes_for(patient_id, x_who):
+        raise HTTPException(403, "未獲授權：沒有對話權限")
+    sentence, _by = verify_event(patient_id, event_id, body.choice, body.text, x_who)
+    return _talk_stream(patient_id, sentence, "caregiver", event_id, body.choice)
 
 
 @app.post("/round/start/stream")

@@ -417,6 +417,20 @@ def decide_next(state: TalkState) -> dict[str, Any]:
             }
         # anything else in confirm phase is treated as an addition (falls through to planning)
         s.phase = "intake"
+    if state.get("event_choice") == "unreachable":
+        # 聯絡不上：程式已通知護理師（RF12）；不追問，請照護者持續聯絡
+        s.phase = "red" if state.get("red") else s.phase
+        conv.save_session(pid, s)
+        ev = step.done(
+            "decide_next：聯絡不上 → 不追問，已通知護理師", "先通知護理師", output="closing"
+        )
+        return {
+            "reply": "已通知護理師。請持續嘗試聯絡他，聯絡上了再跟我說他的狀況。",
+            "reply_kind": "closing",
+            "reply_meta": {"phase": "red", "event_choice": "unreachable"},
+            "phase": s.phase,
+            "events": [ev],
+        }
     # ---- plan the next question (the model decides) ----
     t0 = time.perf_counter()
     asked_dims = [t["dimension"] for t in state["turns"][1:] if t.get("dimension")]

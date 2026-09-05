@@ -4,7 +4,8 @@ import { Mic, SendHorizontal, Square } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ActivityBar } from "@/components/patient/activity-bar";
 import { Button } from "@/components/ui/button";
-import { streamSSE, type ActivityEvent, type ConvMessage, type PatientSummary, type TalkDone } from "@/lib/api";
+import { VERIFY_LABELS, type VerifyChoice } from "@schema";
+import { streamSSE, type ActivityEvent, type ConvMessage, type PatientSummary, type SessionState, type TalkDone } from "@/lib/api";
 import { fmtDay } from "@/lib/format";
 import type { Role } from "@/lib/role";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,8 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
   const pid = summary.profile.patient_id;
   const name = summary.profile.code_name;
   const [messages, setMessages] = useState<ConvMessage[]>(summary.conversation);
+  // 通道 4：等照護者驗證的「可能跌倒」事件（唯一允許出現按鈕的地方）
+  const [pendingEvent, setPendingEvent] = useState<string | null>(summary.session?.pending_event_id ?? null);
   const [live, setLive] = useState<{ events: ActivityEvent[]; text: string; system: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -70,20 +73,24 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length, live?.text, live?.events.length]);
 
-  const send = async (raw: string) => {
+  const send = async (raw: string, verify?: { eventId: string; choice: VerifyChoice }) => {
     const text = raw.trim();
-    if (!text || busy) {
+    if ((!text && !verify) || busy) {
       inputRef.current?.focus();
       return;
     }
     setError(null);
     setInput("");
-    const mine: ConvMessage = { id: `local_${++localId}`, patient_id: pid, session_id: "", role: "caregiver", kind: "message", text, ts: new Date().toISOString(), meta: {} };
+    const shown = verify ? `${VERIFY_LABELS[verify.choice]}${text ? `：${text}` : ""}` : text;
+    const mine: ConvMessage = { id: `local_${++localId}`, patient_id: pid, session_id: "", role: "caregiver", kind: "message", text: shown, ts: new Date().toISOString(), meta: verify ? { choice: verify.choice, event_id: verify.eventId } : {} };
     setMessages((ms) => [...ms, mine]);
+    if (verify) setPendingEvent(null);
     const state = { events: [] as ActivityEvent[], text: "", system: [] as string[] };
     setLive({ ...state });
     try {
-      await streamSSE(`/patients/${pid}/talk`, { text, role_view: role }, (name, data) => {
+      const url = verify ? `/patients/${pid}/events/${verify.eventId}/verify` : `/patients/${pid}/talk`;
+      const body = verify ? { choice: verify.choice, text } : { text, role_view: role };
+      await streamSSE(url, body, (name, data) => {
         if (name === "event") state.events = [...state.events, data as unknown as ActivityEvent];
         else if (name === "token") state.text += String(data.text ?? "");
         else if (name === "system") state.system = [...state.system, String(data.text ?? "")];
@@ -95,6 +102,8 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
             ? { id: String(d.meta?.message_id ?? `agent_${localId}`), patient_id: pid, session_id: "", role: "agent", kind: d.kind, text: d.reply, ts: new Date().toISOString(), meta: { ...(d.meta ?? {}), activity: state.events, red: d.red } }
             : null;
           setMessages((ms) => [...ms, ...sys, ...(agent ? [agent] : [])]);
+          const sess = d.session as (SessionState & { pending_event_id?: string | null }) | null;
+          setPendingEvent(sess?.pending_event_id ?? null);
           onChanged();
         }
         setLive({ ...state });
@@ -146,6 +155,7 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
     rows.push(m);
   }
   const phase = summary.session?.phase;
+  const CHOICES: VerifyChoice[] = ["with_patient", "fine", "maybe_injured", "unreachable"];
   const placeholder = listening ? "聽你說…" : busy ? "…" : phase === "confirm" ? "對／不對，或再補一句…" : phase === "red" ? "還有什麼要跟護理師說的…" : `${name}今天…`;
 
   return (
@@ -168,6 +178,27 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
               <p key={i} className="w-full text-center text-xs text-ink-2">{s}</p>
             ))}
             {live.text && <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-base leading-relaxed">{live.text}<span className="ml-0.5 inline-block w-[2px] animate-pulse bg-ink align-text-bottom" style={{ height: "1em" }} aria-hidden="true" /></div>}
+          </div>
+        )}
+        {pendingEvent && !live && role !== "doctor" && (
+          <div className="rounded-[12px] border border-warn bg-warn-fill p-3" role="group" aria-label="請確認他的狀況">
+            <p className="mb-2 text-base font-medium">請確認{name}現在的狀況：</p>
+            <ul className="grid grid-cols-2 gap-2">
+              {CHOICES.map((c) => (
+                <li key={c}>
+                  <Button
+                    type="button"
+                    variant={c === "unreachable" ? "danger" : c === "fine" ? "ok" : "secondary"}
+                    size="lg"
+                    className="w-full min-h-14"
+                    onClick={() => void send(input, { eventId: pendingEvent, choice: c })}
+                  >
+                    {VERIFY_LABELS[c]}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-ink-2">可以先在下方打一句他的情形，再按其中一個。</p>
           </div>
         )}
         <div ref={endRef} />

@@ -202,6 +202,8 @@ export interface SessionState {
   thread_id: string | null;
   started: string;
   closed: string | null;
+  closed_reason?: string | null;
+  pending_event_id?: string | null;
 }
 /** LangGraph 串流事件（graphs/talk.py、runner.start_stream、agents/personal.run_task 發出） */
 export interface ActivityEvent {
