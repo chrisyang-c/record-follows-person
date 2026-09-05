@@ -233,6 +233,8 @@ class Profile(BaseModel):
     caregiver_language: Lang = "zh-TW"
     primary_nurse: str
     one_liner: str = Field(default="", description="一句話的人")
+    height_cm: float | None = None
+    weight_kg: float | None = Field(default=None, description="最近一次量的體重（本人 wellness 區用）")
 
     @property
     def on_anticoagulant(self) -> bool:
@@ -479,6 +481,23 @@ class LifeEvent(TimelineBase):
     ended: date | None = None
 
 
+class WearableDaily(TimelineBase):
+    """通道 4 穿戴每日指標（模擬）。只有事實數值，不存任何品質分數；照護鏈只把心率／SpO₂ 當觀察事實。
+    資料形狀參考 health-ref 的 daily_metrics（想法，重新設計）。"""
+
+    kind: Literal["wearable_daily"] = "wearable_daily"
+    day: date
+    steps: int
+    exercise_min: int
+    resting_hr: int
+    hrv_ms: int
+    spo2: int
+    sleep_hours: float
+    deep_sleep_hours: float
+    rem_hours: float
+    source: str = "simulated_wearable"
+
+
 class Encounter(TimelineBase):
     kind: Literal["encounter"] = "encounter"
     encounter_type: Literal["round", "emergency", "visit"]
@@ -512,7 +531,8 @@ class Order(TimelineBase):
 
 
 TimelineEntry = Annotated[
-    Union[Observation, Incident, Encounter, Order, LifeEvent], Field(discriminator="kind")
+    Union[Observation, Incident, Encounter, Order, LifeEvent, WearableDaily],
+    Field(discriminator="kind"),
 ]
 
 
@@ -717,7 +737,7 @@ __all__ = [
     "SensorVerification", "SensorEvent", "BaselineEntry", "Baseline",
     "BaselineProposal", "VitalMetric", "VITAL_LABELS", "VITAL_UNITS", "VitalsBand", "VitalsBands",
     "MinimalSBAR", "TimelineBase", "Observation", "Incident", "Encounter",
-    "LifeEventType", "LifeEvent",
+    "LifeEventType", "LifeEvent", "WearableDaily",
     "OrderItem", "OrderFollowUp", "Order", "TimelineEntry", "ISBAR", "OnsiteAssessment",
     "CaregiverSection", "NurseSection", "Notification", "FollowUp", "DocBase", "IncidentFile",
     "HandoffPage", "VisitPage", "TrendPoint", "TrendSeries", "TrendLine", "TrendReport",

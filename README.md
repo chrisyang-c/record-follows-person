@@ -184,7 +184,7 @@ mock 模式的 hallucination 在結構上不可能超過關鍵字命中（raw_qu
 | Order Ingest → 照護者三件事（中文）＋ baseline 提案＋確認 | Roster 排序（3 位住民）|
 | Health ID + Care Circle（本人授權／撤銷、access log）；本人 App（終身時間軸、問我的紀錄只引用既有行）| Health Graph：第二階段（不做）|
 | 通道 4 模擬跌倒訊號 → 「可能跌倒」→ 照護者四鍵 → 事件資訊包 | 真實穿戴裝置、醫院 EHR／FHIR 對接：第二階段（不做）|
-| 01 活體數位孿生：向量解剖圖（EMBL-EBI Expression Atlas anatomogram，Apache-2.0，`apps/web/public/anatomy/`）＋八維度熱點 | 3D 人體模型：第二階段 |
+| 01 活體數位孿生：向量解剖圖（EMBL-EBI Expression Atlas anatomogram，Apache-2.0，`apps/web/public/anatomy/`）＋八維度熱點；3D 分身（模型來自團隊 health-ref，`apps/web/public/models/LICENSE.txt`）、沙盤模擬、穿戴每日指標（模擬） | 真實穿戴資料、分身動畫：第二階段 |
 
 其他限制見 [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)。本機沒有 `OPENAI_API_KEY` 時所有流程以 mock（確定性抽取）跑完；`deepagents / langgraph / langchain` 鎖精確版本（alpha）。**只用合成資料**：`data/seed/` 的姓名為代號，repo 內沒有任何真實個資。
 

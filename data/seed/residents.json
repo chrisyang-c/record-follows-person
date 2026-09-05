@@ -237,7 +237,9 @@
           "summary": "MMSE 篩檢後確診，開始 Donepezil。"
         }
       ],
-      "access_code": "1940"
+      "access_code": "1940",
+      "height_cm": 168,
+      "weight_kg": 61.5
     },
     {
       "patient_id": "P002",
@@ -396,7 +398,9 @@
           "ended": "2025-12-17"
         }
       ],
-      "access_code": "1936"
+      "access_code": "1936",
+      "height_cm": 152,
+      "weight_kg": 48.0
     },
     {
       "patient_id": "P003",
@@ -568,7 +572,9 @@
           "ended": "2026-03-08"
         }
       ],
-      "access_code": "1943"
+      "access_code": "1943",
+      "height_cm": 170,
+      "weight_kg": 66.0
     }
   ]
 }

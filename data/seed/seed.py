@@ -54,6 +54,7 @@ from record_schema import (  # noqa: E402
     Profile,
     Provenance,
     Vitals,
+    WearableDaily,
 )
 from red_flags.rules import RedFlagInput, evaluate  # noqa: E402
 
@@ -142,6 +143,8 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
             birth_year=r["birth_year"],
             room=r["room"],
             one_liner=r.get("one_liner", ""),
+            height_cm=r.get("height_cm"),
+            weight_kg=r.get("weight_kg"),
             conditions=[Condition(**c) for c in r["conditions"]],
             allergies=[AllergyIntolerance(**a) for a in r["allergies"]],
             medications=[MedicationStatement(**m) for m in r["medications"]],
@@ -226,12 +229,41 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
                 )
                 store.write_timeline(pid, entry)
                 recent.append(entry)
+        _seed_wearable(store, profile, days, day1, r["story"], {"P001": 41, "P002": 42, "P003": 43}[pid])
         if not quiet:
             n = len(store.load_timeline(pid))
             print(f"seeded {pid} {profile.code_name}: {n} timeline entries, {len(store.load_documents(pid))} documents")
     care_circle_save = getattr(care_circle, "save_identities")
     care_circle_save(identities)
     return store
+
+
+def _seed_wearable(store, profile, days, day1: date, story: dict, seed: int) -> None:
+    """Channel 4 daily wearable metrics, 14 days, correlated with the story curve (sleep phrase →
+    hours; intake → steps). Facts only; no quality score. confirmed_by = device sync."""
+    rng = random.Random(seed + 7)
+    s0, s1 = story["sleep"]
+    for i, (_day_text, night_text) in enumerate(days, start=1):
+        d = day1 + timedelta(days=i - 1)
+        f = i / 13
+        wakes = max(0, min(5, round(s0 + (s1 - s0) * f + rng.gauss(0, 0.5))))
+        sleep_h = round(max(3.5, 7.4 - wakes * 0.55 + rng.gauss(0, 0.25)), 1)
+        steps = int(max(300, 2600 - wakes * 250 + rng.gauss(0, 350)))
+        ts = _dt(d, "23:59")
+        store.write_timeline(
+            profile.patient_id,
+            WearableDaily(
+                id=new_id("wear", ts), patient_id=profile.patient_id, ts=ts, status="approved",
+                confirmed_by="device_sync",
+                provenance=Provenance(source="system_derived", author="simulated_wearable", confirmed_by="device_sync", ts=ts),
+                day=d, steps=steps, exercise_min=int(max(0, steps / 120 + rng.gauss(0, 3))),
+                resting_hr=int(70 + wakes * 2 + rng.gauss(0, 2)), hrv_ms=int(max(12, 38 - wakes * 4 + rng.gauss(0, 3))),
+                spo2=int(min(99, max(93, 96 + rng.gauss(0, 0.8)))), sleep_hours=sleep_h,
+                deep_sleep_hours=round(max(0.4, sleep_h * 0.18 + rng.gauss(0, 0.1)), 1),
+                rem_hours=round(max(0.5, sleep_h * 0.2 + rng.gauss(0, 0.1)), 1),
+            ),
+        )
+    _ = night_text
 
 
 def _seed_history(store, profile, history: list[dict], nurses: dict) -> None:

@@ -41,3 +41,5 @@
 | 35 | 登入是 demo 等級：`POST /login` 驗證病人密碼（hash）並把身份加進 Care Circle，但 cookie `me` 仍由 `/role?set=` 寫入，直接打該網址可跳過密碼（Care Circle 仍擋住未授權的 tab）。示範密碼＝出生年。 | 只影響 demo 安全性。 | 第二階段：session token 由 API 簽發、`/role` 只接受 token。 |
 | 36 | 01 的解剖 SVG 約 900 KB（一次載入、瀏覽器快取）；器官對維度的對應是示意（如「皮膚」熱點固定在上臂、「疼痛」浮動在髖部），不是臨床定位。 | 首次載入多約 0.3 秒。 | 第二階段可換 3D 模型或依疼痛部位移動熱點。 |
 | 39 | `make test` 只跑 `ruff check`，不跑 `ruff format --check`；但 CI（ci.yml L33）兩個都跑。本機 `make test` 過不代表 CI 會綠。 | commit `c0a6802` 推上 main 時 CI 應為紅（5 個檔案格式不符），已於同日修正。 | 本機改用 `.\scripts\dev.ps1 check`（lint 含 format + pytest + codegen 一致性），與 CI 同一組檢查。 |
+| 37 | 3D 分身模型 9.2 MB 進 git（`apps/web/public/models/my_avatar.glb`），首次載入約 1–3 秒；沒有 Idle 動畫（模型不含 animations），姿態切換無效果；ARKit blendshape 名稱以模型實際為準，缺的表情會被略過。 | 分身頁首屏較慢。 | 第二階段：Draco 壓縮、加動畫。 |
+| 38 | 「唸給我聽」用瀏覽器 speechSynthesis，中文語音依作業系統而定；無語音時按鈕無反應。 | 只影響本人區。 | — |

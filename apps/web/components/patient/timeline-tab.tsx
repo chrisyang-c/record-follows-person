@@ -21,6 +21,7 @@ const KIND: Record<TimelineEntry["kind"], { label: string; tone: "neutral" | "pr
   encounter: { label: "巡診", tone: "ok" },
   order: { label: "醫囑", tone: "warn" },
   life_event: { label: "大事件", tone: "neutral" },
+  wearable_daily: { label: "穿戴", tone: "neutral" },
 };
 
 type Row = { ts: string; id: string; entry?: TimelineEntry; msg?: ConvMessage };
@@ -60,6 +61,9 @@ function Entry({ e }: { e: TimelineEntry }) {
         </div>
       )}
       {e.kind === "incident" && <p className="mt-2">{e.summary}</p>}
+      {e.kind === "wearable_daily" && (
+        <p className="mt-2 text-sm text-ink-2">睡眠 <span className="num">{e.sleep_hours}</span> h · 步數 <span className="num">{e.steps}</span> · 靜息心率 <span className="num">{e.resting_hr}</span> · SpO₂ <span className="num">{e.spo2}</span>%（模擬穿戴）</p>
+      )}
       {e.kind === "life_event" && (
         <p className="mt-2"><span className="font-medium">{e.title}</span>{e.summary ? ` — ${e.summary}` : ""}{e.facility ? <span className="text-ink-2">（{e.facility}）</span> : null}</p>
       )}

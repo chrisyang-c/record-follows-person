@@ -37,6 +37,9 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 - `c0a6802` 推上 main 時 **CI 應該是紅的**：`ruff format --check`（ci.yml L33）會抓到 5 個檔案格式不符。已於本輪修正，但這說明「不等 CI」的規則需要本機先跑 `.\scripts\dev.ps1 check`。
 - `health-ref` 有 18 檔 / 5,528 行未提交，且 `backend/venv` 有 4,101 個檔案被 commit 進該 repo —— 屬該 repo 擁有者處理。
 - `claude_healthcare` 已依指示刪除，除 baseline 引擎外約 13,500 行不可回復（CONSOLIDATION §2.2）。
+## 已完成（參考 health-ref 的互動，2026-09-05 深夜）
+
+使用者指示參考隊友的 `../health-ref`（§0.5）：3D 分身進 01（`components/twin/avatar-model.tsx`、`avatar-view.tsx`，模型 `public/models/my_avatar.glb`＋LICENSE.txt）、沙盤模擬、穿戴每日指標（schema `WearableDaily`、seed 14 天、`/twin/{id}.wearable`）、今天的身體四卡＋複合圖、「唸給我聽」（`ask-box.tsx`）、本人自記（/me，寫進對話串）、回答聚焦維度。不借的三項與理由見 DECISIONS。KNOWN_ISSUES #37–#38。
 
 ## 已完成（登入與 01 住民選擇，2026-09-05 深夜）
 
@@ -79,7 +82,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 
 ## 已知問題
 
-全表在 docs/KNOWN_ISSUES.md（#1–#35）。最影響 demo 的：
+全表在 docs/KNOWN_ISSUES.md（#1–#38）。最影響 demo 的：
 - #17 測試留下的紅燈 thread 會疊卡 → 錄影前 `make reset`。
 - #18 已修（4 小時／跨日自動過期）；同一天 4 小時內連續測試仍共用一段 → 說「不對」重來或 `make reset`。
 - #26 已修：已知維度有缺口可追問一次（gap 驗證）、第二次無效改摘要卡、503 只留給 LLM 失敗。

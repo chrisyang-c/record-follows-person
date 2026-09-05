@@ -25,7 +25,7 @@ export type VerifyChoice = "with_patient" | "fine" | "maybe_injured" | "unreacha
 
 export type Scope = "who" | "timeline" | "docs" | "talk";
 
-export type TimelineEntry = Observation | Incident | Encounter | Order | LifeEvent;
+export type TimelineEntry = Observation | Incident | Encounter | Order | LifeEvent | WearableDaily;
 
 export type Document = IncidentFile | HandoffPage | VisitPage | RoundPage | CaregiverNotes;
 
@@ -488,6 +488,8 @@ export interface Profile {
   caregiver_language: "zh-TW" | "id" | "vi" | "en";
   primary_nurse: string;
   /** 一句話的人 */ one_liner: string;
+  height_cm: number | null;
+  /** 最近一次量的體重（本人 wellness 區用） */ weight_kg: number | null;
 }
 
 /** Append-only ledger row (records/{id}/provenance.jsonl). */
@@ -539,6 +541,29 @@ export interface VisitPage {
   reason: string;
   recent: string[];
   medications: string[];
+}
+
+/** 通道 4 穿戴每日指標（模擬）。只有事實數值，不存任何品質分數；照護鏈只把心率／SpO₂ 當觀察事實。
+資料形狀參考 health-ref 的 daily_metrics（想法，重新設計）。 */
+export interface WearableDaily {
+  id: string;
+  patient_id: string;
+  ts: string;
+  status: "draft" | "approved";
+  confirmed_by: string | null;
+  provenance: Provenance;
+  related_ids: string[];
+  kind: "wearable_daily";
+  day: string;
+  steps: number;
+  exercise_min: number;
+  resting_hr: number;
+  hrv_ms: number;
+  spo2: number;
+  sleep_hours: number;
+  deep_sleep_hours: number;
+  rem_hours: number;
+  source: string;
 }
 
 export interface CareCircleMember {
@@ -615,7 +640,7 @@ export interface TrendReport {
 export interface PersonRecord {
   profile: Profile;
   baseline: Baseline;
-  timeline: (Observation | Incident | Encounter | Order | LifeEvent)[];
+  timeline: (Observation | Incident | Encounter | Order | LifeEvent | WearableDaily)[];
   documents: (IncidentFile | HandoffPage | VisitPage | RoundPage | CaregiverNotes)[];
   provenance: ProvenanceLine[];
 }

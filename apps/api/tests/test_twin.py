@@ -24,3 +24,13 @@ def test_twin_requires_care_circle(records_root):
 
     with pytest.raises(HTTPException):
         twin("P001", x_who="nobody")
+
+
+def test_twin_wearable_and_avatar_state(records_root):
+    out = twin("P002", x_who="P002")
+    assert len(out["wearable"]) == 14
+    w = out["wearable"][-1]
+    assert {"steps", "resting_hr", "hrv_ms", "spo2", "sleep_hours"} <= set(w)
+    assert "quality" not in " ".join(w)  # facts only, no quality score
+    assert out["avatar"]["mood"] in ("same", "changed", "attention")
+    assert out["avatar"]["weight_kg"] == 48.0 and out["avatar"]["sleep_hours"] == w["sleep_hours"]

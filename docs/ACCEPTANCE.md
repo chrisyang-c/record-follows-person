@@ -106,6 +106,19 @@ luna none 多抽 pain×2、cognition×2（「不舒服」「沒精神」類句�
 
 - **角色首頁一次呼叫（#19）＋輪詢暫停（#20）**：`GET /home/{role}`；瀏覽器實測護理站只打 `/home/nurse` ×1 與 `/nurse/inbox`（不再每人一次 `/trends`），照護者／醫師首頁各只打 `/home/{role}`；console 無錯誤。`usePolling` 取代四處 `setInterval`，`lib/polling.test.tsx` 驗證隱藏時暫停、回前景立即刷新。api 99 passed；web typecheck／lint／vitest（3）綠。
 
+## 參考 health-ref 的互動（2026-09-05 深夜，使用者指示；想法重寫、模型原檔複製）
+
+| 保留並改造 | 在哪 | 證據 |
+|---|---|---|
+| 3D 分身（膚色依睡眠、身材依體重、表情依心情、嘴型同步） | 01「我的分身」切換；`avatar-model.tsx` | `avatar-1.png`（本地）、`twin-1280-avatar.png` |
+| 沙盤模擬（現況｜沙盤並排、睡眠與體重拉桿、示意心情） | 01 分身下方；標「示意，不是預測或診斷」 | `twin-1280-sandbox.png` |
+| 穿戴每日指標（步數、運動、靜息心率、HRV、SpO₂、睡眠／深睡／REM） | `WearableDaily` timeline kind、seed 14 天、`/twin/{id}.wearable`、01「今天的身體」＋複合圖 | `tests/test_twin.py::test_twin_wearable_and_avatar_state`；無品質分數 |
+| 唸給我聽（語音＋嘴型） | `ask-box.tsx`（/me 與 01 共用） | 瀏覽器 speechSynthesis |
+| 本人自記 | /me「自己記一句」→ `/patients/{id}/talk`（對話串，護理師確認才進 timeline） | — |
+| 回答聚焦維度（focusWidget 想法） | 01 問答後人體圖切到相關維度 | `ask-box.tsx::guessDimension` |
+
+不保留：營養品推薦與購買連結、模型直接依數字給建議、向量庫。api 128 passed；web typecheck／lint／vitest 綠。
+
 ## 登入（以病人為核心）與 01 住民選擇（2026-09-05 深夜）
 
 `/login`：選角色 → 選身份 → 選住民 → 輸入病人密碼（本人用自己的）。`POST /login` 驗 hash；不在 Care Circle 的身份通過後以角色預設範圍加入一天，access log 記 `login:granted`。`tests/test_login.py` ×4（本人正確／錯誤密碼 401／醫師用病人密碼取得範圍／護理師沒選住民 400）。工作人員進 01 先選住民（`/twin?pid=`）。截圖：`login-390.png`、`twin-1280-pick.png`。

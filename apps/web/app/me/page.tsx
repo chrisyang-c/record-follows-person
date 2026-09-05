@@ -1,86 +1,17 @@
 "use client";
 
-import { ChevronRight, Search } from "lucide-react";
+import { ChevronRight, PenLine } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { AskBox } from "@/components/twin/ask-box";
 import { DIMENSION_LABELS, DIMENSIONS, type Dimension } from "@schema";
 import { Chip } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { askRecord, useApi, type AskAnswer, type MeHome } from "@/lib/api";
+import { streamSSE, useApi, type MeHome } from "@/lib/api";
 import { fmtDateTime, fmtDay } from "@/lib/format";
 import { DIRECTION_LABEL, LIFE_EVENT_LABEL } from "@/lib/labels";
 import { useMyPatientId } from "@/lib/me";
-
-/** 「問我的紀錄」：每句附可點的來源行（timeline id）。AI 產出＝虛線＋淡藍。 */
-function AskBox({ pid }: { pid: string }) {
-  const [q, setQ] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [ans, setAns] = useState<AskAnswer | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const ask = async (question: string) => {
-    if (!question.trim() || busy) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      setAns(await askRecord(pid, question.trim()));
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Card title="問我的紀錄" headingLevel={2}>
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void ask(q);
-        }}
-      >
-        <label htmlFor="ask" className="sr-only">問題</label>
-        <input id="ask" name="ask" value={q} onChange={(e) => setQ(e.target.value)} placeholder="我以前有做過心臟手術嗎…" autoComplete="off" enterKeyHint="search" inputMode="text" className="min-h-14 min-w-0 flex-1 rounded-[10px] border border-line bg-bg px-4 text-base text-ink placeholder:text-ink-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary" />
-        <Button type="submit" size="lg" className="size-14 shrink-0 p-0" disabled={busy} aria-label="問">
-          <Search className="size-6" aria-hidden="true" />
-        </Button>
-      </form>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {["我住過幾次院？", "上次跌倒是什麼時候？", "我有哪些慢性病？"].map((s) => (
-          <button key={s} type="button" onClick={() => { setQ(s); void ask(s); }} className="min-h-11 rounded-full border border-line px-3 text-sm hover:border-primary focus-visible:ring-2 focus-visible:ring-primary">{s}</button>
-        ))}
-      </div>
-      {busy && <p className="mt-3 text-sm text-ink-2" aria-live="polite">正在翻我的紀錄…</p>}
-      {err && <p role="alert" className="mt-3 text-sm text-danger-ink">{err}</p>}
-      {ans && !busy && (
-        <div className="ai-draft mt-3 p-3" aria-live="polite">
-          <p className="mb-2 text-xs text-primary">只回答紀錄裡有的事，不給建議、不解讀數值</p>
-          {ans.found ? (
-            <ul className="space-y-2">
-              {ans.sentences.map((s, i) => (
-                <li key={i}>
-                  <p className="text-base">{s.text}</p>
-                  <p className="mt-0.5 flex flex-wrap gap-2 text-xs">
-                    {s.sources.map((src) => (
-                      <Link key={src.id} href={`/p/${pid}?tab=timeline#${src.id.split("#")[0]}`} className="rounded-full border border-line bg-bg px-2 py-0.5 text-ink-2 hover:border-primary hover:text-primary">
-                        來源 · {fmtDay(src.date)} · {src.text.slice(0, 24)}{src.text.length > 24 ? "…" : ""}
-                      </Link>
-                    ))}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-base">{ans.fallback ?? "紀錄裡沒有這件事。"}</p>
-          )}
-          <p className="mt-2 text-[11px] text-ink-2">
-            personal agent · retrieve {ans.meta.tool_counts?.retrieve ?? 0} 次{ans.meta.duration_s != null ? ` · ${ans.meta.duration_s} 秒` : ""}{ans.meta.scripted ? " · scripted" : ""}
-          </p>
-        </div>
-      )}
-    </Card>
-  );
-}
 
 /** 本人首頁（VISION §28.1）：狀態一行 → 今天八維度 → 終身摘要 → 最近事件 → 問我的紀錄。 */
 export default function MeHomePage() {
@@ -147,7 +78,54 @@ export default function MeHomePage() {
         </ul>
       </Card>
 
+      <SelfNote pid={pid} name={p.code_name} />
       <div className="lg:col-span-2"><AskBox pid={pid} /></div>
     </div>
+  );
+}
+
+/**
+ * 本人自記（health-ref「手動填表」的想法改造）：寫進對話串（有 provenance、AI 只抽取），
+ * 不直接寫 timeline——護理師確認後才是正式紀錄。
+ */
+function SelfNote({ pid, name }: { pid: string; name: string }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [reply, setReply] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    setReply(null);
+    let out = "";
+    try {
+      await streamSSE(`/patients/${pid}/talk`, { text: text.trim(), role_view: "caregiver" }, (n, d) => {
+        if (n === "token") out += String(d.text ?? "");
+        if (n === "error") throw new Error(String(d.text ?? d.detail ?? "error"));
+      });
+      setReply(out || "記下了。");
+      setText("");
+    } catch (e2) {
+      setErr((e2 as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="自己記一句" headingLevel={2} meta={<Link href={`/p/${pid}?tab=talk`} className="text-primary hover:underline">看整段對話 →</Link>}>
+      <form onSubmit={send} className="flex gap-2">
+        <label htmlFor="self-note" className="sr-only">今天怎麼樣</label>
+        <input id="self-note" name="self_note" value={text} onChange={(e) => setText(e.target.value)} placeholder={`${name}今天…`} autoComplete="off" enterKeyHint="send" className="min-h-14 min-w-0 flex-1 rounded-[10px] border border-line bg-bg px-4 text-base text-ink placeholder:text-ink-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary" />
+        <Button type="submit" size="lg" className="size-14 shrink-0 p-0" disabled={busy || !text.trim()} aria-label="記下">
+          <PenLine className="size-6" aria-hidden="true" />
+        </Button>
+      </form>
+      <p className="mt-2 text-xs text-ink-2">會進到你的對話串（AI 只抽取成八個面向），護理師確認後才成為正式紀錄。</p>
+      {busy && <p className="mt-2 text-sm text-ink-2" aria-live="polite">記錄中…</p>}
+      {reply && <p className="ai-draft mt-2 p-3 text-sm" aria-live="polite">{reply}</p>}
+      {err && <p role="alert" className="mt-2 text-sm text-danger-ink">{err}</p>}
+    </Card>
   );
 }

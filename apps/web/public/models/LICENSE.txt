@@ -1,0 +1,5 @@
+my_avatar.glb — 3D avatar (Ready Player Me style, Wolf3D meshes, ARKit blendshapes) from the team project
+"health-ref" (frontend/public/models/my_avatar.glb, author Jennifer, commit 7a96fb1, 2026-09-05).
+Copied with the repo owner's explicit permission (2026-09-05); health-ref carries no LICENSE file.
+Used only as the 01 活體數位孿生「我的分身」view. Avatar behaviour rules (skin tone by sleep, body scale by
+weight, expression by mood, lip-sync) were re-implemented in TypeScript in components/twin/avatar-model.tsx.

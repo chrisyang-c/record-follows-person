@@ -412,11 +412,38 @@ def twin(patient_id: str, x_who: str | None = Header(default=None)) -> dict[str,
             "tip": WELLNESS_TIP[d],
         }
     changed_n = sum(1 for v in dims.values() if v["state"] != "same")
+    # channel 4 wearable daily metrics (facts only) + the avatar's state（本人 wellness 區）
+    wear = store.load_timeline(patient_id, since=since, kinds={"wearable_daily"})
+    wear_rows = [
+        {
+            "day": w.day.isoformat(),
+            "steps": w.steps,
+            "exercise_min": w.exercise_min,
+            "resting_hr": w.resting_hr,
+            "hrv_ms": w.hrv_ms,
+            "spo2": w.spo2,
+            "sleep_hours": w.sleep_hours,
+            "deep_sleep_hours": w.deep_sleep_hours,
+            "rem_hours": w.rem_hours,
+        }
+        for w in wear
+    ]
+    last_w = wear_rows[-1] if wear_rows else None
+    mood = "attention" if red_now else ("changed" if changed_n else "same")
     return {
         "profile": {
             "code_name": profile.code_name,
             "health_id": profile.health_id,
             "birth_year": profile.birth_year,
+            "height_cm": profile.height_cm,
+            "weight_kg": profile.weight_kg,
+        },
+        "wearable": wear_rows,
+        "avatar": {
+            "sleep_hours": last_w["sleep_hours"] if last_w else None,
+            "weight_kg": profile.weight_kg,
+            "height_cm": profile.height_cm,
+            "mood": mood,
         },
         "today_ts": latest.ts.isoformat() if latest else None,
         "status_line": "護理師正在處理一件事"

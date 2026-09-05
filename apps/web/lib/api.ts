@@ -270,8 +270,12 @@ export interface TwinDimension {
   series: { date: string; value: number | null; label: string }[];
   tip: string;
 }
+export interface WearableDay { day: string; steps: number; exercise_min: number; resting_hr: number; hrv_ms: number; spo2: number; sleep_hours: number; deep_sleep_hours: number; rem_hours: number }
+export type Mood = "same" | "changed" | "attention";
 export interface TwinData {
-  profile: { code_name: string; health_id: string; birth_year: number };
+  profile: { code_name: string; health_id: string; birth_year: number; height_cm: number | null; weight_kg: number | null };
+  wearable: WearableDay[];
+  avatar: { sleep_hours: number | null; weight_kg: number | null; height_cm: number | null; mood: Mood };
   today_ts: string | null;
   status_line: string;
   dimensions: Record<string, TwinDimension>;
