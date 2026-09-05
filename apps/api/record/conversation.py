@@ -50,6 +50,7 @@ class SessionState(BaseModel):
     started: str
     closed: str | None = None
     closed_reason: str | None = None  # "confirmed" | "restart" | "expired" | …
+    pending_event_id: str | None = None  # channel 4「可能跌倒」waiting for the four-button answer
 
 
 def is_expired(s: SessionState, now: datetime | None = None) -> str | None:

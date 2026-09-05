@@ -279,6 +279,48 @@ class AccessLogEntry(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Channel 4 — sensor events (simulated wearable). The event layer records「可能跌倒」, never「跌倒」.
+# Raw values are nurse-only; caregiver and doctor views carry no confidence or percentages.
+# ---------------------------------------------------------------------------
+
+VerifyChoice = Literal["with_patient", "fine", "maybe_injured", "unreachable"]
+VERIFY_LABELS: dict[str, str] = {
+    "with_patient": "我在他身邊",
+    "fine": "他沒事",
+    "maybe_injured": "他可能受傷",
+    "unreachable": "聯絡不上",
+}
+
+
+class SensorVerification(BaseModel):
+    choice: VerifyChoice
+    text: str = ""
+    by: str
+    ts: datetime
+
+
+class SensorEvent(BaseModel):
+    id: str
+    health_id: str
+    patient_id: str
+    ts: datetime
+    kind: Literal["possible_fall"] = "possible_fall"
+    location: str = ""
+    accel_peak_g: float = Field(description="加速度尖峰（g）")
+    orientation_change_deg: float = Field(description="姿態改變（度）")
+    still_seconds: int = Field(description="事件後靜止秒數")
+    hr_before: int
+    hr_after: int
+    spo2_after: int | None = None
+    status: Literal["pending", "verified", "closed"] = "pending"
+    hard_flag: bool = Field(default=False, description="紅燈硬條件命中（靜止 ≥ N 秒或 SpO₂ 低於門檻）")
+    hard_facts: list[str] = Field(default_factory=list)
+    verification: SensorVerification | None = None
+    thread_id: str | None = Field(default=None, description="Path A thread（若已通知護理師）")
+    source: str = "simulated_wearable"
+
+
+# ---------------------------------------------------------------------------
 # Baseline — updated only via ◇nurse_confirm_baseline → baseline_write
 # ---------------------------------------------------------------------------
 
@@ -504,6 +546,7 @@ class IncidentFile(DocBase):
     route_decision: RouteDecision | None = None
     notifications: list[Notification] = Field(default_factory=list)
     follow_up: FollowUp | None = None
+    sensor_event: SensorEvent | None = Field(default=None, description="通道 4：觸發此事件的感測事件（含照護者四鍵驗證）")
 
 
 class HandoffPage(DocBase):
@@ -611,7 +654,8 @@ __all__ = [
     "DimensionValue", "ObservationFlags", "Vitals", "FollowupQA", "StructuredObservation",
     "BaselineDelta", "RedFlagHit", "RedFlagResult", "Condition", "AllergyIntolerance",
     "MedicationStatement", "Contact", "Facility", "Profile", "HEALTH_ID_PATTERN", "CareRole",
-    "Scope", "CareCircleMember", "AccessLogEntry", "BaselineEntry", "Baseline",
+    "Scope", "CareCircleMember", "AccessLogEntry", "VerifyChoice", "VERIFY_LABELS",
+    "SensorVerification", "SensorEvent", "BaselineEntry", "Baseline",
     "BaselineProposal", "MinimalSBAR", "TimelineBase", "Observation", "Incident", "Encounter",
     "LifeEventType", "LifeEvent",
     "OrderItem", "OrderFollowUp", "Order", "TimelineEntry", "ISBAR", "OnsiteAssessment",

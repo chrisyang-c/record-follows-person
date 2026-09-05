@@ -500,13 +500,21 @@ def build_observation(
 
 
 def evaluate_red(
-    obs: StructuredObservation, profile: Profile | None, baseline: Baseline | None
+    obs: StructuredObservation,
+    profile: Profile | None,
+    baseline: Baseline | None,
+    sensor: dict | None = None,
+    caregiver_unreachable: bool = False,
 ) -> RedFlagResult:
+    from record_schema import SensorEvent
+
     return evaluate(
         RedFlagInput(
             observation=obs,
             baseline_vitals=baseline.vitals_usual if baseline else None,
             on_anticoagulant=profile.on_anticoagulant if profile else False,
+            sensor=SensorEvent.model_validate(sensor) if sensor else None,
+            caregiver_unreachable=caregiver_unreachable,
         )
     )
 

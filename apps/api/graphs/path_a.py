@@ -147,6 +147,7 @@ def compile_incident(
     ts: datetime,
     generated_from: list[str],
     incident_kind: str | None = None,
+    sensor_event: dict[str, Any] | None = None,
 ) -> tuple[Incident, IncidentFile]:
     kind = incident_kind or (obs.incident_flags[0] if obs.incident_flags else "acute")
     summary = nurse_section.isbar.situation[:120]
@@ -180,6 +181,7 @@ def compile_incident(
         red_flags=red_flags,
         route_decision=route,  # type: ignore[arg-type]
         notifications=[],
+        sensor_event=sensor_event,  # type: ignore[arg-type]
     )
     return entry, doc
 
@@ -470,6 +472,7 @@ def incident_compiler(state: PathAState) -> dict[str, Any]:
         nurse_id=nurse_id,
         ts=datetime.now(UTC),
         generated_from=_generated_from(state),
+        sensor_event=(state.get("raw_input") or {}).get("sensor_event"),
     )
     return {
         "incident_entry": entry.model_dump(mode="json"),

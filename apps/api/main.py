@@ -24,6 +24,7 @@ from ingest import vitals as vitals_ingest
 from ingest.caregiver_speech import ingest as ingest_speech
 from record import care_circle as cc
 from record import conversation as conv
+from record import events as sensor_events
 from record.store import get_store
 from red_flags.rules import RULES, render_lines
 
@@ -192,6 +193,110 @@ def home(role: str) -> dict[str, Any]:
             for pid in store.list_patients()
         ],
     }
+
+
+# --- 通道 4：模擬跌倒訊號 --------------------------------------------------------------------
+
+
+class SimFallIn(BaseModel):
+    still_seconds: int | None = None
+    spo2_after: int | None = None
+    location: str = "房間"
+
+
+def _pid_of_health_id(health_id: str) -> str:
+    store = get_store()
+    for pid in store.list_patients():
+        if store.load_profile(pid).health_id == health_id:
+            return pid
+    raise HTTPException(404, "unknown health_id")
+
+
+@app.post("/sim/fall/{health_id}")
+def sim_fall(health_id: str, body: SimFallIn | None = None) -> dict[str, Any]:
+    """Simulated wearable signal → the event layer records「可能跌倒」(not「跌倒」).
+    Hard conditions (still ≥60 s or SpO₂ <92, RF11) notify the nurse at once via Path A;
+    otherwise the caregiver is asked to verify (four buttons in talk). Returns the nurse view."""
+    from record_schema import StructuredObservation
+
+    from red_flags.rules import RedFlagInput, evaluate
+
+    body = body or SimFallIn()
+    pid = _pid_of_health_id(health_id)
+    store = get_store()
+    profile = store.load_profile(pid)
+    ev = vitals_ingest.simulate_fall(
+        pid,
+        health_id,
+        still_seconds=body.still_seconds,
+        spo2_after=body.spo2_after,
+        location=body.location,
+    )
+    rf = evaluate(
+        RedFlagInput(observation=StructuredObservation(raw_text="", language="zh-TW"), sensor=ev)
+    )
+    ev.hard_flag = rf.notify_now
+    ev.hard_facts = [f for h in rf.hits for f in h.facts]
+    sensor_events.create(pid, ev)
+    s = conv.open_session(pid)
+    when = ev.ts.astimezone().strftime("%H:%M")
+    if rf.notify_now:
+        snap = runner.start(
+            "path_a",
+            pid,
+            {
+                "path": "incident",
+                "raw_input": {
+                    "turns": [
+                        {
+                            "text": f"感測器偵測到{profile.code_name}可能跌倒"
+                            f"（{when}，{ev.location}）"
+                        }
+                    ],
+                    "language": "zh-TW",
+                    "caregiver_id": "sensor",
+                    "dialog_id": s.dialog_id,
+                    "sensor_event": ev.model_dump(mode="json"),
+                },
+            },
+        )
+        ev.thread_id = snap["thread_id"]
+        ev.status = "verified" if ev.verification else "pending"
+        sensor_events.update(pid, ev)
+        s.thread_id, s.phase, s.pending_event_id = snap["thread_id"], "red", ev.id
+        conv.save_session(pid, s)
+        conv.append(
+            pid,
+            "system",
+            f"感測器偵測到{profile.code_name}可能於 {when} 跌倒（{ev.location}）。"
+            "已通知護理師，請留在他身邊。",
+            s.session_id,
+            kind="event",
+            meta={"sensor_event_id": ev.id, "red": True, "thread_id": snap["thread_id"]},
+            author="red_flag_rules",
+        )
+    else:
+        s.pending_event_id = ev.id
+        conv.save_session(pid, s)
+        conv.append(
+            pid,
+            "system",
+            f"感測器偵測到{profile.code_name}可能於 {when} 跌倒（{ev.location}）。請確認他的狀況。",
+            s.session_id,
+            kind="event",
+            meta={"sensor_event_id": ev.id, "needs_verification": True},
+            author="sensor",
+        )
+    return {
+        "event": sensor_events.nurse_view(ev),
+        "notified_nurse": rf.notify_now,
+        "patient_id": pid,
+    }
+
+
+class VerifyIn(BaseModel):
+    choice: str
+    text: str = ""
 
 
 # --- 本人 App（第四扇門）：/me ----------------------------------------------------------------
@@ -533,6 +638,10 @@ def patient_summary(
         "conversation": [m.model_dump(mode="json") for m in msgs],
         "session": (conv.session(patient_id).model_dump() if conv.session(patient_id) else None),
         "pending": _pending_for(patient_id) if role != "caregiver" else [],
+        "sensor_events": [
+            (sensor_events.nurse_view if role == "nurse" else sensor_events.public_view)(e)
+            for e in sensor_events.list_events(patient_id)[-5:]
+        ],
         "changed_dimensions": [line.dimension for line in trend.lines if line.is_abnormal],
         "trend_lines": [line.model_dump(mode="json") for line in trend.lines],
         "recorded_today": any(m.role == "caregiver" and m.ts[:10] == today for m in msgs)
@@ -1066,7 +1175,19 @@ def nurse_inbox() -> dict[str, Any]:
     items.sort(
         key=lambda i: (not i["red_flag"], order.get(i["interrupt_type"], 9), i["updated_at"] or "")
     )
-    return {"items": items, "worker_scan_interval_s": get_settings().WORKER_SCAN_INTERVAL_S}
+    events = []
+    store = get_store()
+    for pid in store.list_patients():
+        for e in sensor_events.list_events(pid):
+            if e.status == "closed":
+                continue
+            events.append({**sensor_events.nurse_view(e), "code_name": _code_name(pid)})
+    events.sort(key=lambda e: e["ts"], reverse=True)
+    return {
+        "items": items,
+        "events": events,  # 新事件（含感測原始值，只給護理師）
+        "worker_scan_interval_s": get_settings().WORKER_SCAN_INTERVAL_S,
+    }
 
 
 @app.post("/worker/scan")

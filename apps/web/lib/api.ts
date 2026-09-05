@@ -1,6 +1,6 @@
 "use client";
 
-import type { Baseline, Document, PersonRecord, Profile, StructuredObservation, TimelineEntry, RedFlagResult, TrendLine, TrendReport } from "@schema";
+import type { Baseline, Document, PersonRecord, Profile, StructuredObservation, TimelineEntry, RedFlagResult, SensorEvent, TrendLine, TrendReport, VerifyChoice } from "@schema";
 import { useCallback, useEffect, useState } from "react";
 import { readMe, readRole, type Tab } from "@/lib/role";
 
@@ -141,6 +141,18 @@ export interface HomeData {
   generated_at: string;
   residents: HomeResident[];
 }
+/** 通道 4 感測事件（護理師視角含原始值；其他角色由 API 去掉原始值） */
+export type { SensorEvent } from "@schema";
+export interface SensorEventPublic {
+  id: string;
+  ts: string;
+  kind: "possible_fall";
+  location: string;
+  status: "pending" | "verified" | "closed";
+  verification: { choice: VerifyChoice; text: string; by: string; ts: string } | null;
+  thread_id: string | null;
+  nurse_notified: boolean;
+}
 export interface InboxItem {
   thread_id: string;
   graph: string;
@@ -229,6 +241,8 @@ export interface PatientSummary {
   conversation: ConvMessage[];
   session: SessionState | null;
   pending: PendingThread[];
+  /** 護理師：SensorEvent（含原始值）；其他角色：SensorEventPublic */
+  sensor_events: (SensorEvent | SensorEventPublic)[];
   changed_dimensions: string[];
   trend_lines: TrendLine[];
   recorded_today: boolean;

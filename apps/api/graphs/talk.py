@@ -61,6 +61,9 @@ class TalkState(TypedDict, total=False):
     patient_id: str
     text: str
     role_view: str
+    event_id: str | None  # channel 4: the possible-fall event this turn answers
+    event_choice: str | None  # with_patient | fine | maybe_injured | unreachable
+    sensor_event: dict[str, Any] | None
     session: dict[str, Any]
     profile: dict[str, Any]
     baseline: dict[str, Any]
@@ -111,9 +114,13 @@ def load_person_record(state: TalkState) -> dict[str, Any]:
     profile = store.load_profile(pid)
     baseline = store.load_baseline(pid)
     s = conv.open_session(pid)
+    from record import events as sensor_events
+
+    ev_id = state.get("event_id") or s.pending_event_id
+    sensor = sensor_events.get(pid, ev_id) if ev_id else None
     ev = step.done(
         f"load_person_record：{profile.code_name}，基線 {len(baseline.entries)} 條，"
-        f"session {s.session_id}",
+        f"session {s.session_id}" + (f"，感測事件 {ev_id}" if sensor else ""),
         f"讀取{profile.code_name}的基線",
         output=f"{len(baseline.entries)} 條基線",
     )
@@ -123,6 +130,7 @@ def load_person_record(state: TalkState) -> dict[str, Any]:
         "session": s.model_dump(),
         "thread_id": s.thread_id,
         "phase": s.phase,
+        "sensor_event": sensor.model_dump(mode="json") if sensor else None,
         "events": [ev],
     }
 
@@ -131,11 +139,15 @@ def record_caregiver_message(state: TalkState) -> dict[str, Any]:
     pid = state["patient_id"]
     s = state["session"]
     step = _Step("record_caregiver_message", "記下你說的話")
+    meta: dict[str, Any] = {}
+    if state.get("event_choice"):
+        meta = {"event_id": state.get("event_id"), "choice": state["event_choice"]}
     conv.append(
         pid,
         "caregiver",
         state["text"].strip(),
         s["session_id"],
+        meta=meta,
         author=Profile.model_validate(state["profile"]).caregiver_code_name,
     )
     turns = conv.session_turns(pid, s["session_id"])
@@ -219,7 +231,11 @@ def red_flag_rules(state: TalkState) -> dict[str, Any]:
     step = _Step("red_flag_rules", "檢查有沒有要馬上叫護理師的事")
     obs = StructuredObservation.model_validate(state["obs"])
     rf = evaluate_red(
-        obs, Profile.model_validate(state["profile"]), Baseline.model_validate(state["baseline"])
+        obs,
+        Profile.model_validate(state["profile"]),
+        Baseline.model_validate(state["baseline"]),
+        sensor=state.get("sensor_event"),
+        caregiver_unreachable=state.get("event_choice") == "unreachable",
     )
     if rf.notify_now:
         facts = "；".join(f for h in rf.hits for f in h.facts if h.action == "notify_now")
@@ -260,12 +276,21 @@ def notify_nurse(state: TalkState) -> dict[str, Any]:
                     "language": "zh-TW",
                     "caregiver_id": profile.caregiver_code_name,
                     "dialog_id": s.dialog_id,
+                    "sensor_event": state.get("sensor_event"),
+                    "caregiver_unreachable": state.get("event_choice") == "unreachable",
                 },
             },
         )
         thread_id = snap["thread_id"]
         s.thread_id, s.phase = thread_id, "red"
         conv.save_session(pid, s)
+        if state.get("sensor_event"):
+            from record import events as sensor_events
+
+            se = sensor_events.get(pid, state["sensor_event"]["id"])
+            if se is not None:
+                se.thread_id = thread_id
+                sensor_events.update(pid, se)
         first_line = "；".join(render_lines(RedFlagResult.model_validate(state["red_flags"]))[:1])
         lines.append("已通知護理師，請留在他身邊。")
         conv.append(
@@ -531,17 +556,29 @@ def compiled():
     return _compiled
 
 
-def run_turn(patient_id: str, text: str, role_view: str = "caregiver"):
+def run_turn(
+    patient_id: str,
+    text: str,
+    role_view: str = "caregiver",
+    event_id: str | None = None,
+    event_choice: str | None = None,
+):
     """Generator: yields ('event', dict) as nodes run, then ('final', state).
 
     The graph runs in one worker thread (contextvars-safe under StreamingResponse).
     """
     from core.trace import run_in_thread
 
-    yield from run_in_thread(lambda: _run_turn(patient_id, text, role_view))
+    yield from run_in_thread(lambda: _run_turn(patient_id, text, role_view, event_id, event_choice))
 
 
-def _run_turn(patient_id: str, text: str, role_view: str):
+def _run_turn(
+    patient_id: str,
+    text: str,
+    role_view: str,
+    event_id: str | None = None,
+    event_choice: str | None = None,
+):
     from core.trace import tagged
 
     s = conv.open_session(patient_id)
@@ -549,7 +586,13 @@ def _run_turn(patient_id: str, text: str, role_view: str):
     with tagged(dialog_id=s.dialog_id, thread_id=s.thread_id):
         try:
             for mode, chunk in compiled().stream(
-                {"patient_id": patient_id, "text": text, "role_view": role_view},
+                {
+                    "patient_id": patient_id,
+                    "text": text,
+                    "role_view": role_view,
+                    "event_id": event_id,
+                    "event_choice": event_choice,
+                },
                 stream_mode=["custom", "updates"],
             ):
                 if mode == "custom":

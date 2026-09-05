@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { SensorEventCard } from "@/components/nurse/sensor-event-card";
 import { TenSecondConfirm } from "@/components/nurse/ten-second-confirm";
 import { Sparkline } from "@/components/sparkline";
 import { Chip } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { useApi, usePolling, type HomeData, type HomeResident, type InboxItem } from "@/lib/api";
+import { useApi, usePolling, type HomeData, type HomeResident, type InboxItem, type SensorEvent } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { typeLabel } from "@/lib/labels";
 
@@ -36,7 +37,7 @@ function ResidentRow({ r, items }: { r: HomeResident; items: InboxItem[] }) {
 
 /** 護理站：紅燈橫幅（全站 layout）→ 等我確認 → 今日總覽；右上「巡診準備」。 */
 export default function NurseHome() {
-  const { data: inbox, reload } = useApi<{ items: InboxItem[] }>("/nurse/inbox");
+  const { data: inbox, reload } = useApi<{ items: InboxItem[]; events: (SensorEvent & { code_name?: string | null })[] }>("/nurse/inbox");
   const { data: home } = useApi<HomeData>("/home/nurse");
   const residents = home?.residents;
   usePolling(reload, 5000);
@@ -44,6 +45,7 @@ export default function NurseHome() {
   const pathA = items.filter((i) => i.graph === "path_a");
   const tens = items.filter((i) => i.interrupt_type === "nurse_10s_confirm");
   const round = items.filter((i) => i.graph === "round");
+  const sensor = inbox?.events ?? [];
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -53,6 +55,16 @@ export default function NurseHome() {
           巡診準備{round.length > 0 ? `（${typeLabel(round[0].interrupt_type)}）` : ""} →
         </Link>
       </div>
+
+      <section aria-labelledby="h-e">
+        <h2 id="h-e" className="mb-2 text-lg font-medium">新事件</h2>
+        {sensor.length === 0 && <p className="text-sm text-ink-2">沒有新的感測事件。（通道 4：<code>POST /sim/fall/{"{health_id}"}</code> 可模擬一筆「可能跌倒」）</p>}
+        <ul className="grid gap-3 md:grid-cols-2">
+          {sensor.map((e) => (
+            <li key={e.id}><SensorEventCard e={e} /></li>
+          ))}
+        </ul>
+      </section>
 
       <section aria-labelledby="h-c">
         <h2 id="h-c" className="mb-2 text-lg font-medium">等我確認</h2>

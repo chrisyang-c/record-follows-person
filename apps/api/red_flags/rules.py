@@ -12,9 +12,14 @@ from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel
-from record_schema import RedFlagHit, RedFlagResult, StructuredObservation, Vitals
+from record_schema import RedFlagHit, RedFlagResult, SensorEvent, StructuredObservation, Vitals
 
 Action = Literal["notify_now", "observe"]
+
+# Channel 4 hard conditions (the only sensor facts that notify by themselves; the rest is
+# verified by a person). Thresholds are code, not model output.
+SENSOR_STILL_S = 60
+SENSOR_SPO2_MIN = 92
 
 
 class RedFlagInput(BaseModel):
@@ -22,6 +27,8 @@ class RedFlagInput(BaseModel):
     vitals: Vitals | None = None
     baseline_vitals: Vitals | None = None
     on_anticoagulant: bool = False
+    sensor: SensorEvent | None = None
+    caregiver_unreachable: bool = False
 
     def merged_vitals(self) -> Vitals:
         """Nurse-measured values take precedence over caregiver-reported numbers."""
@@ -137,6 +144,25 @@ def _cannot_get_up(inp: RedFlagInput) -> list[str]:
     return []
 
 
+def _sensor_hard(inp: RedFlagInput) -> list[str]:
+    """感測事件只做硬條件：靜止 ≥ SENSOR_STILL_S 秒，或 SpO₂ < SENSOR_SPO2_MIN。其餘交人驗證。"""
+    e = inp.sensor
+    if e is None:
+        return []
+    facts = []
+    if e.still_seconds >= SENSOR_STILL_S:
+        facts.append(f"感測器：可能跌倒後靜止 {e.still_seconds} 秒")
+    if e.spo2_after is not None and e.spo2_after < SENSOR_SPO2_MIN:
+        facts.append(f"感測器：可能跌倒後 SpO₂ {e.spo2_after}%")
+    return facts
+
+
+def _unreachable(inp: RedFlagInput) -> list[str]:
+    if inp.sensor is not None and inp.caregiver_unreachable:
+        return ["感測器：可能跌倒，照護者回報聯絡不上他"]
+    return []
+
+
 def _observe_only(inp: RedFlagInput) -> list[str]:
     f = inp.observation.flags
     facts = []
@@ -158,6 +184,13 @@ RULES: tuple[Rule, ...] = (
     Rule("RF08", "胸痛", _chest_pain, "notify_now"),
     Rule("RF09", "呼吸困難", _breathing_difficulty, "notify_now"),
     Rule("RF10", "跌倒後無法起身", _cannot_get_up, "notify_now"),
+    Rule(
+        "RF11",
+        "感測：可能跌倒後靜止 ≥60 秒或 SpO₂ <92%（硬條件，其餘交人驗證）",
+        _sensor_hard,
+        "notify_now",
+    ),
+    Rule("RF12", "感測：可能跌倒且照護者回報聯絡不上", _unreachable, "notify_now"),
 )
 
 DISCLAIMER = "需護理師／醫師驗證；非診斷、非檢傷分級。"

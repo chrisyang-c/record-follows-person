@@ -33,6 +33,7 @@ ROOT_ALIASES: dict[str, Any] = {
     "RouteDecision": rs.RouteDecision,
     "CareRole": rs.CareRole,
     "LifeEventType": rs.LifeEventType,
+    "VerifyChoice": rs.VerifyChoice,
     "Scope": rs.Scope,
     "TimelineEntry": rs.TimelineEntry,
     "Document": rs.Document,
@@ -135,6 +136,11 @@ def main() -> None:
             out.append(emit_interface(name, s, defs))
         else:
             out.append(f"export type {name} = {ts_type(s, defs)};\n")
+    out.append(
+        "export const VERIFY_LABELS: Record<VerifyChoice, string> = "
+        + json.dumps(rs.VERIFY_LABELS, ensure_ascii=False)
+        + ";\n"
+    )
     out.append("export const DIMENSIONS = " + json.dumps(list(rs.DIMENSIONS)) + " as const;\n")
     out.append(
         "export const DIMENSION_LABELS: Record<Dimension, Record<Lang, string>> = "

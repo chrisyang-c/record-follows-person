@@ -21,6 +21,8 @@ export type CareRole = "patient" | "family" | "caregiver" | "nurse" | "doctor";
 
 export type LifeEventType = "condition" | "hospitalization" | "surgery" | "fall" | "other";
 
+export type VerifyChoice = "with_patient" | "fine" | "maybe_injured" | "unreachable";
+
 export type Scope = "who" | "timeline" | "docs" | "talk";
 
 export type TimelineEntry = Observation | Incident | Encounter | Order | LifeEvent;
@@ -118,6 +120,13 @@ export interface MedicationStatement {
   is_anticoagulant: boolean;
   started: string | null;
   ordered_by: string | null;
+}
+
+export interface SensorVerification {
+  choice: "with_patient" | "fine" | "maybe_injured" | "unreachable";
+  text: string;
+  by: string;
+  ts: string;
 }
 
 export interface BaselineEntry {
@@ -245,6 +254,27 @@ export interface NurseSection {
   confirmed_at: string | null;
 }
 
+export interface SensorEvent {
+  id: string;
+  health_id: string;
+  patient_id: string;
+  ts: string;
+  kind: "possible_fall";
+  location: string;
+  /** 加速度尖峰（g） */ accel_peak_g: number;
+  /** 姿態改變（度） */ orientation_change_deg: number;
+  /** 事件後靜止秒數 */ still_seconds: number;
+  hr_before: number;
+  hr_after: number;
+  spo2_after: number | null;
+  status: "pending" | "verified" | "closed";
+  /** 紅燈硬條件命中（靜止 ≥ N 秒或 SpO₂ 低於門檻） */ hard_flag: boolean;
+  hard_facts: string[];
+  verification: SensorVerification | null;
+  /** Path A thread（若已通知護理師） */ thread_id: string | null;
+  source: string;
+}
+
 export interface TrendPoint {
   date: string;
   value: number | null;
@@ -362,6 +392,7 @@ export interface IncidentFile {
   route_decision: "contact_contract_hospital" | "home_acute_mode_b" | "accompany_visit" | "observe" | "escalate_119" | null;
   notifications: Notification[];
   follow_up: FollowUp | null;
+  /** 通道 4：觸發此事件的感測事件（含照護者四鍵驗證） */ sensor_event: SensorEvent | null;
 }
 
 /** 終身時間軸的大事件（年層只顯示這些＋事故）：疾病確診、住院、手術、跌倒。
@@ -557,6 +588,8 @@ export interface PersonRecord {
   documents: (IncidentFile | HandoffPage | VisitPage | RoundPage | CaregiverNotes)[];
   provenance: ProvenanceLine[];
 }
+
+export const VERIFY_LABELS: Record<VerifyChoice, string> = {"with_patient": "我在他身邊", "fine": "他沒事", "maybe_injured": "他可能受傷", "unreachable": "聯絡不上"};
 
 export const DIMENSIONS = ["intake", "elimination", "function", "cognition", "sleep", "skin", "pain", "vitals"] as const;
 

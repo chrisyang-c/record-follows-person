@@ -13,6 +13,7 @@ from record_schema import (
     Profile,
     Provenance,
     RedFlagResult,
+    SensorEvent,
     StructuredObservation,
 )
 
@@ -34,6 +35,8 @@ class RawInput(TypedDict, total=False):
     incidents: list[str]
     caregiver_id: str
     shift: str
+    sensor_event: dict[str, Any]  # channel 4: the possible-fall event that started this
+    caregiver_unreachable: bool  # four-button answer「聯絡不上」
 
 
 def now_iso() -> str:
@@ -165,12 +168,17 @@ def red_flag_rules(state: dict[str, Any]) -> dict[str, Any]:
     obs = StructuredObservation.model_validate(state["structured_observation"])
     profile = Profile.model_validate(state["profile"])
     baseline = Baseline.model_validate(state["baseline"])
+    raw = state.get("raw_input") or {}
     result = evaluate(
         RedFlagInput(
             observation=obs,
             vitals=None,
             baseline_vitals=baseline.vitals_usual,
             on_anticoagulant=profile.on_anticoagulant,
+            sensor=SensorEvent.model_validate(raw["sensor_event"])
+            if raw.get("sensor_event")
+            else None,
+            caregiver_unreachable=bool(raw.get("caregiver_unreachable")),
         )
     )
     return {"red_flags": result.model_dump(mode="json"), "updated_at": now_iso()}

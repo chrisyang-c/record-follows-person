@@ -176,12 +176,19 @@ def update_caregiver(
     obs = res.observation
     recent = [Observation.model_validate(o) for o in values.get("recent_observations", [])]
     deltas = compare(obs, baseline, recent, datetime.now(UTC).date())
+    from record_schema import SensorEvent
+
+    raw_prev = values.get("raw_input") or {}
     rf = evaluate(
         RedFlagInput(
             observation=obs,
             vitals=None,
             baseline_vitals=baseline.vitals_usual,
             on_anticoagulant=profile.on_anticoagulant,
+            sensor=SensorEvent.model_validate(raw_prev["sensor_event"])
+            if raw_prev.get("sensor_event")
+            else None,
+            caregiver_unreachable=bool(raw_prev.get("caregiver_unreachable")),
         )
     )
     raw = {
