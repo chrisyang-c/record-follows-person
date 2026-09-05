@@ -265,3 +265,32 @@ Scope: apps/web only (+ docs/design.md §1 note, docs/DECISIONS.md row). API pay
 | access-denied.tsx | `role="alert"`、圖示 `aria-hidden` | ✓ |
 | longitudinal-summary.tsx | 第二階段項目 `aria-disabled`、數字 `num`（tabular） | ✓ |
 | 手機 390px | /me、/caregiver、talk 完整可用（截圖 docs/img/me-390-*.png、caregiver-390-family-home.png、talk-390-four-buttons.png） | ✓ |
+
+## 2026-09-05 · OMNI-TWIN 殼（docs/UIUX_OMNI_TWIN.md 遷移 1–9 步）
+
+**對比稽核（深色 tokens §6，程式計算 WCAG 比值）**
+
+| 組合 | 比值 | 判定 |
+|---|---|---|
+| --ink on --surface | 15.1:1 | 臨床數字 ≥ 7:1 ✓ |
+| --ink on --bg | 16.3:1 | ✓ |
+| --ink-2 on --surface | 6.9:1 | 正文 ≥ 4.5:1 ✓ |
+| --accent on --surface | 10.7:1 | ✓ |
+| --accent-2 on --surface | 6.5:1 | 大數字可；小字改 --ink（依規格） |
+| --ok／--warn on --surface | 10.1／10.0:1 | ✓ |
+| --danger on --surface | 6.4:1 | 邊框／圖示；文字用 --danger-ink 7.8:1 ✓ |
+| --bg on --accent（主按鈕字） | 11.6:1 | ✓ |
+
+**web-design-guidelines（新檔：components/shell/*、components/twin/*、app/twin/*、ten-second-confirm.tsx）**
+
+| 檔案 | 發現 | 處置 |
+|---|---|---|
+| components/shell/topbar.tsx | 品牌連結、頭像連結有 aria-label；天氣為示意資料，`aria-label` 註明 | ✓ |
+| components/shell/rail.tsx | 選中 `aria-current="page"`；02–04 `aria-disabled`；資料完整度不含健康分數 | ✓ |
+| components/shell/bottom-tabs.tsx | 5 格 ≥56px、`aria-current`、`env(safe-area-inset-bottom)` | ✓ |
+| components/twin/body-map.tsx | 熱點為 `<button aria-pressed>`（foreignObject）、呼吸動畫只在有變化；reduced-motion 全關（globals.css） | ✓ |
+| components/twin/trend-line.tsx | `role="img"` 加 aria-label | ✓ |
+| app/twin/page.tsx | 八維度 tab `aria-pressed`、focus ring；面板 `aria-live="polite"` | ✓ |
+| components/nurse/ten-second-confirm.tsx | 三鍵不互鎖；就地輸入有 `<label htmlFor>`；`autoFocus` 只在展開時 | ✓（autoFocus 有理由：就地展開） |
+| 列印 | `@media print` 強制白色 tokens、殼 `.no-print`；`docs/img/print-1280-white.png` | ✓ |
+| 動畫 | 只有 breathe／step-in／slide-down／fade-in 四種；`prefers-reduced-motion` 全關 | ✓ |

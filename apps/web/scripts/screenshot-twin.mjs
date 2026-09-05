@@ -19,7 +19,7 @@ await page.waitForSelector("text=MY HEALTH TWIN");
 await settle();
 await page.screenshot({ path: `${out}/me-390-home.png`, fullPage: true });
 await page.goto(`${base}/me/timeline`, { waitUntil: "networkidle" });
-await page.waitForSelector("text=我的時間軸");
+await page.waitForSelector("h1:has-text(\"我的時間軸\")");
 await settle();
 await page.screenshot({ path: `${out}/me-390-timeline.png`, fullPage: true });
 
@@ -47,6 +47,12 @@ await page.click("text=他可能受傷");
 await page.waitForFunction(() => !document.querySelector('button[aria-label="送出"]')?.disabled, null, { timeout: 180000 });
 await settle();
 await page.screenshot({ path: `${out}/talk-390-after-verify.png` });
+// --- 01 活體數位孿生（本人）
+await page.goto(`${base}/role?set=P001&next=/twin`, { waitUntil: "networkidle" });
+await page.waitForSelector("text=活體數位孿生體");
+await settle(1200);
+await page.screenshot({ path: `${out}/twin-390-body.png`, fullPage: true });
+
 await mobile.close();
 
 // --- desktop
@@ -60,6 +66,19 @@ await d.goto(`${base}/role?set=dr_wu&next=/p/P001?tab=docs`, { waitUntil: "netwo
 await d.waitForSelector("text=縱向摘要");
 await d.waitForTimeout(800);
 await d.screenshot({ path: `${out}/doctor-1280-longitudinal.png`, fullPage: true });
+// 列印白底驗證：殼隱藏、tokens 切白（docs/UIUX_OMNI_TWIN.md §8）
+await d.emulateMedia({ media: "print" });
+await d.screenshot({ path: `${out}/print-1280-white.png`, fullPage: false });
+await d.emulateMedia({ media: "screen" });
+await d.goto(`${base}/role?set=P001&next=/twin`, { waitUntil: "networkidle" });
+await d.waitForSelector("text=活體數位孿生體");
+await d.click("button[aria-label^='睡眠']");
+await d.waitForTimeout(1200);
+await d.screenshot({ path: `${out}/twin-1280-body.png` });
+await d.goto(`${base}/role?set=P001&next=/me`, { waitUntil: "networkidle" });
+await d.waitForSelector("text=MY HEALTH TWIN");
+await d.waitForTimeout(800);
+await d.screenshot({ path: `${out}/me-1280-home.png` });
 await desktop.close();
 await browser.close();
 console.log("twin screenshots written to", out);

@@ -3,6 +3,10 @@
 Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起直接 commit 到 `main` 並 push（不開分支／PR，見 CLAUDE.md §0.1）。
 先讀：CLAUDE.md → docs/ARCHITECTURE.md → docs/ACCEPTANCE.md（驗收與指令）→ docs/DECISIONS.md（為什麼）→ docs/KNOWN_ISSUES.md。
 
+## 已完成（OMNI-TWIN 殼，2026-09-05 深夜）
+
+依 docs/UIUX_OMNI_TWIN.md §9 九步各一個 commit（`git log --grep 'ui(omni-'`）：深色 tokens 預設＋白色列印、殼（頂欄／rail／麵包屑／底部 tab）、四艙進殼、元件系統、Clinical Queue 重排（#21 修）、01 人體圖與 `GET /twin/{id}`、/me 八小卡、手機版面、列印與對比稽核。細節：ACCEPTANCE「OMNI-TWIN 殼」、UI_AUDIT 同名段、DECISIONS 末兩行、KNOWN_ISSUES #33–#34。**規格 §7 動畫只有四種、§10 不可違反已併入 CLAUDE.md §1.9。**
+
 ## 已完成（Personal Health Twin，2026-09-05 晚）
 
 六塊各一個 commit（`89cb46d`→`48206d6`→`e044c2c`→`6a7a26e`→`903d584`→本輪）：Health ID＋Care Circle＋access log；本人 App `/me`（LifeEvent、問我的紀錄）；通道 4 `/sim/fall`＋RF11／RF12；照護者四鍵；事件資訊包／README／VIDEO 十幕／CLAUDE §1.8；介面對齊 VISION §28（截圖 `pnpm screenshot:twin`）。細節見 ACCEPTANCE「Personal Health Twin」、DECISIONS 2026-09-05 末五行、KNOWN_ISSUES #28–#32。
@@ -27,8 +31,8 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 1. ~~extract 與 next_question 改 `reasoning_effort="low"` 重跑 eval~~ **已做（2026-09-05）**：`INTAKE_REASONING_EFFORT`（預設 low → Responses API）、ACCEPTANCE Eval 表三欄、KNOWN_ISSUES #26。結論：low 在這兩個 prompt 上 reasoning tokens 為 0，成本不變，hallucination 8.7%→6.5%（gpt-4.1 仍 4.3%）。**定案**：luna + intake low（README 評測段三欄表）。
 2. ~~對話 session 過期（KNOWN_ISSUES #18）~~ **已做（2026-09-05）**：`SESSION_EXPIRY_H`＝4 小時或跨台灣日期自動關閉；順手把抽取快取持久化到 `records/{id}/extract_cache.json`（每輪只抽新的一句）。
 3. ~~角色首頁批次 summary 端點（#19）、輪詢在分頁隱藏時暫停（#20）~~ **已做（2026-09-05）**：`GET /home/{role}`、`usePolling`。
-4. 10 秒確認「改一句／退回」改成不鎖鍵、就地提示（#21）。
-4b. omni-twin-3.v0.build 的 UI 對齊（#32，等使用者給截圖／原始碼）。
+4. ~~10 秒確認「改一句／退回」改成不鎖鍵、就地提示（#21）~~ **已做（OMNI-TWIN 第 5 步）**。
+4b. ~~omni-twin-3.v0.build 的 UI 對齊~~ **已做**：使用者提供截圖與規格（docs/UIUX_OMNI_TWIN.md），已依九步遷移。剩：RoundPage 白底列印實跑一次（#33）。
 4c. 身份表兩處同步（#28）改成只讀 `records/_identities.json`（API `/whoami`）。
 5. SSE 客戶端斷線取消後端 graph（#22，`core/trace.run_in_thread` 加 cancel flag）。
 6. 若全隊同意改 CLAUDE.md §1：對話每輪直接寫 timeline（#15，改 `record/conversation.py::append` 一處）。
@@ -36,7 +40,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 
 ## 已知問題
 
-全表在 docs/KNOWN_ISSUES.md（#1–#32）。最影響 demo 的：
+全表在 docs/KNOWN_ISSUES.md（#1–#34）。最影響 demo 的：
 - #17 測試留下的紅燈 thread 會疊卡 → 錄影前 `make reset`。
 - #18 已修（4 小時／跨日自動過期）；同一天 4 小時內連續測試仍共用一段 → 說「不對」重來或 `make reset`。
 - #26 已修：已知維度有缺口可追問一次（gap 驗證）、第二次無效改摘要卡、503 只留給 LLM 失敗。

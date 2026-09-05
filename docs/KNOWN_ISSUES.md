@@ -22,7 +22,7 @@
 | 18 | ~~對話 session 不會自動過期~~ **已修（2026-09-05）**：`open_session` 在 session 超過 `SESSION_EXPIRY_H`（預設 4）小時或跨台灣日期時自動關閉（`closed_reason=expired`），對話串加一行系統事件「上一段對話已自動結束（超過 4 小時／跨日）」，並開新的一段。 | 同一天 4 小時內連續測試仍共用同一段。 | 說「不對」重新開始；或 `make reset`。`tests/test_session_expiry.py`。 |
 | 19 | ~~角色首頁 N+1~~ **已修（2026-09-05）**：`GET /home/{role}` 一次回全部住民＋該角色卡片需要的資料（照護者：今天記了沒／注意事項數／session；護理師：異常趨勢句＋前兩個異常維度的曲線；醫師：RoundPage 首句／狀態）。三個角色首頁各只打一次（護理站另有 `/nurse/inbox` 輪詢）。 | 十位以上住民首屏仍要算 N 次趨勢，但在同一個請求裡。 | `tests/test_home.py`。 |
 | 20 | ~~輪詢在分頁隱藏時不暫停~~ **已修（2026-09-05）**：`lib/api.ts::usePolling(reload, ms, enabled)` 統一四處輪詢（護理站 inbox、全站紅燈橫幅、trace 頁、Path A 審核面板）：`document.hidden` 時停，回前景先 reload 一次再繼續。 | 同一分頁仍是 5 秒輪詢，未改 SSE。 | `lib/polling.test.tsx`。 |
-| 21 | 10 秒確認的「改一句／退回」在文字為空時按鈕 disabled，沒有就地提示（review-panel 的確認鍵是「不鎖、就地列缺什麼」）。 | 一致性。 | 改成同一種作法。 |
+| 21 | ~~10 秒確認「改一句／退回」鎖鍵~~ **已修（2026-09-05，OMNI-TWIN 第 5 步）**：三鍵永遠可按，改一句／退回就地展開輸入，確認鍵依是否有改寫送 accept／edit。 | — | `components/nurse/ten-second-confirm.tsx` |
 | 22 | SSE 串流（對話、巡診）在客戶端中途斷線時不會取消後端的 graph：worker thread 會跑完（結果照樣寫進 checkpoint／registry），只是沒人收事件。 | 重新整理頁面後從 registry／conversation 讀到結果。 | 需要取消時可在 `core/trace.run_in_thread` 加 cancel flag。 |
 | 23 | gpt-4.1 偶爾把文字放進數字欄（`vitals_reported.rr = "呼吸很快"`），以前會讓整句抽取失敗（503）。現在 `_Extraction` 只留數字、其餘丟掉，文字仍在 vitals 維度的 raw_quote。 | eval 第一次跑到這句時中斷，修後重跑。 | — |
 | 24 | 成本是估算：價格寫死在 settings（gpt-5.6-luna 2026-07-30 降價後牌價：input 0.20、cached 0.02、cache write 0.25、output 1.20 USD/1M），依 usage 的 prompt／cached／cache_write／completion tokens 計算；未含 Batch 折扣或帳號協議價。 | ACCEPTANCE 的「每次呼叫成本」以此為準。 | 價格改了改 .env 的 PRICE_*。 |
@@ -34,3 +34,5 @@
 | 30 | 感測事件的硬條件門檻寫死在 `red_flags/rules.py`（靜止 60 秒、SpO₂ 92）；`/sim/fall` 為模擬，沒有真實穿戴裝置。 | Demo 用 `{"still_seconds":90}` 觸發硬條件。 | 第二階段接裝置。 |
 | 31 | `make seed` 會清掉 records（含 conversation、sensor_events、care_circle 的變更），但 DB 的舊 thread 仍在 → 紅燈橫幅可能疊卡（#17）。 | 錄影前 `make reset`。 | — |
 | 32 | omni-twin-3.v0.build 需登入才看得到預覽與 chat（Preview setup failed／read-only），本輪未能讀取其 UI 想法。 | 尚未併入。 | 使用者匯出截圖或原始碼後再對齊。 |
+| 33 | 列印白底驗證用的是醫師 docs tab（事件資訊包）；RoundPage 需先跑巡診流程（約 2.5 分鐘）才會出現，本輪 `make seed` 後沒有已發布的 RoundPage。RoundPage 卡片本身以 `data-theme="white"` 呈現，列印時整頁切白色 tokens。 | 截圖 `print-1280-white.png` 是事件資訊包。 | 錄影前跑 `/nurse/round` 發布後再印。 |
+| 34 | 頂欄的地點·天氣是示意假資料（規格 §3.1 允許）；「孿生同步中」燈只代表頁面在輪詢，不代表裝置連線。 | 觀感。 | 第二階段接真資料。 |

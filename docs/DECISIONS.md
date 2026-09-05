@@ -67,3 +67,5 @@
 | 2026-09-05 | 通道 4：`/sim/fall` → `SensorEvent`（`sensor_events.jsonl`，不是 timeline），事件層記「可能跌倒」；紅燈對感測只做硬條件 RF11（靜止 ≥60 s 或 SpO₂ <92）與 RF12（聯絡不上），其餘由照護者四鍵驗證後進既有追問流程；原始值只給護理師（`public_view` 去掉數值，CLAUDE §1.8）。 | 使用者指示；VISION §20–21。 | Claude |
 | 2026-09-05 | 四鍵是全系統唯一允許的按鈕（talk 的可能跌倒訊息下）；選項→一句照護者原話（`VERIFY_TEXT`）→ `run_turn(event_id, choice)`；IncidentFile 對外名「事件資訊包」，內部 `incident_file` 不改。 | 使用者指示。 | Claude |
 | 2026-09-05 | 介面依 VISION §28 對齊但沿用既有路由與元件：/me 首頁五段＋三子頁（用藥／影像／檢驗標第二階段）、/caregiver 依 §28.2（家屬只看自己那位）、/nurse 改名 Clinical Queue 三段、/doctor docs tab 加縱向摘要於 RoundPage 上方（檢驗／影像／臨床紀錄／AI 助理標第二階段）。不做 Health Graph、真實穿戴、EHR 對接。 | 使用者指示。 | Claude |
+| 2026-09-05 | UI 改為 OMNI-TWIN 殼（docs/UIUX_OMNI_TWIN.md，使用者提供）：深色為預設（§6 tokens），白色主題只給 RoundPage／列印；五維度 rail 只有 01 與 05 有內容；01 活體數位孿生為 wellness 語氣（允許大數字與一般建議），05 艙維持臨床語氣；四種動畫、發光只給熱點與同步燈。九步各一個 commit（e1ebc96→3d748d0＋本輪）。 | 使用者指示（2026-09-05）：「殼可以科幻，鏈不能」。 | 使用者 |
+| 2026-09-05 | `--primary` 成為 `--accent` 的別名、新增 `--on-primary`，既有元件不改 class 名即切到深色；AI／人／紅燈的樣式契約改靠形狀（虛線／實線／左 4px 紅線）而非顏色。 | 深色下顏色對比與語意不可靠；一次換 tokens 比逐檔改 class 安全。 | Claude |

@@ -106,6 +106,31 @@ luna none 多抽 pain×2、cognition×2（「不舒服」「沒精神」類句�
 
 - **角色首頁一次呼叫（#19）＋輪詢暫停（#20）**：`GET /home/{role}`；瀏覽器實測護理站只打 `/home/nurse` ×1 與 `/nurse/inbox`（不再每人一次 `/trends`），照護者／醫師首頁各只打 `/home/{role}`；console 無錯誤。`usePolling` 取代四處 `setInterval`，`lib/polling.test.tsx` 驗證隱藏時暫停、回前景立即刷新。api 99 passed；web typecheck／lint／vitest（3）綠。
 
+## OMNI-TWIN 殼 × 臨床安全核心（2026-09-05 晚，docs/UIUX_OMNI_TWIN.md §9 九步各一個 commit）
+
+| 步 | commit | 內容 | 證據 |
+|---|---|---|---|
+| 1 tokens | `e1ebc96` | 深色預設、白色主題 `[data-theme="white"]` 保留、列印強制白、`--on-primary` | UI_AUDIT 對比表（正文 ≥ 6.9:1、臨床數字 ≥ 15:1） |
+| 2 殼 | 見 git log `ui(omni-2)` | 頂欄（品牌、地點·天氣示意、同步燈、身份）、左 rail 五維度、麵包屑、手機底部 5 格 tab、02–04 空頁 | `nurse-1280-clinical-queue.png`、`me-390-home.png` |
+| 3 四艙 | `ui(omni-3)` | 路由不變；本人登入落 01 `/twin`，其他落 05 自己的艙 | — |
+| 4 元件 | `ui(omni-4)` | 卡片無陰影、二級卡片、主按鈕 accent／危險按鈕外框、AI 草稿虛線、活動列逐步出現、紅燈橫幅滑入 | 各截圖 |
+| 5 Clinical Queue | `ui(omni-5)` | 新事件 → 待審核（S／A 一行、三鍵不互鎖，#21 修）→ 今日總覽（八點）；事件資訊包 45／55 | `nurse-1280-clinical-queue.png` |
+| 6 01 人體圖 | `ui(omni-6)` | 8 熱點三態、右側面板（大數字、14 天趨勢、原話、一般建議）、八維度 tab；`GET /twin/{id}`（`tests/test_twin.py`） | `twin-1280-body.png`、`twin-390-body.png` |
+| 7 /me | `ui(omni-7)` | 今天八小卡（名稱＋一個詞）、桌機兩欄 | `me-1280-home.png` |
+| 8 手機 | `ui(omni-8)` | 對話輸入列在底部 tab 之上；/caregiver、talk、/me 390px 完整可用 | `talk-390-four-buttons.png`、`caregiver-390-family-home.png` |
+| 9 驗證 | 本 commit | 列印白底（`print-1280-white.png`：殼隱藏、白色 tokens）、對比稽核、截圖、文件 | UI_AUDIT「OMNI-TWIN 殼」 |
+
+| 1280px | 1280px |
+|---|---|
+| ![01 人體圖](img/twin-1280-body.png) | ![本人艙桌機](img/me-1280-home.png) |
+| ![Clinical Queue（深色）](img/nurse-1280-clinical-queue.png) | ![列印白底](img/print-1280-white.png) |
+
+| 390px | 390px |
+|---|---|
+| ![01 人體圖手機](img/twin-390-body.png) | ![本人首頁](img/me-390-home.png) |
+
+不可違反（CLAUDE.md §1.9）在程式裡的落點：wellness 大數字與一般建議只在 `/twin` 與 `/me`（`WELLNESS_TIP`、`.big-num`）；感測原始值只在 `SensorEventCard`（`sensor_events.nurse_view`）；紅燈橫幅沒有關閉控制；四鍵只在 talk 的可能跌倒訊息下。
+
 ## Personal Health Twin（2026-09-05 晚，六塊各一個 commit）
 
 | 塊 | commit | 內容 | 證據 |

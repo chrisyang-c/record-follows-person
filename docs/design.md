@@ -1,4 +1,4 @@
-# design.md — 白色未來感醫療
+# design.md — 白色未來感醫療（2026-09-05 起為 `[data-theme="white"]`／列印主題；全站預設改為 docs/UIUX_OMNI_TWIN.md 的深色殼）
 
 > 由 ui-ux-pro-max（`design-system/record-follows-person/MASTER.md`）產出骨架，**tokens 段落整段以 CLAUDE.md §7 覆寫**。
 > ui-ux-pro-max 原建議的 cyan 色系、Figtree 字體、GSAP 動效一律不採用。任何畫面都從本檔長。
