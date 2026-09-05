@@ -3,6 +3,7 @@
 import { Printer } from "lucide-react";
 import type { CaregiverNotes, IncidentFile, RoundPage } from "@schema";
 import { IncidentFileView } from "@/components/incident-file-view";
+import { LongitudinalSummary } from "@/components/patient/longitudinal-summary";
 import { ReviewPanel } from "@/components/nurse/review-panel";
 import { TenSecondConfirm } from "@/components/nurse/ten-second-confirm";
 import { RoundPageView } from "@/components/round-page-view";
@@ -41,6 +42,8 @@ export function DocsTab({ summary, role, onChanged }: { summary: PatientSummary;
           ))}
         </section>
       )}
+
+      {role === "doctor" && <LongitudinalSummary summary={summary} />}
 
       {role !== "caregiver" && (
         <section aria-labelledby="rp">

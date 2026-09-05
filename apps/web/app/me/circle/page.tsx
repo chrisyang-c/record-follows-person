@@ -25,6 +25,7 @@ export default function MeCirclePage() {
   if (error) return <p role="alert" className="text-danger-ink">{error}</p>;
   const active = data!.members.filter((m) => !m.revoked_at && (!m.valid_to || m.valid_to > new Date().toISOString()));
   const revoke = async (memberId: string) => {
+    if (!window.confirm(`撤銷 ${IDENTITIES[memberId]?.name ?? memberId} 的存取？撤銷後對方立刻看不到你的紀錄。`)) return;
     setBusy(true);
     try {
       await api(`/patients/${pid}/care-circle/${memberId}/revoke`, { method: "POST", json: {} });
@@ -67,7 +68,7 @@ export default function MeCirclePage() {
         <div className="space-y-3 text-sm">
           <label className="block">
             <span className="text-ink-2">誰</span>
-            <select value={who} onChange={(e) => setWho(e.target.value)} className="mt-1 min-h-11 w-full rounded-[10px] border border-line bg-bg px-3">
+            <select name="who" value={who} onChange={(e) => setWho(e.target.value)} className="mt-1 min-h-11 w-full rounded-[10px] border border-line bg-bg px-3 text-ink focus-visible:ring-2 focus-visible:ring-primary">
               {Object.entries(IDENTITIES).filter(([k, v]) => v.role !== "patient" && k !== `fam_${pid}`).map(([k, v]) => (
                 <option key={k} value={k}>{v.name}（{ROLE_LABEL[v.role]}）</option>
               ))}
@@ -86,7 +87,7 @@ export default function MeCirclePage() {
           </fieldset>
           <label className="block">
             <span className="text-ink-2">有效天數（0＝不限）</span>
-            <input type="number" min={0} value={days} onChange={(e) => setDays(Number(e.target.value))} className="num mt-1 min-h-11 w-full rounded-[10px] border border-line bg-bg px-3" />
+            <input type="number" name="valid_days" inputMode="numeric" min={0} value={days} onChange={(e) => setDays(Number(e.target.value))} className="num mt-1 min-h-11 w-full rounded-[10px] border border-line bg-bg px-3" />
           </label>
           <Button size="lg" className="w-full" disabled={busy || scopes.length === 0} onClick={() => void grant()}>授權</Button>
         </div>

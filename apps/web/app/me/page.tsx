@@ -40,14 +40,14 @@ function AskBox({ pid }: { pid: string }) {
         }}
       >
         <label htmlFor="ask" className="sr-only">問題</label>
-        <input id="ask" value={q} onChange={(e) => setQ(e.target.value)} placeholder="我以前有做過心臟手術嗎？" className="min-h-14 min-w-0 flex-1 rounded-[10px] border border-line bg-bg px-4 text-base placeholder:text-ink-2 focus-visible:border-primary" />
+        <input id="ask" name="ask" value={q} onChange={(e) => setQ(e.target.value)} placeholder="我以前有做過心臟手術嗎…" autoComplete="off" enterKeyHint="search" inputMode="text" className="min-h-14 min-w-0 flex-1 rounded-[10px] border border-line bg-bg px-4 text-base text-ink placeholder:text-ink-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary" />
         <Button type="submit" size="lg" className="size-14 shrink-0 p-0" disabled={busy} aria-label="問">
           <Search className="size-6" aria-hidden="true" />
         </Button>
       </form>
       <div className="mt-2 flex flex-wrap gap-2">
         {["我住過幾次院？", "上次跌倒是什麼時候？", "我有哪些慢性病？"].map((s) => (
-          <button key={s} type="button" onClick={() => { setQ(s); void ask(s); }} className="min-h-11 rounded-full border border-line px-3 text-sm hover:border-primary">{s}</button>
+          <button key={s} type="button" onClick={() => { setQ(s); void ask(s); }} className="min-h-11 rounded-full border border-line px-3 text-sm hover:border-primary focus-visible:ring-2 focus-visible:ring-primary">{s}</button>
         ))}
       </div>
       {busy && <p className="mt-3 text-sm text-ink-2" aria-live="polite">正在翻我的紀錄…</p>}
@@ -97,7 +97,7 @@ export default function MeHomePage() {
     <div className="space-y-4">
       <header className="text-center">
         <p className="text-xs text-ink-2">MY HEALTH TWIN</p>
-        <h1 className="text-2xl font-medium">{p.code_name}</h1>
+        <h1 className="text-balance text-2xl font-medium">{p.code_name}</h1>
         <p className="text-sm text-ink-2">{age} 歲 · <span className="num" translate="no">Health ID {p.health_id}</span></p>
         <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1 text-base">
           <span className={`size-2 rounded-full ${data.status_line.includes("護理師") ? "bg-danger" : data.status_line.includes("不一樣") ? "bg-warn" : "bg-ok"}`} aria-hidden="true" />

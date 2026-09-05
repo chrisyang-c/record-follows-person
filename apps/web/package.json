@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "screenshot": "node scripts/screenshot.mjs"
+    "screenshot": "node scripts/screenshot.mjs",
+    "screenshot:twin": "node scripts/screenshot-twin.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

@@ -3,7 +3,14 @@
 Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起直接 commit 到 `main` 並 push（不開分支／PR，見 CLAUDE.md §0.1）。
 先讀：CLAUDE.md → docs/ARCHITECTURE.md → docs/ACCEPTANCE.md（驗收與指令）→ docs/DECISIONS.md（為什麼）→ docs/KNOWN_ISSUES.md。
 
-## 已完成（最近一輪，2026-09-05）
+## 已完成（Personal Health Twin，2026-09-05 晚）
+
+六塊各一個 commit（`89cb46d`→`48206d6`→`e044c2c`→`6a7a26e`→`903d584`→本輪）：Health ID＋Care Circle＋access log；本人 App `/me`（LifeEvent、問我的紀錄）；通道 4 `/sim/fall`＋RF11／RF12；照護者四鍵；事件資訊包／README／VIDEO 十幕／CLAUDE §1.8；介面對齊 VISION §28（截圖 `pnpm screenshot:twin`）。細節見 ACCEPTANCE「Personal Health Twin」、DECISIONS 2026-09-05 末五行、KNOWN_ISSUES #28–#32。
+先讀 docs/VISION_personal_health_twin.md（願景）再讀 ARCHITECTURE（實作範圍以 ARCHITECTURE／HANDOFF 為準）。
+
+**未做（第二階段，README 已標）**：Health Graph、真實穿戴裝置、醫院 EHR／FHIR 對接；omni-twin-3.v0.build 的 UI 想法需登入才看得到（#32），待使用者提供截圖或原始碼。
+
+## 已完成（前一輪，2026-09-05）
 
 | 項目 | 在哪裡 | 證據 |
 |---|---|---|
@@ -21,13 +28,15 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 2. ~~對話 session 過期（KNOWN_ISSUES #18）~~ **已做（2026-09-05）**：`SESSION_EXPIRY_H`＝4 小時或跨台灣日期自動關閉；順手把抽取快取持久化到 `records/{id}/extract_cache.json`（每輪只抽新的一句）。
 3. ~~角色首頁批次 summary 端點（#19）、輪詢在分頁隱藏時暫停（#20）~~ **已做（2026-09-05）**：`GET /home/{role}`、`usePolling`。
 4. 10 秒確認「改一句／退回」改成不鎖鍵、就地提示（#21）。
+4b. omni-twin-3.v0.build 的 UI 對齊（#32，等使用者給截圖／原始碼）。
+4c. 身份表兩處同步（#28）改成只讀 `records/_identities.json`（API `/whoami`）。
 5. SSE 客戶端斷線取消後端 graph（#22，`core/trace.run_in_thread` 加 cancel flag）。
 6. 若全隊同意改 CLAUDE.md §1：對話每輪直接寫 timeline（#15，改 `record/conversation.py::append` 一處）。
 7. 影片：`make reset` 後照 docs/VIDEO.md 錄；紅燈用李阿公第二個例子。
 
 ## 已知問題
 
-全表在 docs/KNOWN_ISSUES.md（#1–#26）。最影響 demo 的：
+全表在 docs/KNOWN_ISSUES.md（#1–#32）。最影響 demo 的：
 - #17 測試留下的紅燈 thread 會疊卡 → 錄影前 `make reset`。
 - #18 已修（4 小時／跨日自動過期）；同一天 4 小時內連續測試仍共用一段 → 說「不對」重來或 `make reset`。
 - #26 已修：已知維度有缺口可追問一次（gap 驗證）、第二次無效改摘要卡、503 只留給 LLM 失敗。

@@ -138,14 +138,56 @@ def _home_card(store: Any, pid: str, role: str) -> dict[str, Any]:
         today = date.today().isoformat()
         s = conv.session(pid)
         notes = next((d.items for d in reversed(store.load_documents(pid, "caregiver_notes"))), [])
+        profile = store.load_profile(pid)
+        obs = store.load_timeline(pid, kinds={"observation"})
+        latest = obs[-1] if obs else None
+        changed = [
+            d.domain for d in (latest.deltas if latest else []) if d.direction in ("up", "down")
+        ]
+        pending_ev = sensor_events.pending(pid)
+        red_threads = [
+            row
+            for row in registry.list_threads(status="interrupted")
+            if row.get("patient_id") == pid and row.get("graph") == "path_a"
+        ]
+        alerts: list[str] = []
+        if pending_ev:
+            alerts.append("感測器：可能跌倒，請確認他的狀況")
+        if s and s.phase == "red":
+            alerts.append("護理師已收到通知")
+        elif red_threads:
+            alerts.append("護理師正在處理一件事")
+        events = [
+            _event_row(e)
+            for e in sorted(
+                [e for e in store.load_timeline(pid) if e.kind in MAJOR_KINDS],
+                key=lambda e: e.ts,
+                reverse=True,
+            )[:3]
+        ]
         return {
             "recorded_today": any(m.role == "caregiver" and m.ts[:10] == today for m in msgs)
-            or any(
-                e.ts.date().isoformat() == today
-                for e in store.load_timeline(pid, kinds={"observation"})
-            ),
+            or any(e.ts.date().isoformat() == today for e in obs),
             "notes_count": len(notes),
             "session_phase": s.phase if s and s.phase != "closed" else None,
+            "status_line": (
+                "護理師正在處理一件事"
+                if alerts and "護理師" in alerts[-1]
+                else ("今天有幾項跟平常不一樣" if changed else "跟平常差不多")
+            ),
+            "changed_dimensions": changed,
+            "latest_ts": latest.ts.isoformat() if latest else None,
+            "pending_event": sensor_events.public_view(pending_ev) if pending_ev else None,
+            "alerts": alerts,
+            "recent_events": events,
+            "care_team": {
+                "primary_nurse": profile.primary_nurse,
+                "doctor": "dr_wu",
+                "facility": profile.contract_facility.model_dump(mode="json"),
+                "emergency_contacts": [
+                    c.model_dump(mode="json") for c in profile.emergency_contacts
+                ],
+            },
         }
     if role == "doctor":
         pages = store.load_documents(pid, "round_page")
@@ -327,11 +369,7 @@ def me_home(patient_id: str, x_who: str | None = Header(default=None)) -> dict[s
         if latest
         else {}
     )
-    changed = [
-        d.dimension
-        for d in (latest.deltas if latest else [])
-        if getattr(d, "is_change", getattr(d, "changed", False))
-    ]
+    changed = [d.domain for d in (latest.deltas if latest else []) if d.direction in ("up", "down")]
     red = bool(latest and latest.red_flags and latest.red_flags.notify_now)
     status_line = (
         "護理師正在處理一件事" if red else ("今天有幾項跟平常不一樣" if changed else "跟平常差不多")

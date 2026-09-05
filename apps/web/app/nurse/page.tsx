@@ -35,7 +35,7 @@ function ResidentRow({ r, items }: { r: HomeResident; items: InboxItem[] }) {
   );
 }
 
-/** 護理站：紅燈橫幅（全站 layout）→ 等我確認 → 今日總覽；右上「巡診準備」。 */
+/** Clinical Queue（VISION §28.3）：紅燈橫幅（全站 layout）→ 新事件（含感測原始值）→ 待審核 → 今日總覽；右上「巡診準備」。 */
 export default function NurseHome() {
   const { data: inbox, reload } = useApi<{ items: InboxItem[]; events: (SensorEvent & { code_name?: string | null })[] }>("/nurse/inbox");
   const { data: home } = useApi<HomeData>("/home/nurse");
@@ -49,7 +49,7 @@ export default function NurseHome() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-medium">護理站</h1>
+        <h1 className="text-2xl font-medium">Clinical Queue <span className="text-base font-normal text-ink-2">護理站</span></h1>
         <span className="text-sm text-ink-2" aria-live="polite">待辦 <span className="num">{items.length}</span> · 每 5 秒更新（分頁隱藏時暫停）</span>
         <Link href="/nurse/round" className="ml-auto inline-flex min-h-11 items-center rounded-[10px] border border-line px-4 hover:border-primary hover:text-primary">
           巡診準備{round.length > 0 ? `（${typeLabel(round[0].interrupt_type)}）` : ""} →
@@ -67,7 +67,7 @@ export default function NurseHome() {
       </section>
 
       <section aria-labelledby="h-c">
-        <h2 id="h-c" className="mb-2 text-lg font-medium">等我確認</h2>
+        <h2 id="h-c" className="mb-2 text-lg font-medium">待審核</h2>
         {pathA.length === 0 && tens.length === 0 && <p className="text-sm text-ink-2">沒有待確認的草稿。照護者送出後會出現在這裡。</p>}
         <ul className="grid gap-3 md:grid-cols-2">
           {pathA.map((i) => (
@@ -89,7 +89,7 @@ export default function NurseHome() {
                   {i.escalation_level > 0 && <Chip tone="warn">已升級 {i.escalation_level} 次</Chip>}
                 </div>
                 <Link href={`/p/${i.patient_id}?tab=docs`} className="mt-3 inline-flex min-h-14 w-full items-center justify-center rounded-[10px] bg-primary px-4 text-white hover:bg-primary-hover">
-                  {i.red_flag ? "到場評估 / 審核" : "審核 ISBAR"}
+                  {i.red_flag ? "事件資訊包 / 護理評估" : "審核 ISBAR"}
                 </Link>
               </Card>
             </li>

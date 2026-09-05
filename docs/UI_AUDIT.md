@@ -247,3 +247,21 @@ Scope: apps/web only (+ docs/design.md §1 note, docs/DECISIONS.md row). API pay
 **已修**：`aria-current` 誤用（nav）；`readRole()`／`window.location.hash` 在 render 讀 → 改 `useSyncExternalStore`／effect（避免 hydration 不一致）；維度篩選「全部」補 `aria-pressed`；活動列切換鈕 32px → 44px、篩選 chips 36px → 44px、RoundPage「N 筆紀錄」24px → 44px；紅燈橫幅 CTA `bg-danger` 白字 4.40:1 → `bg-danger-ink`（≥6:1），移除 `hover:opacity-90`；placeholder `text-ink-2/70`（2.97:1）→ `text-ink-2`（5.4:1）；活動列虛線框 `primary/40` → `primary`（非文字 ≥3:1）；聊天輸入補 `inputMode`／`enterKeyHint`，串流中仍可打字（只鎖送出）；`aria-live` 只包正在串流的區塊；print 選擇器改為 `body:has(.print-page) main section:not(:has(.print-page)):not(.print-page section)`；`scroll-padding-bottom` 給 sticky 動作列；文件 tab 死碼；照護者／醫師首頁空狀態；頂欄只剩「角色 · 住民」（切換角色移到角色首頁頁尾）。
 
 **保留（記 KNOWN_ISSUES）**：#19 角色首頁每位住民各打一次 `/patients/{id}/summary`／`/trends`（N+1，三人可接受）；#20 護理師病人頁同時有三個 5 秒輪詢、未在分頁隱藏時暫停；#21 「改一句／退回」按鈕在文字為空時 disabled 而非就地提示（與 review-panel 的確認鍵作法不一致）。
+
+## 2026-09-05 · Personal Health Twin 四扇門（web-design-guidelines，`/web-design-guidelines` 稽核新檔）
+
+檔案：app/me/*、app/caregiver/page.tsx、app/page.tsx、components/patient/talk-tab.tsx、components/nurse/sensor-event-card.tsx、components/patient/longitudinal-summary.tsx、components/patient/access-denied.tsx。
+
+| 檔案 | 發現 | 處置 |
+|---|---|---|
+| app/me/page.tsx:43 | 問題輸入框缺 `name`／`autoComplete="off"`／`enterKeyHint`，placeholder 未以「…」結尾 | 已修 |
+| app/me/page.tsx:50 | 建議問題原生 `<button>` 無 focus-visible ring | 已修 |
+| app/me/timeline/page.tsx:39 | 展開月份原生 `<button>` 無 focus-visible ring | 已修 |
+| app/me/circle/page.tsx:60 | 「撤銷」為破壞性動作，無確認 | 已修（`confirm`） |
+| app/me/circle/page.tsx:70 | 原生 `<select>` 未指定文字色、無 `name` | 已修 |
+| app/me/page.tsx、app/caregiver/page.tsx | h1 無 `text-wrap: balance` | 已修（`text-balance`） |
+| talk-tab.tsx 四鍵 | ≥56px、`role="group"` 有 aria-label、按鈕走 Button（focus ring）；唯一允許按鈕之處 | ✓ |
+| sensor-event-card.tsx | 原始值只在護理師端；照護者回覆區 `aria-live="polite"`；來源 `translate="no"` | ✓ |
+| access-denied.tsx | `role="alert"`、圖示 `aria-hidden` | ✓ |
+| longitudinal-summary.tsx | 第二階段項目 `aria-disabled`、數字 `num`（tabular） | ✓ |
+| 手機 390px | /me、/caregiver、talk 完整可用（截圖 docs/img/me-390-*.png、caregiver-390-family-home.png、talk-390-four-buttons.png） | ✓ |

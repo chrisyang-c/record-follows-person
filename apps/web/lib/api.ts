@@ -131,6 +131,13 @@ export interface HomeResident extends Resident {
     recorded_today?: boolean;
     notes_count?: number;
     session_phase?: "intake" | "confirm" | "red" | null;
+    status_line?: string;
+    changed_dimensions?: string[];
+    latest_ts?: string | null;
+    pending_event?: SensorEventPublic | null;
+    alerts?: string[];
+    recent_events?: MeEvent[];
+    care_team?: { primary_nurse: string; doctor: string; facility: { name: string; phone: string }; emergency_contacts: { name: string; relation: string; phone: string; notify_first?: boolean }[] };
     abnormal?: TrendLine[];
     series?: TrendReport["series"];
     round_page?: { first: string; generated_at: string; status: string; confirmed_by: string | null } | null;

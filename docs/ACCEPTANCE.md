@@ -106,6 +106,29 @@ luna none 多抽 pain×2、cognition×2（「不舒服」「沒精神」類句�
 
 - **角色首頁一次呼叫（#19）＋輪詢暫停（#20）**：`GET /home/{role}`；瀏覽器實測護理站只打 `/home/nurse` ×1 與 `/nurse/inbox`（不再每人一次 `/trends`），照護者／醫師首頁各只打 `/home/{role}`；console 無錯誤。`usePolling` 取代四處 `setInterval`，`lib/polling.test.tsx` 驗證隱藏時暫停、回前景立即刷新。api 99 passed；web typecheck／lint／vitest（3）綠。
 
+## Personal Health Twin（2026-09-05 晚，六塊各一個 commit）
+
+| 塊 | commit | 內容 | 證據 |
+|---|---|---|---|
+| 一 Health ID 與同意 | `89cb46d` | `health_id`（P-0000001…3）、Care Circle（角色／可見範圍／有效起迄／撤銷）、cookie 只存 `me`、無授權 tab「未獲授權」、誰看過我的紀錄 | `tests/test_care_circle.py` ×6；醫師開 `?tab=talk` 顯示未獲授權 |
+| 二 本人 App | `48206d6` | `/me` 五段、`/me/timeline` 年→月→事件（年層只列確診／住院／手術／跌倒）、`/me/events`、`/me/circle`、問我的紀錄（personal agent `retrieve`＋`submit_answer`，每句附可點來源） | `tests/test_me.py` ×7；真模型：「我以前有做過心臟手術嗎？」→「紀錄裡沒有這件事」（王伯只有白內障手術）、「我住過幾次院？」→ 1 次，來源 2015-06-20 |
+| 三 模擬跌倒訊號 | `e044c2c` | `POST /sim/fall/{health_id}` → 「可能跌倒」`SensorEvent`；RF11／RF12 硬條件；原始值只在護理師端 | `tests/test_sensor_fall.py` ×4；照護者／醫師 summary 的 `sensor_events` 無任何數值 |
+| 四 照護者四鍵 | `6a7a26e` | talk 的系統訊息＋四鍵（唯一按鈕）；選完進既有追問；聯絡不上直接紅燈；回覆進事件資訊包照護者區塊、護理師事件卡 5 秒內顯示 | `tests/test_verify_flow.py` ×5；真模型：按「我在他身邊」→「他現在清醒嗎？叫他有回應嗎？」 |
+| 五 名稱與文件 | `903d584` | 事件資訊包、README 定位、VIDEO 十幕、CLAUDE §1.8 | — |
+| 六 介面對齊 §28 | 本 commit | /me、/caregiver（家屬只看自己那位、聯絡照護團隊）、Clinical Queue、醫師縱向摘要、第二階段灰色項目；`pnpm screenshot:twin` | 下表截圖；UI_AUDIT「Personal Health Twin 四扇門」 |
+
+| 390px | 390px |
+|---|---|
+| ![本人首頁](img/me-390-home.png) | ![我的時間軸](img/me-390-timeline.png) |
+| ![問我的紀錄](img/me-390-ask.png) | ![家屬首頁（可能跌倒）](img/caregiver-390-family-home.png) |
+| ![四鍵](img/talk-390-four-buttons.png) | ![選「他可能受傷」後](img/talk-390-after-verify.png) |
+
+| 1280px | |
+|---|---|
+| ![Clinical Queue](img/nurse-1280-clinical-queue.png) | ![醫師縱向摘要](img/doctor-1280-longitudinal.png) |
+
+測試：api **121 passed**（ruff 乾淨）；web typecheck／lint／vitest 3 綠。指令：`make seed`（重建 records 含 care_circle、歷史大事件）→ `curl -X POST localhost:8000/sim/fall/P-0000001` → 家屬 `/role?set=fam_P001` → `/p/P001?tab=talk` 四鍵。
+
 ## §12 逐項
 
 | # | 項目 | 結果 | 怎麼驗證 |

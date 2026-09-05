@@ -29,3 +29,8 @@
 | 25 | 快取命中不保證：第一次呼叫（或路由到沒有快取的機器）會是 cache write；一天內 timeline 有新寫入（護理師確認）時紀錄區塊改變、下一次呼叫重新寫入。 | 偶爾一輪成本較高。 | — |
 | 26 | ~~luna 逐字重問／連續兩次選已知維度 → 503~~ **已修（2026-09-05 下午）**：`intake_dialog.known_gaps` 算出每個已知維度的缺口（value／direction 未填、原話裡有該維度關鍵字但不在 raw_quote），交給模型「已知但仍有缺口（可追問一次）」；planner 選已知維度時 `gap`／`reason` 必須指出其中一個缺口、同一維度只放行一次；第二次仍無效 → ask=false 出摘要卡（trace `intake.plan_gave_up`），不再 503。503 只留給 LLM 真的失敗，照護者端顯示「系統暫時無法回覆，請直接告訴護理師」。順手修 `_apply_answer` 把追問回答整句覆寫成已知維度 raw_quote 的舊 bug。 | 真模型實測：「早餐沒吃完，說肚子脹」第一題就補問脹的程度；第二輪想再問進食被擋後改問疼痛。 | `tests/test_planner_gaps.py` ×7。 |
 | 27 | 抽取快取以「句子＋住民＋模型＋effort＋當日」為 key（`records/{id}/extract_cache.json`）：同一天同住民說同一句不會重抽；基線在當天內被護理師更新時，舊快取仍沿用。 | 只影響當天。 | 改 `ingest/intake_dialog.py::_extract_cache_key` 加入 baseline 版本即可。 |
+| 28 | 身份是 demo 靜態表：web 的 `lib/role.ts::IDENTITIES` 與 seed 的 `records/_identities.json` 要手動保持一致；cookie 只存 `me`，沒有登入。 | 新增身份要改兩處。 | 第二階段接真正的身份提供者。 |
+| 29 | 「問我的紀錄」檢索是關鍵字 bigram（去停用詞），不是向量檢索；同義詞（例：「心臟開刀」vs「心臟手術」）可能找不到而回「紀錄裡沒有這件事」。 | 回答保守（寧可說沒有），不會捏造。 | 第二階段換 embedding；答案仍須引用既有行。 |
+| 30 | 感測事件的硬條件門檻寫死在 `red_flags/rules.py`（靜止 60 秒、SpO₂ 92）；`/sim/fall` 為模擬，沒有真實穿戴裝置。 | Demo 用 `{"still_seconds":90}` 觸發硬條件。 | 第二階段接裝置。 |
+| 31 | `make seed` 會清掉 records（含 conversation、sensor_events、care_circle 的變更），但 DB 的舊 thread 仍在 → 紅燈橫幅可能疊卡（#17）。 | 錄影前 `make reset`。 | — |
+| 32 | omni-twin-3.v0.build 需登入才看得到預覽與 chat（Preview setup failed／read-only），本輪未能讀取其 UI 想法。 | 尚未併入。 | 使用者匯出截圖或原始碼後再對齊。 |

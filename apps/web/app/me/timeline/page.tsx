@@ -36,7 +36,7 @@ export default function MeTimelinePage() {
                 </li>
               ))}
             </ul>
-            <button type="button" onClick={() => setOpen((o) => ({ ...o, [y.year]: !o[y.year] }))} aria-expanded={!!open[y.year]} className="mt-2 inline-flex min-h-11 items-center text-sm text-primary hover:underline">
+            <button type="button" onClick={() => setOpen((o) => ({ ...o, [y.year]: !o[y.year] }))} aria-expanded={!!open[y.year]} className="mt-2 inline-flex min-h-11 items-center rounded text-sm text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary">
               {open[y.year] ? "收起月份" : `展開 ${y.months.length} 個月`}
             </button>
             {open[y.year] && (
