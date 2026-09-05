@@ -31,6 +31,7 @@ from record_schema import (
     Vitals,
 )
 
+from baseline.loader import bands_for
 from core.ids import new_id
 from core.llm import get_llm
 from core.settings import get_settings
@@ -349,6 +350,9 @@ def nurse_onsite_assessment(state: PathAState) -> dict[str, Any]:
             observation=obs,
             vitals=oa.vitals,
             baseline_vitals=baseline.vitals_usual,
+            # The nurse has just measured him — the one place where comparing against
+            # his own measured range (RF13) has the most to say.
+            vitals_bands=bands_for(state["patient_id"]),
             on_anticoagulant=profile.on_anticoagulant,
         )
     )

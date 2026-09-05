@@ -1081,10 +1081,13 @@ def intake_preview(body: PreviewIn) -> dict[str, Any]:
     from red_flags.rules import RedFlagInput, evaluate
 
     profile = store.load_profile(body.patient_id)
+    from baseline.loader import bands_for
+
     rf = evaluate(
         RedFlagInput(
             observation=obs,
             baseline_vitals=store.load_baseline(body.patient_id).vitals_usual,
+            vitals_bands=bands_for(body.patient_id),  # type: ignore[arg-type]
             on_anticoagulant=profile.on_anticoagulant,
         )
     )

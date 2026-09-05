@@ -150,7 +150,9 @@ def main() -> None:
     text = "\n".join(out)
     text = re.sub(r"\n{3,}", "\n\n", text)
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(text, encoding="utf-8")
+    # newline="\n" so the generated file is byte-identical on every platform. Without it
+    # Windows writes CRLF and every codegen run produces a whole-file diff.
+    OUT.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {OUT} ({len(text)} bytes, {len(emitted)} types)", file=sys.stderr)
 
 

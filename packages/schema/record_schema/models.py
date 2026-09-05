@@ -364,6 +364,65 @@ class BaselineProposal(BaseModel):
     source_order_id: str | None = None
 
 
+VitalMetric = Literal["temp_c", "sbp", "dbp", "hr", "rr", "spo2"]
+
+VITAL_LABELS: dict[str, str] = {
+    "temp_c": "體溫",
+    "sbp": "收縮壓",
+    "dbp": "舒張壓",
+    "hr": "心率",
+    "rr": "呼吸",
+    "spo2": "血氧",
+}
+
+VITAL_UNITS: dict[str, str] = {
+    "temp_c": "°C",
+    "sbp": "mmHg",
+    "dbp": "mmHg",
+    "hr": "／分",
+    "rr": "／分",
+    "spo2": "%",
+}
+
+
+class VitalsBand(BaseModel):
+    """這個人自己的正常範圍，從 timeline 的量測值算出來，不是族群常模。
+
+    `vitals_usual` 是護理師寫的一組數字；這裡是從實際量測算出來的「帶」。
+    兩者並存：帶只用來說明「這次跟他平常比起來如何」，
+    要更新 `vitals_usual` 仍必須走 ◇nurse_confirm_baseline（CLAUDE.md §1.6）。
+
+    `established=False` 時不得用來判斷任何事情——樣本太少的「正常範圍」
+    是誤報的主要來源，不是靈敏度不夠。
+    """
+
+    metric: VitalMetric
+    label: str
+    unit: str
+    center: float = Field(description="中位數（不是平均數：生理值有離群值）")
+    spread: float = Field(description="中位數絕對偏差 MAD（不是標準差）")
+    low: float = Field(description="第 10 百分位")
+    high: float = Field(description="第 90 百分位")
+    n: int = Field(description="樣本數")
+    days: int = Field(description="涵蓋幾天")
+    established: bool
+    reason: str = Field(default="", description="established=False 時說明為什麼")
+    text: str = Field(default="", description="給人看的一行，例如「收縮壓 129–139 mmHg」")
+
+
+class VitalsBands(BaseModel):
+    """一位住民的所有生理值正常帶。系統推導，不寫入 baseline。"""
+
+    patient_id: str
+    computed_at: datetime
+    window_days: int
+    bands: dict[str, VitalsBand] = Field(default_factory=dict)
+
+    def get(self, metric: str) -> VitalsBand | None:
+        band = self.bands.get(metric)
+        return band if band is not None and band.established else None
+
+
 # ---------------------------------------------------------------------------
 # Timeline — append only: Observation | Incident | Encounter | Order
 # ---------------------------------------------------------------------------
@@ -656,7 +715,8 @@ __all__ = [
     "MedicationStatement", "Contact", "Facility", "Profile", "HEALTH_ID_PATTERN", "CareRole",
     "Scope", "CareCircleMember", "AccessLogEntry", "VerifyChoice", "VERIFY_LABELS",
     "SensorVerification", "SensorEvent", "BaselineEntry", "Baseline",
-    "BaselineProposal", "MinimalSBAR", "TimelineBase", "Observation", "Incident", "Encounter",
+    "BaselineProposal", "VitalMetric", "VITAL_LABELS", "VITAL_UNITS", "VitalsBand", "VitalsBands",
+    "MinimalSBAR", "TimelineBase", "Observation", "Incident", "Encounter",
     "LifeEventType", "LifeEvent",
     "OrderItem", "OrderFollowUp", "Order", "TimelineEntry", "ISBAR", "OnsiteAssessment",
     "CaregiverSection", "NurseSection", "Notification", "FollowUp", "DocBase", "IncidentFile",

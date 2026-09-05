@@ -18,6 +18,7 @@ from record_schema import (
 )
 
 from agents.comparator import compare
+from baseline.loader import bands_for
 from core.settings import get_settings
 from record.store import UnapprovedWriteError, get_store
 from red_flags.rules import RedFlagInput, evaluate, render_lines
@@ -169,11 +170,16 @@ def red_flag_rules(state: dict[str, Any]) -> dict[str, Any]:
     profile = Profile.model_validate(state["profile"])
     baseline = Baseline.model_validate(state["baseline"])
     raw = state.get("raw_input") or {}
+    recent = [Observation.model_validate(o) for o in state.get("recent_observations", [])]
     result = evaluate(
         RedFlagInput(
             observation=obs,
             vitals=None,
             baseline_vitals=baseline.vitals_usual,
+            # This person's own measured ranges (RF13). None when the record cannot be
+            # read or too few measurements exist — every other rule is unaffected.
+            vitals_bands=bands_for(state["patient_id"]),
+            recent_vitals=[o.vitals for o in recent if o.vitals is not None],
             on_anticoagulant=profile.on_anticoagulant,
             sensor=SensorEvent.model_validate(raw["sensor_event"])
             if raw.get("sensor_event")

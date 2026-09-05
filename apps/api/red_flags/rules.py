@@ -12,7 +12,17 @@ from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel
-from record_schema import RedFlagHit, RedFlagResult, SensorEvent, StructuredObservation, Vitals
+from record_schema import (
+    RedFlagHit,
+    RedFlagResult,
+    SensorEvent,
+    StructuredObservation,
+    Vitals,
+    VitalsBands,
+)
+
+from baseline.vitals_band import METRICS as BAND_METRICS
+from baseline.vitals_band import departure
 
 Action = Literal["notify_now", "observe"]
 
@@ -29,6 +39,11 @@ class RedFlagInput(BaseModel):
     on_anticoagulant: bool = False
     sensor: SensorEvent | None = None
     caregiver_unreachable: bool = False
+
+    # Optional: this person's own measured ranges (baseline/vitals_band.py). When absent
+    # every rule below behaves exactly as before — RF13 is the only rule that reads it.
+    vitals_bands: VitalsBands | None = None
+    recent_vitals: list[Vitals] = []
 
     def merged_vitals(self) -> Vitals:
         """Nurse-measured values take precedence over caregiver-reported numbers."""
@@ -163,6 +178,38 @@ def _unreachable(inp: RedFlagInput) -> list[str]:
     return []
 
 
+def _personal_band(inp: RedFlagInput) -> list[str]:
+    """Departure from this person's own measured range (not a population threshold).
+
+    RF02–RF04 ask "is this value dangerous for anyone". This asks "is this value unusual
+    for him". P001's usual systolic is 138: a reading of 118 clears every population
+    threshold and is a real drop for him.
+
+    Deliberately ``observe``, not ``notify_now``. A departure from one's own range is the
+    early, quiet signal — putting it in the red banner would drown the rules that mean
+    "call the nurse now", and a banner people learn to ignore protects nobody.
+    """
+    bands = inp.vitals_bands
+    if bands is None:
+        return []
+    current = inp.merged_vitals()
+    facts: list[str] = []
+    for metric in BAND_METRICS:
+        band = bands.get(metric)
+        value = getattr(current, metric, None)
+        if band is None or value is None:
+            continue
+        recent = [
+            float(v)
+            for v in (getattr(m, metric, None) for m in inp.recent_vitals)
+            if v is not None
+        ]
+        line = departure(band, float(value), recent=recent or None)
+        if line:
+            facts.append(line)
+    return facts
+
+
 def _observe_only(inp: RedFlagInput) -> list[str]:
     f = inp.observation.flags
     facts = []
@@ -191,6 +238,12 @@ RULES: tuple[Rule, ...] = (
         "notify_now",
     ),
     Rule("RF12", "感測：可能跌倒且照護者回報聯絡不上", _unreachable, "notify_now"),
+    Rule(
+        "RF13",
+        "生理值偏離他自己平常的量測範圍（記錄觀察）",
+        _personal_band,
+        "observe",
+    ),
 )
 
 DISCLAIMER = "需護理師／醫師驗證；非診斷、非檢傷分級。"

@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 import ast
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from record_schema import ObservationFlags, StructuredObservation, Vitals
+from record_schema import (
+    VITAL_LABELS,
+    VITAL_UNITS,
+    ObservationFlags,
+    StructuredObservation,
+    Vitals,
+    VitalsBand,
+    VitalsBands,
+)
 
 from red_flags.rules import RULES, RedFlagInput, evaluate, render_lines
 
@@ -200,6 +209,93 @@ def test_render_has_no_level_or_score():
 def test_every_rule_requires_validation_and_has_id():
     assert len({r.id for r in RULES}) == len(RULES)
     assert all(r.requires_validation for r in RULES)
+
+
+# RF13 偏離個人平常範圍 -----------------------------------------------------------
+def bands(**kw) -> VitalsBands:
+    """P001-like ranges: his usual systolic is 138, which clears every population rule."""
+    defaults = dict(sbp=(129.0, 147.0, 138.0, 4.0), spo2=(95.0, 97.0, 96.0, 1.0))
+    defaults.update(kw)
+    built = {}
+    for metric, (low, high, center, spread) in defaults.items():
+        built[metric] = VitalsBand(
+            metric=metric, label=VITAL_LABELS[metric], unit=VITAL_UNITS[metric],
+            center=center, spread=spread, low=low, high=high,
+            n=40, days=14, established=True,
+            text=f"{VITAL_LABELS[metric]} {low:.0f}–{high:.0f}{VITAL_UNITS[metric]}",
+        )
+    return VitalsBands(
+        patient_id="P001", computed_at=datetime.now(UTC), window_days=90, bands=built
+    )
+
+
+def test_rf13_hit_below_his_own_range():
+    """118 mmHg passes every population threshold and is a real drop for this person."""
+    r = evaluate(
+        RedFlagInput(
+            observation=obs(),
+            vitals=Vitals(sbp=118),
+            vitals_bands=bands(),
+            recent_vitals=[Vitals(sbp=120)],
+        )
+    )
+    assert "RF13" in ids(r)
+    assert "RF04" not in ids(r), "族群門檻不該命中——這正是 RF13 存在的理由"
+    assert r.observe and not r.notify_now, "偏離個人基準是記錄觀察，不是立即通知"
+    assert any("他平常的" in f for h in r.hits if h.rule_id == "RF13" for f in h.facts)
+
+
+def test_rf13_miss_inside_his_own_range():
+    r = evaluate(
+        RedFlagInput(observation=obs(), vitals=Vitals(sbp=138), vitals_bands=bands())
+    )
+    assert "RF13" not in ids(r)
+
+
+def test_rf13_boundary_single_reading_does_not_fire():
+    """單點越界很常見（剛走完路量的）。連續兩點才算訊號。"""
+    r = evaluate(
+        RedFlagInput(
+            observation=obs(),
+            vitals=Vitals(sbp=118),
+            vitals_bands=bands(),
+            recent_vitals=[Vitals(sbp=136)],
+        )
+    )
+    assert "RF13" not in ids(r)
+
+
+def test_rf13_never_fires_on_an_unestablished_band():
+    """樣本不足的『正常範圍』是誤報的主要來源，不是靈敏度不夠。"""
+    b = bands()
+    b.bands["sbp"].established = False
+    b.bands["sbp"].reason = "量測值只有 4 筆"
+    r = evaluate(
+        RedFlagInput(
+            observation=obs(), vitals=Vitals(sbp=90), vitals_bands=b,
+            recent_vitals=[Vitals(sbp=92)],
+        )
+    )
+    assert "RF13" not in ids(r)
+
+
+def test_rf13_absent_when_no_bands_supplied():
+    """沒傳 bands 時，所有既有規則的行為必須完全不變。"""
+    r = evaluate(RedFlagInput(observation=obs(), vitals=Vitals(sbp=118)))
+    assert "RF13" not in ids(r)
+
+
+def test_rf13_output_carries_no_score():
+    """CLAUDE.md §1.8：任何分數、機率、信心值都不得出現。"""
+    r = evaluate(
+        RedFlagInput(
+            observation=obs(), vitals=Vitals(spo2=92), vitals_bands=bands(),
+            recent_vitals=[Vitals(spo2=93)],
+        )
+    )
+    text = " ".join(render_lines(r))
+    for banned in ("z=", "score", "分數", "機率", "信心", "%）", "confidence"):
+        assert banned not in text
 
 
 def test_rules_module_never_calls_an_llm():

@@ -140,6 +140,29 @@ export interface BaselineEntry {
   provenance: Provenance;
 }
 
+/** 這個人自己的正常範圍，從 timeline 的量測值算出來，不是族群常模。
+
+`vitals_usual` 是護理師寫的一組數字；這裡是從實際量測算出來的「帶」。
+兩者並存：帶只用來說明「這次跟他平常比起來如何」，
+要更新 `vitals_usual` 仍必須走 ◇nurse_confirm_baseline（CLAUDE.md §1.6）。
+
+`established=False` 時不得用來判斷任何事情——樣本太少的「正常範圍」
+是誤報的主要來源，不是靈敏度不夠。 */
+export interface VitalsBand {
+  metric: "temp_c" | "sbp" | "dbp" | "hr" | "rr" | "spo2";
+  label: string;
+  unit: string;
+  /** 中位數（不是平均數：生理值有離群值） */ center: number;
+  /** 中位數絕對偏差 MAD（不是標準差） */ spread: number;
+  /** 第 10 百分位 */ low: number;
+  /** 第 90 百分位 */ high: number;
+  /** 樣本數 */ n: number;
+  /** 涵蓋幾天 */ days: number;
+  established: boolean;
+  /** established=False 時說明為什麼 */ reason: string;
+  /** 給人看的一行，例如「收縮壓 129–139 mmHg」 */ text: string;
+}
+
 export interface BaselineDelta {
   domain: "intake" | "elimination" | "function" | "cognition" | "sleep" | "skin" | "pain" | "vitals";
   direction: "up" | "down" | "same" | "unknown";
@@ -546,6 +569,14 @@ export interface BaselineProposal {
   proposed_by: "caregiver_said" | "ai_extracted" | "nurse_assessed" | "nurse_confirmed" | "doctor_ordered" | "system_derived";
   confirmed_by: string | null;
   source_order_id: string | null;
+}
+
+/** 一位住民的所有生理值正常帶。系統推導，不寫入 baseline。 */
+export interface VitalsBands {
+  patient_id: string;
+  computed_at: string;
+  window_days: number;
+  bands: Record<string, VitalsBand>;
 }
 
 export interface TimelineBase {

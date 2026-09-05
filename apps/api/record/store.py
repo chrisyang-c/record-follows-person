@@ -92,10 +92,14 @@ class RecordStore:
 
     # -- read ------------------------------------------------------------------
     def load_profile(self, patient_id: str) -> Profile:
-        return Profile.model_validate_json((self.dir(patient_id) / "profile.json").read_text())
+        return Profile.model_validate_json(
+            (self.dir(patient_id) / "profile.json").read_text(encoding="utf-8")
+        )
 
     def load_baseline(self, patient_id: str) -> Baseline:
-        return Baseline.model_validate_json((self.dir(patient_id) / "baseline.json").read_text())
+        return Baseline.model_validate_json(
+            (self.dir(patient_id) / "baseline.json").read_text(encoding="utf-8")
+        )
 
     def load_timeline(
         self,
@@ -108,7 +112,7 @@ class RecordStore:
             return []
         out: list[TimelineEntry] = []
         for f in sorted(tdir.glob("*.json")):
-            e = _TIMELINE.validate_json(f.read_text())
+            e = _TIMELINE.validate_json(f.read_text(encoding="utf-8"))
             if kinds and e.kind not in kinds:
                 continue
             if since is not None:
@@ -126,7 +130,10 @@ class RecordStore:
         ddir = self.dir(patient_id) / "documents"
         if not ddir.exists():
             return []
-        docs = [_DOCUMENT.validate_json(f.read_text()) for f in sorted(ddir.glob("*.json"))]
+        docs = [
+            _DOCUMENT.validate_json(f.read_text(encoding="utf-8"))
+            for f in sorted(ddir.glob("*.json"))
+        ]
         if doc_type:
             docs = [d for d in docs if d.doc_type == doc_type]
         return sorted(docs, key=lambda d: d.generated_at)
@@ -143,7 +150,7 @@ class RecordStore:
             return []
         return [
             ProvenanceLine.model_validate_json(line)
-            for line in f.read_text().splitlines()
+            for line in f.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
 

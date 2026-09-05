@@ -31,7 +31,9 @@
 | 27 | 抽取快取以「句子＋住民＋模型＋effort＋當日」為 key（`records/{id}/extract_cache.json`）：同一天同住民說同一句不會重抽；基線在當天內被護理師更新時，舊快取仍沿用。 | 只影響當天。 | 改 `ingest/intake_dialog.py::_extract_cache_key` 加入 baseline 版本即可。 |
 | 28 | 身份是 demo 靜態表：web 的 `lib/role.ts::IDENTITIES` 與 seed 的 `records/_identities.json` 要手動保持一致；cookie 只存 `me`，沒有登入。 | 新增身份要改兩處。 | 第二階段接真正的身份提供者。 |
 | 29 | 「問我的紀錄」檢索是關鍵字 bigram（去停用詞），不是向量檢索；同義詞（例：「心臟開刀」vs「心臟手術」）可能找不到而回「紀錄裡沒有這件事」。 | 回答保守（寧可說沒有），不會捏造。 | 第二階段換 embedding；答案仍須引用既有行。 |
-| 30 | 感測事件的硬條件門檻寫死在 `red_flags/rules.py`（靜止 60 秒、SpO₂ 92）；`/sim/fall` 為模擬，沒有真實穿戴裝置。 | Demo 用 `{"still_seconds":90}` 觸發硬條件。 | 第二階段接裝置。 |
+| 30 | 感測事件的硬條件門檻寫死在 `red_flags/rules.py`（靜止 60 秒、SpO₂ 92）；`/sim/fall` 為模擬，沒有真實穿戴裝置。 | Demo 用 `{"still_seconds":90}` 觸發硬條件。 | **硬條件維持不變**（它們回答的是「對任何人危不危險」）；2026-09-05 另加 RF13：從 timeline 已量測的 vitals 算出每位住民自己的正常帶，偏離自己的範圍時 `observe`。裝置本身仍是第二階段。 |
+| 37 | 生理值正常帶只涵蓋 `Vitals` 六個欄位（體溫、收縮壓、舒張壓、心率、呼吸、血氧），八維度中的其他七個（進食、排泄、活動、認知、睡眠、皮膚、疼痛）沒有數值序列可算，仍只有護理師寫的 `BaselineEntry` 文字描述。 | RF13 只對 vitals 生效。 | 需要那七個維度也有可比較的量，才談得上算帶；目前 `DimensionValue.value` 多半是文字。 |
+| 38 | ~~Windows 上 `uv run pytest` 有 25 個 UnicodeDecodeError~~ **已修（2026-09-05）**：`record/store.py` 的 `read_text()` 沒指定編碼，Windows 預設 cp950 而檔案是 UTF-8。 | 只影響非 UTF-8 預設編碼的平台（macOS/Linux 不受影響）。 | 補 `encoding="utf-8"`；133 個測試在 Windows 上全過。 |
 | 31 | `make seed` 會清掉 records（含 conversation、sensor_events、care_circle 的變更），但 DB 的舊 thread 仍在 → 紅燈橫幅可能疊卡（#17）。 | 錄影前 `make reset`。 | — |
 | 32 | omni-twin-3.v0.build 需登入才看得到預覽與 chat（Preview setup failed／read-only），本輪未能讀取其 UI 想法。 | 尚未併入。 | 使用者匯出截圖或原始碼後再對齊。 |
 | 33 | 列印白底驗證用的是醫師 docs tab（事件資訊包）；RoundPage 需先跑巡診流程（約 2.5 分鐘）才會出現，本輪 `make seed` 後沒有已發布的 RoundPage。RoundPage 卡片本身以 `data-theme="white"` 呈現，列印時整頁切白色 tokens。 | 截圖 `print-1280-white.png` 是事件資訊包。 | 錄影前跑 `/nurse/round` 發布後再印。 |
