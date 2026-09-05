@@ -17,6 +17,59 @@ def test_get_model_pins_gpt_5_with_reasoning_none_and_temperature_zero():
     assert any(isinstance(cb, UsageTrace) for cb in (m.callbacks or []))
 
 
+def test_get_model_low_reasoning_switches_gpt_5_to_responses_api():
+    s = Settings(MODEL_PROVIDER="openai", OPENAI_API_KEY="sk-test", MODEL_PINNED="gpt-5.6-luna")
+    m = s.get_model(reasoning_effort="low")
+    assert m.reasoning_effort == "low" and m.use_responses_api is True
+    assert s.get_model().use_responses_api is not True  # "none" stays on chat completions
+
+
+def test_chat_model_llm_uses_intake_model_only_for_intake(monkeypatch):
+    from core import llm as llm_mod
+
+    s = Settings(
+        MODEL_PROVIDER="openai",
+        OPENAI_API_KEY="sk-test",
+        MODEL_PINNED="gpt-5.6-luna",
+        INTAKE_REASONING_EFFORT="low",
+    )
+    monkeypatch.setattr(llm_mod, "get_settings", lambda: s)
+    c = llm_mod.ChatModelLLM()
+    assert c.model.reasoning_effort == "none" and c.intake_model.reasoning_effort == "low"
+    assert "intake reasoning=low" in c.name
+    s2 = s.model_copy(update={"INTAKE_REASONING_EFFORT": "none"})
+    monkeypatch.setattr(llm_mod, "get_settings", lambda: s2)
+    c2 = llm_mod.ChatModelLLM()
+    assert c2.intake_model is c2.model
+
+
+def test_usage_callback_reads_responses_api_usage_metadata(records_root):
+    from core import trace as tr
+
+    class _Msg:
+        usage_metadata = {
+            "input_tokens": 1574,
+            "output_tokens": 60,
+            "input_token_details": {"cache_creation": 1446, "cache_read": 0},
+            "output_token_details": {"reasoning": 36},
+        }
+
+    class _Gen:
+        message = _Msg()
+
+    class _Resp:
+        llm_output = None
+        generations = [[_Gen()]]
+
+    cb = UsageTrace("gpt-5.6-luna", Settings().prices)
+    rid = uuid4()
+    cb.on_chat_model_start({}, [], run_id=rid, tags=["llm.extract"], metadata={})
+    cb.on_llm_end(_Resp(), run_id=rid)
+    row = tr.recent("llm.usage")[-1]
+    assert row["cache_write_tokens"] == 1446 and row["reasoning_tokens"] == 36
+    assert row["prompt_tokens"] == 1574 and row["completion_tokens"] == 60
+
+
 def test_get_model_keeps_gpt_4_without_reasoning_param():
     s = Settings(
         MODEL_PROVIDER="openai", OPENAI_API_KEY="sk-test", MODEL_PINNED="gpt-4.1-2025-04-14"

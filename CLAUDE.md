@@ -17,8 +17,8 @@ gh repo create record-follows-person --public --source=. --remote=origin --descr
 git add . && git commit -m "chore: bootstrap" && git push -u origin main
 ```
 - 若 repo 已存在：`git remote -v` 確認 origin，`git pull --rebase origin main`。
-- 分支規則：`main` 永遠可跑；功能用 `feat/<name>`，PR 進 main，至少一人 review。
-- 每次 commit 前：`uv run ruff check . && uv run pytest -q`（api）、`pnpm lint && pnpm test`（web）。
+- 分支規則（2026-09-05 起）：不開分支、不開 PR、不等 CI；所有變更直接 commit 到 `main` 並 push。
+- 每次 commit 前只跑受影響那一側的測試：api 改動 `cd apps/api && uv run pytest -q`；web 改動 `cd apps/web && pnpm typecheck && pnpm test`。過了就推。
 
 ### 0.2 先讀這些檔案（不讀完不准動架構）
 ```

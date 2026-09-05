@@ -512,13 +512,22 @@ class ChatModelLLM(LLM):
     def __init__(self, model: Any | None = None) -> None:
         s = get_settings()
         self.model = model if model is not None else s.get_model()
+        # intake (extract / next_question) may run with reasoning; everything else stays "none"
+        self.intake_effort = s.INTAKE_REASONING_EFFORT or "none"
+        self.intake_model = (
+            self.model
+            if model is not None or self.intake_effort == "none"
+            else s.get_model(reasoning_effort=self.intake_effort)
+        )
         self.name = f"{s.effective_provider}:{s.MODEL_PINNED}"
+        if self.intake_effort != "none":
+            self.name += f"(intake reasoning={self.intake_effort})"
         self.fallback = MockLLM()
 
     def extract_observation(self, text, lang, profile=None, baseline=None):
         try:
             de = deidentify(text, profile)
-            structured = _structured(self.model, _Extraction)
+            structured = _structured(self.intake_model, _Extraction)
             with timed() as tm:
                 res: _Extraction = structured.invoke(
                     [
@@ -759,7 +768,7 @@ def _next_question_impl(self: ChatModelLLM, ctx: dict[str, Any]) -> NextQuestion
     )
     try:
         with timed() as tm:
-            res: NextQuestionOut = _structured(self.model, NextQuestionOut).invoke(
+            res: NextQuestionOut = _structured(self.intake_model, NextQuestionOut).invoke(
                 [
                     ("system", NEXT_Q_SYSTEM + RECORD_SEP + record),
                     ("human", prompt),

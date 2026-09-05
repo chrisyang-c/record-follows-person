@@ -198,18 +198,14 @@
   "id": 11,
   "lang": "zh-TW",
   "leading": false,
-  "hallucinated": [
-   "cognition"
-  ],
+  "hallucinated": [],
   "omitted": [],
   "provenance_ok": true,
   "no_diagnosis": true,
   "seems_different_ok": true,
   "vitals_ok": true,
   "predicted": {
-   "dims": [
-    "cognition"
-   ],
+   "dims": [],
    "flags": [],
    "incidents": [
     "behavior"

@@ -2,7 +2,7 @@
 
 日期：2026-09-05 ・ 執行者：Claude（自主）・ Repo：https://github.com/chrisyang-c/record-follows-person ・ 本輪 PR：#9
 環境：macOS（Darwin 25.3）、Python 3.12（uv）、Node 24（pnpm 10.12.1）、Homebrew postgresql@17（本機無 Docker）。
-模型：`MODEL_PROVIDER=openai`、**`MODEL_PINNED=gpt-5.6-luna`**（2026-09-05 換模型）；`settings.get_model()` 是唯一模型工廠：`ChatOpenAI(model="gpt-5.6-luna", temperature=0, reasoning_effort="none")`，intake、personal agent、trend_analyzer／familiarization_writer／handoff_packager 都經它。`.env` 已填 `OPENAI_API_KEY`。**沒有模型就停**：追問、RoundPage、對話都不會退回規則版（503／畫面錯誤）。
+模型：`MODEL_PROVIDER=openai`、**`MODEL_PINNED=gpt-5.6-luna`**（2026-09-05 換模型）；`settings.get_model()` 是唯一模型工廠：`ChatOpenAI(model="gpt-5.6-luna", temperature=0, reasoning_effort="none")`，intake、personal agent、trend_analyzer／familiarization_writer／handoff_packager 都經它。intake 的兩個呼叫（`llm.extract`、`llm.next_question`）另用 `get_model(reasoning_effort=INTAKE_REASONING_EFFORT)`（預設 `low`，走 Responses API；`none` 則與其他呼叫相同）。`.env` 已填 `OPENAI_API_KEY`。**沒有模型就停**：追問、RoundPage、對話都不會退回規則版（503／畫面錯誤）。
 Demo 語言：只用 zh-TW；多語為第二階段。
 
 > **需要你決定的一件事（CLAUDE.md 衝突）**：這次需求寫「對話串的每一輪同時寫進 timeline（caregiver_said／ai_extracted）」，但 CLAUDE.md §1.2／§4／§11 規定 timeline 只能經 `timeline_write` 寫入護理師核准的內容。我沒有改 §1（需全隊同意），改成：每位住民一條對話（`records/{pid}/conversation.jsonl`），每輪寫一行 provenance，在病人頁「紀錄」tab 與 timeline 合併顯示；正式 Observation 仍在護理師確認後由 `timeline_write` 產生。記在 DECISIONS 2026-09-05、KNOWN_ISSUES #15。若要照需求原文直接寫 timeline，改 `record/conversation.py::append` 一處即可。
@@ -53,7 +53,23 @@ Demo 語言：只用 zh-TW；多語為第二階段。
 
 → 這個模型只快取 **system 內的前綴**，所以紀錄區塊放在 system。門檻 1024 tokens；`EXTRACT_SYSTEM` 本身 1167 tokens、`NEXT_Q_SYSTEM` 464 + 紀錄 ~980。
 
-**Eval（`uv run python -m eval.run`，gpt-5.6-luna，46 句 zh-TW 含 5 句誘導）**：hallucination rate **4/46 = 8.7%**（多抽標籤 4/81 = 4.9%）、omission rate **2/46 = 4.3%**（漏抽 2/79 = 2.5%）、provenance 46/46 = 100%、無診斷詞 46/46、誘導句 5/5、逐句全對 41/46。對照 gpt-4.1（同日）：4.3% / 2.2%。多抽的是 pain×2、cognition×2（「不舒服」「沒精神」類句子），漏抽 no_urine_24h 旗標一次。逐句：[apps/api/eval/results.md](../apps/api/eval/results.md)。
+**Eval（`uv run python -m eval.run`，46 句 zh-TW 含 5 句誘導，同日三次；逐句：[apps/api/eval/results.md](../apps/api/eval/results.md)）**
+
+| 指標 | gpt-4.1-2025-04-14 | gpt-5.6-luna（none） | gpt-5.6-luna（intake low，Responses API） |
+|---|---|---|---|
+| hallucination rate（≥1 多抽標籤的句子） | **2/46 = 4.3%** | 4/46 = 8.7% | **3/46 = 6.5%** |
+| 多抽標籤／預測標籤 | 2/80 = 2.5% | 4/81 = 4.9% | 3/80 = 3.8% |
+| omission rate（≥1 漏抽的句子） | **1/46 = 2.2%** | 2/46 = 4.3% | 2/46 = 4.3% |
+| 漏抽標籤／gold 標籤 | 1/79 = 1.3% | 2/79 = 2.5% | 2/79 = 2.5% |
+| provenance 正確 | 46/46 | 46/46 | 46/46 |
+| 無診斷詞／誘導句 | 46/46／5/5 | 46/46／5/5 | 46/46／5/5 |
+| 逐句全對 | 43/46 | 41/46 | 42/46 |
+| `llm.extract` 平均 prompt／cached／output | （未記 usage） | 1448／1236（85%）／152 | 1448／1236（85%）／151 |
+| reasoning tokens／次 | — | 0 | **0**（46 次皆 0） |
+| 每次成本／46 句合計 | — | $0.00025／$0.0117 | $0.00025／$0.0116 |
+| 耗時 | — | 約 2 分 | 1 分 30 秒 |
+
+luna none 多抽 pain×2、cognition×2（「不舒服」「沒精神」類句子），漏 no_urine_24h 一次；luna low 少了 id 11 的 cognition 多抽，其餘四筆相同。**low 在這兩個 prompt 上不產生 reasoning tokens**（extract 的 system 含大量規則與範例，模型自行略過推理；同一模型在短 prompt 上 low 約 40–70 reasoning tokens），所以成本與 none 相同，差異只來自 Responses API 路徑。
 
 **成本（估算，USD；價格寫在 `core/settings.py` PRICE_*：input 0.20、cached input 0.02、cache write 0.25、output 1.20 / 1M tokens，2026-07-30 降價後牌價，來源見下）**
 
@@ -68,12 +84,15 @@ Demo 語言：只用 zh-TW；多語為第二階段。
 | 對話第 2 輪起：`llm.extract`（同住民，紀錄區塊已在快取） | 3 | 2418 | 2269 | 94% | 138 | $0.00024 | — |
 | 對話第 2 輪起：`llm.next_question`（含驗證重問） | 6 | 1897 | 1553 | 82% | 75 | $0.00020 | $0.0012 |
 | `llm.minimal_sbar`（送出後每班草稿，381 tokens，低於快取門檻） | 1 | 381 | 0 | 0% | 79 | $0.00017 | — |
+| **intake low（Responses API）四輪對話**（P002，2026-09-05 12:40；每輪重新抽取本 session 每一句，所以 extract 1→4 次） | 16 | 2260 | 1880 | 83% | 170 | $0.00033 | $0.0052 |
+| ├ `llm.extract`（10 次，第 2 輪起 cached 2269–2303） | 10 | 2427 | 2071 | 85% | 192 | $0.00033 | $0.0033 |
+| └ `llm.next_question`（6 次：第 1、2 輪各被 planner 擋一次「已知維度」後重問；reasoning tokens 全 0） | 6 | 1898 | 1295 | 68% | 79 | $0.00026 | $0.0016 |
 
 實際一段對話（陳奶奶，2026-09-05 19:33，`P002` session）：首句「今天中午只吃一半，下午一直躺著」→ 問發燒／喘（vitals）→ 答「叫得醒，會回話，但比平常沒精神」→ 問排泄 → 答「喝了兩杯水，晚上起來三次」→ 問轉位（function）→ 答「都跟平常一樣」→ 問尾椎傷口（skin）；四題都不重複、依 profile（糖尿病、壓傷）排序，`next_question` 六次呼叫皆命中 1553 tokens 快取（system + 紀錄區塊），每輪約 2 秒。
 
 一位住民一次完整對話（首句 + 4 題 + 摘要）約 **$0.003**；巡診三位住民（6 次 deep-agent 派工、30 次模型呼叫）約 **$0.012**；46 句 eval 約 $0.012。價格來源：[OpenAI 模型頁](https://developers.openai.com/api/docs/models/gpt-5.6-luna)、[OpenAI 降價公告](https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6/)、[OpenRouter](https://openrouter.ai/openai/gpt-5.6-luna)（2026-09-05 查）；未含 Batch 折扣（KNOWN_ISSUES #24）。
 
-**行為差異**：gpt-5.6-luna（reasoning none）比 gpt-4.1 更常無視「已問過」逐字重問同一題；`intake_dialog._plan` 現在驗證模型決定（重複問題／已知維度 → 帶原因重問一次；第二次仍無效 → 503，不退回規則版），並接受模型回傳維度中文名（KNOWN_ISSUES #26）。
+**行為差異**：gpt-5.6-luna（reasoning none）比 gpt-4.1 更常無視「已問過」逐字重問同一題；`intake_dialog._plan` 現在驗證模型決定（重複問題／已知維度 → 帶原因重問一次；第二次仍無效 → 503，不退回規則版），並接受模型回傳維度中文名（KNOWN_ISSUES #26）。intake `reasoning_effort=low`（Responses API）四輪實測（陳奶奶：「今天中午只吃一半，下午一直躺著」→ 問喘／發燒 → 問排泄 → 問轉位 → 問尾椎傷口）：**沒有逐字重問**；planner 在第 1、2 輪各擋一次「選到已知維度」（第 1 輪想問「叫得醒、會聊天嗎」但 cognition 已由「一直躺著」標為已知；第 2 輪想問喝水但 intake 已知），帶原因重問後皆有效；第 3、4 輪第一次就有效。
 
 ---
 

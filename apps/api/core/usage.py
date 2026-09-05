@@ -61,13 +61,19 @@ class UsageTrace(BaseCallbackHandler):
         usage = (response.llm_output or {}).get("token_usage") or {}
         if not usage:
             try:
+                # Responses API (use_responses_api=True) leaves llm_output empty; LangChain's
+                # normalized usage_metadata carries cache read/creation and reasoning tokens.
                 um = response.generations[0][0].message.usage_metadata or {}
+                itd = um.get("input_token_details") or {}
+                otd = um.get("output_token_details") or {}
                 usage = {
                     "prompt_tokens": um.get("input_tokens", 0),
                     "completion_tokens": um.get("output_tokens", 0),
                     "prompt_tokens_details": {
-                        "cached_tokens": (um.get("input_token_details") or {}).get("cache_read", 0)
+                        "cached_tokens": itd.get("cache_read", 0),
+                        "cache_write_tokens": itd.get("cache_creation", 0),
                     },
+                    "completion_tokens_details": {"reasoning_tokens": otd.get("reasoning", 0)},
                 }
             except Exception:  # noqa: BLE001
                 return

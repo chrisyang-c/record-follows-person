@@ -1,6 +1,6 @@
 # HANDOFF — 交接（2026-09-05）
 
-Repo：https://github.com/chrisyang-c/record-follows-person ・ `main` 最新：PR #11 合併（CI 綠）。
+Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起直接 commit 到 `main` 並 push（不開分支／PR，見 CLAUDE.md §0.1）。
 先讀：CLAUDE.md → docs/ARCHITECTURE.md → docs/ACCEPTANCE.md（驗收與指令）→ docs/DECISIONS.md（為什麼）→ docs/KNOWN_ISSUES.md。
 
 ## 已完成（最近一輪，2026-09-05）
@@ -17,10 +17,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ `main` 最新：
 
 ## 待做（依序）
 
-1. **extract 與 next_question 改 `reasoning_effort="low"` 重跑 eval，結果加進 ACCEPTANCE 表第三欄。**
-   - 改法：`core/llm.py` 的 `extract_observation` 與 `_next_question_impl` 用 `self.model.bind(reasoning_effort="low")`（或 `get_model()` 加參數）；deep agent 維持 `none`（function tools 在 chat completions 只接受 none，見 DECISIONS 2026-09-05；`low` 若被拒要改 Responses API：`ChatOpenAI(use_responses_api=True)`）。
-   - 跑：`cd apps/api && uv run python -m eval.run`（約 2 分鐘，46 句），再跑一段四輪對話看 `llm.usage` 的 reasoning_tokens 與成本。
-   - 寫：ACCEPTANCE「Eval」表加第三欄「luna low」（hallucination／omission／provenance／每次成本），KNOWN_ISSUES #26 更新是否還會重問。
+1. ~~extract 與 next_question 改 `reasoning_effort="low"` 重跑 eval~~ **已做（2026-09-05）**：`INTAKE_REASONING_EFFORT`（預設 low → Responses API）、ACCEPTANCE Eval 表三欄、KNOWN_ISSUES #26。結論：low 在這兩個 prompt 上 reasoning tokens 為 0，成本不變，hallucination 8.7%→6.5%（gpt-4.1 仍 4.3%）。**等使用者決定模型**（luna low／luna none／gpt-4.1，只改 `.env`）再往下。
 2. 對話 session 過期（KNOWN_ISSUES #18）：超過 N 小時或跨日自動 close。
 3. 角色首頁批次 summary 端點（#19）、輪詢在分頁隱藏時暫停或改 SSE（#20）。
 4. 10 秒確認「改一句／退回」改成不鎖鍵、就地提示（#21）。
@@ -33,7 +30,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ `main` 最新：
 全表在 docs/KNOWN_ISSUES.md（#1–#26）。最影響 demo 的：
 - #17 測試留下的紅燈 thread 會疊卡 → 錄影前 `make reset`。
 - #18 session 不過期 → 同一住民多次測試會很快出摘要；說「不對」重來或 `make reset`。
-- #24／#25 成本是牌價估算、快取第一次必寫入；#26 luna 會逐字重問（已擋）。
+- #24／#25 成本是牌價估算、快取第一次必寫入；#26 luna 會逐字重問（已擋；intake low 實測四輪未重問）。
 - #14 TPM 限流：deep agent 一次一位（`_DEEP_AGENT_LOCK`），三人巡診約 2.5 分鐘。
 - 測試偶發：`test_red_flag_starts_path_a_and_keeps_talking` 在 PR #11 CI 失敗一次（答案配對到含 intro 的回覆），已修（a29c551）。
 
@@ -43,6 +40,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ `main` 最新：
 |---|---|---|
 | `MODEL_PROVIDER` | openai | 模型工廠分支（openai／anthropic／mock，mock 只給 pytest） |
 | `MODEL_PINNED` | gpt-5.6-luna | 釘住的模型；gpt-5.x 自動加 `reasoning_effort="none"` |
+| `INTAKE_REASONING_EFFORT` | 未設（settings 預設 `low`） | intake 兩個呼叫的 reasoning_effort；非 `none` 時改走 Responses API；`none` 回到與其他呼叫相同 |
 | `OPENAI_API_KEY` | 已填 | 唯一在用的 key |
 | `ANTHROPIC_API_KEY` | 有欄位、未使用 | 只在 `MODEL_PROVIDER=anthropic` 時用 |
 | `DATABASE_URL` | 本機 brew postgres（record_follows_person） | PostgresSaver + thread registry |

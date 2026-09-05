@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # A provider whose key is missing degrades to mock with a warning so the demo still runs.
     MODEL_PROVIDER: Literal["mock", "openai", "anthropic"] = "openai"
     MODEL_PINNED: str = "gpt-5.6-luna"
+    # reasoning_effort for the two intake calls (llm.extract, llm.next_question). "none" keeps
+    # /chat/completions; anything else ("low"/"medium"/"high") switches those calls to the
+    # Responses API (function tools + reasoning are rejected on chat completions, probed
+    # 2026-09-05). Deep agents / other nodes always use "none".
+    INTAKE_REASONING_EFFORT: str = "low"
     # USD per 1M tokens, used only for the cost estimate in trace / ACCEPTANCE (gpt-5.6-luna list
     # price after the 2026-07-30 cut: input 0.20, cached input 0.02, cache write 0.25, output 1.20)
     PRICE_INPUT_PER_M: float = 0.20
@@ -71,11 +76,14 @@ class Settings(BaseSettings):
             "output": self.PRICE_OUTPUT_PER_M,
         }
 
-    def get_model(self) -> Any:
+    def get_model(self, reasoning_effort: str = "none") -> Any:
         """The one chat model factory. deep agents and every graph node go through here.
 
         Returns ChatOpenAI / ChatAnthropic pinned to MODEL_PINNED with temperature=0, or a
         deterministic fake chat model when MODEL_PROVIDER=mock or the provider key is absent.
+        ``reasoning_effort`` only applies to gpt-5.x: "none" → /chat/completions; any other
+        value → Responses API (``use_responses_api=True``), because chat completions rejects
+        function tools together with reasoning on gpt-5.6-luna (probed 2026-09-05).
         """
         if self.MODEL_PROVIDER == "openai" and self.OPENAI_API_KEY:
             from langchain_openai import ChatOpenAI
@@ -86,7 +94,9 @@ class Settings(BaseSettings):
             if self.MODEL_PINNED.startswith("gpt-5"):
                 # gpt-5.x on /chat/completions: function tools need reasoning_effort="none", and
                 # temperature=0 is only accepted together with it (probed 2026-09-05).
-                extra["reasoning_effort"] = "none"
+                extra["reasoning_effort"] = reasoning_effort or "none"
+                if extra["reasoning_effort"] != "none":
+                    extra["use_responses_api"] = True
             return ChatOpenAI(
                 model=self.MODEL_PINNED,
                 temperature=0,
