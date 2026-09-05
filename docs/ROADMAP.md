@@ -27,10 +27,10 @@ CLAUDE.md §0.2 已經寫明：**實作範圍以 ARCHITECTURE.md 與 HANDOFF.md 
 
 Path A 急症與 Path B 日常兩條流程走完，含退回與超時升級；照護者對話（模型決定每一題、
 缺口驗證、摘要卡）；Health ID、Care Circle、access log、以病人為核心的登入；
-本人 App（人體圖、終身時間軸、問我的紀錄）；模擬跌倒訊號、硬條件紅燈、四鍵驗證、
-事件資訊包；個人生理值正常帶與 RF13；OMNI-TWIN 深色殼、列印白底。
+本人 App（解剖全像人體圖、3D 分身與沙盤、穿戴每日指標、終身時間軸、問我的紀錄與唸給我聽）；模擬跌倒訊號、硬條件紅燈、四鍵驗證、
+事件資訊包；個人生理值正常帶與 RF13（已接進 01 與護理站）；Care Circle 含 purpose；OMNI-TWIN 深色殼、列印白底。
 
-**api 133 個測試、ruff 乾淨、評測 46 句：provenance 100%、無診斷詞 100%、hallucination 6.5%。**
+**api 140 個測試、ruff 乾淨、評測 46 句：provenance 100%、無診斷詞 100%、hallucination 6.5%。**
 
 ---
 
@@ -109,7 +109,7 @@ CLAUDE.md §1.8 禁止分數出現在照護者／護理師／醫師介面；把�
 | | |
 |---|---|
 | 現況 | KNOWN_ISSUES #35：`/role?set=` 可繞過密碼；scope 只有四種頁面級 |
-| 先做 | `CareCircleMember.purpose`、`AccessLogEntry.purpose`（見 CONSOLIDATION §4）—— 小、獨立、補上 VISION 的 WHY |
+| ~~先做~~ 已做 | `CareCircleMember.purpose`、`AccessLogEntry.purpose`（CONSOLIDATION §4）—— 授權必填目的，登入依角色帶預設目的 |
 | 再做 | 資源級 scope：從 `who/timeline/docs/talk` 細到 `meds/labs/imaging/events` |
 | 再做 | 緊急開鎖：獨立憑證、TTL、不可抑制的通知、事後可申訴 |
 | endpoint | `POST /patients/{id}/emergency-access`、`GET /patients/{id}/access-log?purpose=` |
@@ -158,7 +158,7 @@ CLAUDE.md §1.8 禁止分數出現在照護者／護理師／醫師介面；把�
 | Health Graph 知識圖 | OVERVIEW §8 已列 | 每位住民約 10 個診斷、7 種用藥；這個規模用一張策展的對照表（藥 → 已知副作用 → 症狀）就做得到，不需要圖資料庫 |
 | 多語（印尼語／越南語）介面 | CLAUDE.md §12 | Demo 只用 zh-TW；schema 的 `lang` 欄位保留 |
 | 02 風格美學／03 心理情緒／04 全資產生命週期 | UIUX_OMNI_TWIN | 五維度 rail 只有 01 與 05 有內容 |
-| 3D 人體模型 | KNOWN_ISSUES #36 | 現有向量解剖圖夠用 |
+| 3D 人體**解剖**模型（器官級） | KNOWN_ISSUES #36、#40 | 01 已有向量解剖圖＋ 3D 分身（外觀，非解剖）；器官級 3D 不做 |
 | 通道 5 家屬觀察、通道 6 健保雲端藥歷 | ARCHITECTURE §2 | 第二階段 |
 | 影像分析、119／特約通知實發、LINE 實發 | ARCHITECTURE §8 | Demo 範圍內顯示不真發 |
 

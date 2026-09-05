@@ -21,6 +21,13 @@ from record_schema import AccessLogEntry, CareCircleMember, CareRole, Scope
 from record.store import get_store
 
 ALL_SCOPES: tuple[Scope, ...] = ("who", "timeline", "docs", "talk")
+DEFAULT_PURPOSE: dict[CareRole, str] = {
+    "patient": "本人查看自己的紀錄",
+    "family": "家屬照護與陪同",
+    "caregiver": "每日照顧與記錄",
+    "nurse": "護理評估與確認",
+    "doctor": "巡診與醫囑",
+}
 DEFAULT_SCOPES: dict[CareRole, list[Scope]] = {
     "patient": ["who", "timeline", "docs", "talk"],
     "family": ["who", "timeline", "docs", "talk"],
@@ -83,6 +90,9 @@ def _save(patient_id: str, items: list[CareCircleMember]) -> None:
 
 
 def grant(patient_id: str, member: CareCircleMember) -> CareCircleMember:
+    """授權必須說明目的（VISION §16 的 WHY）。"""
+    if not member.purpose.strip():
+        raise ValueError("授權必須說明目的（purpose）")
     items = [m for m in members(patient_id) if not (m.member_id == member.member_id and m.active())]
     items.append(member)
     _save(patient_id, items)
@@ -122,6 +132,13 @@ def scopes_for(patient_id: str, who: str | None) -> list[Scope]:
     return out
 
 
+def purpose_of(patient_id: str, who: str | None) -> str:
+    for m in active_members(patient_id):
+        if m.member_id == who:
+            return m.purpose
+    return ""
+
+
 def role_of(patient_id: str, who: str | None) -> CareRole | None:
     for m in active_members(patient_id):
         if m.member_id == who:
@@ -144,6 +161,7 @@ def log_access(patient_id: str, who: str | None, role: CareRole | None, what: st
         who=who,
         role=role,
         what=what,
+        purpose=purpose_of(patient_id, who) or (DEFAULT_PURPOSE.get(role, "") if role else ""),
         ts=datetime.now(UTC),
     )
     with _log_file(patient_id).open("a", encoding="utf-8") as f:
@@ -214,6 +232,7 @@ def login(who: str, patient_id: str | None, code: str | None, days: int = 1) -> 
                 valid_from=now,
                 valid_to=None if role == "patient" else now + _timedelta(days=days),
                 granted_by=pid,
+                purpose=DEFAULT_PURPOSE[role],
             ),
         )
         log_access(pid, who, role, "login:granted")

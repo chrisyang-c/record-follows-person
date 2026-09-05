@@ -300,6 +300,7 @@ def _seed_care_circle(store, profile, r, data, identities) -> None:
                 scopes=care_circle.DEFAULT_SCOPES[role], valid_from=t0,
                 valid_to=None if role != "doctor" else _dt(date.fromisoformat(data["last_round_date"]) + timedelta(days=365), "09:00"),
                 granted_by=pid if role == "patient" else fam_id if role == "family" else pid,
+                purpose=care_circle.DEFAULT_PURPOSE[role],
             ),
         )
 

@@ -575,6 +575,7 @@ export interface CareCircleMember {
   valid_from: string;
   valid_to: string | null;
   /** 誰授權（本人或代理） */ granted_by: string;
+  /** WHY：為了什麼看（VISION §16；授權時必填） */ purpose: string;
   revoked_at: string | null;
 }
 
@@ -583,6 +584,7 @@ export interface AccessLogEntry {
   who: string;
   role: "patient" | "family" | "caregiver" | "nurse" | "doctor" | null;
   /** 看了什麼（who|timeline|docs|talk|summary|ask…） */ what: string;
+  /** WHY：為了什麼看（依授權的 purpose 帶入） */ purpose: string;
   ts: string;
 }
 

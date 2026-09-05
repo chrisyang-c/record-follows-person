@@ -106,6 +106,14 @@ luna none 多抽 pain×2、cognition×2（「不舒服」「沒精神」類句�
 
 - **角色首頁一次呼叫（#19）＋輪詢暫停（#20）**：`GET /home/{role}`；瀏覽器實測護理站只打 `/home/nurse` ×1 與 `/nurse/inbox`（不再每人一次 `/trends`），照護者／醫師首頁各只打 `/home/{role}`；console 無錯誤。`usePolling` 取代四處 `setInterval`，`lib/polling.test.tsx` 驗證隱藏時暫停、回前景立即刷新。api 99 passed；web typecheck／lint／vitest（3）綠。
 
+## 統整（2026-09-05 晚）：隊友的正常帶／RF13 × 本輪 UI
+
+- 01 生命徵象面板：「平常」改為量測正常帶「他平常：收縮壓 …–… mmHg；心率 …」，最近一次量測偏離時顯示句子並標有變化；`/twin/{id}.vitals_bands` 只有文字與 p10/p90，無 z 分數。
+- 護理站今日總覽：warn chip「偏離他平常：…」（observe），卡底一行「他平常（量測 p10–p90）」；紅燈橫幅不變。
+- `GET /patients/{id}/vitals-bands`（需 Care Circle）。
+- Care Circle 補 `purpose`：seed 每位成員都有目的；登入依角色帶入；`/patients/{id}/care-circle` 沒有目的回 400；access log 每筆帶目的，本人頁「誰看過我的紀錄」顯示「為了…」。
+- 測試：`tests/test_integration_bands_purpose.py` ×6；api 全過。截圖 `nurse-1280-bands.png`。
+
 ## 參考 health-ref 的互動（2026-09-05 深夜，使用者指示；想法重寫、模型原檔複製）
 
 | 保留並改造 | 在哪 | 證據 |

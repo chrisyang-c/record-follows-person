@@ -39,7 +39,7 @@ D:\Health AI Bridge\               D:\Health AI Bridge\
 | 10 | 根目錄 `…最終版.md`（35.4 KB） | 產品願景 | — | **重複** | 與 `docs/VISION_personal_health_twin.md` 同一份檔案（同 35,4xx bytes） |
 | 11 | 外層 `docs/00-architecture.md`（50 KB） | 平台架構提案 | `docs/proposals/00-architecture.md` | **收錄為待審提案** | 逐項採納狀態記在該檔頁首；未採納者維持提案狀態 |
 | 12 | `health-ref` 的 `HealthEvent` 通用事件模型 | 事件不寫死成「跌倒」 | 候選 → `docs/ROADMAP.md` Epic 2 | **僅供參考（想法）** | 見 §2 授權限制：只能借想法，不能移植程式碼 |
-| 13 | `health-ref` 的 `ConsentGrant.purpose` / `AuditLog.purpose` | 授權與稽核記錄「為了什麼目的」 | `packages/schema`（`CareCircleMember`、`AccessLogEntry`） | **待移植（想法）** | 見 §4 |
+| 13 | `health-ref` 的 `ConsentGrant.purpose` / `AuditLog.purpose` | 授權與稽核記錄「為了什麼目的」 | `packages/schema`（`CareCircleMember`、`AccessLogEntry`） | **已移植（想法，重寫）** | 見 §4 |
 | 14 | `health-ref` 其餘（前端 6 頁、twin_service、SQLAlchemy 模型、3,993 行 CSS） | — | — | **僅供參考** | 本 repo 皆有對應且更完整的實作 |
 | 15 | Windows 開發入口 | 從 repo 根目錄啟動／檢查／codegen | `scripts/dev.ps1` | **已採用** | 見 §5 |
 
@@ -104,10 +104,9 @@ VISION §16 定義存取要回答 `WHO / WHAT / WHEN / WHY / HOW MUCH`。本 rep
 | **WHY** | **缺** | **缺** |
 | HOW MUCH | `scopes` ✅ | — |
 
-**採用狀態：待移植。** 目的位置 `packages/schema/record_schema/models.py`。
+**採用狀態：已移植（2026-09-05 統整 commit）。** 目的位置 `packages/schema/record_schema/models.py`。
 驗收方式：`CareCircleMember.purpose` 與 `AccessLogEntry.purpose` 存在且非空；`/patients/{id}/access-log` 回傳含 purpose；`tests/test_care_circle.py` 新增一個「授權必須說明目的」的案例。
 
-**尚未執行** —— 它會改動共用 schema 與前端型別，應在文件整併穩定後單獨一個 commit 處理。
 
 ---
 
@@ -123,7 +122,7 @@ VISION §16 定義存取要回答 `WHO / WHAT / WHEN / WHY / HOW MUCH`。本 rep
 
 | 項目 | 狀態 |
 |---|---|
-| §4 的 purpose 欄位 | 未執行，已寫明目的位置與驗收方式 |
+| §4 的 purpose 欄位 | 已執行：schema、seed、登入、授權端點必填、access log 帶入、前端顯示；`tests/test_integration_bands_purpose.py` |
 | ROADMAP 的 12 個平台 Epic | 未排程，見 `docs/ROADMAP.md` |
 | `health-ref` 的未提交工作與 venv 問題 | 已通知，屬該 repo 擁有者 |
 | `claude_healthcare` 的 13,500 行 | 已刪除，不可回復（§2.2） |

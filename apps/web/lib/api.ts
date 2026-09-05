@@ -140,6 +140,9 @@ export interface HomeResident extends Resident {
     care_team?: { primary_nurse: string; doctor: string; facility: { name: string; phone: string }; emergency_contacts: { name: string; relation: string; phone: string; notify_first?: boolean }[] };
     abnormal?: TrendLine[];
     series?: TrendReport["series"];
+    /** RF13：偏離他自己平常的量測範圍（observe，不是紅燈）；只有文字，沒有分數 */
+    vitals_departures?: string[];
+    vitals_band_texts?: string[];
     round_page?: { first: string; generated_at: string; status: string; confirmed_by: string | null } | null;
   };
 }
@@ -275,6 +278,7 @@ export type Mood = "same" | "changed" | "attention";
 export interface TwinData {
   profile: { code_name: string; health_id: string; birth_year: number; height_cm: number | null; weight_kg: number | null };
   wearable: WearableDay[];
+  vitals_bands: { established: boolean; bands: { metric: string; label: string; unit: string; text: string; low: number; high: number; n: number; days: number }[]; departures: string[] };
   avatar: { sleep_hours: number | null; weight_kg: number | null; height_cm: number | null; mood: Mood };
   today_ts: string | null;
   status_line: string;

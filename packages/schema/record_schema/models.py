@@ -258,6 +258,7 @@ class CareCircleMember(BaseModel):
     valid_from: datetime
     valid_to: datetime | None = None
     granted_by: str = Field(description="誰授權（本人或代理）")
+    purpose: str = Field(default="", description="WHY：為了什麼看（VISION §16；授權時必填）")
     revoked_at: datetime | None = None
 
     def active(self, now: datetime | None = None) -> bool:
@@ -277,6 +278,7 @@ class AccessLogEntry(BaseModel):
     who: str
     role: CareRole | None = None
     what: str = Field(description="看了什麼（who|timeline|docs|talk|summary|ask…）")
+    purpose: str = Field(default="", description="WHY：為了什麼看（依授權的 purpose 帶入）")
     ts: datetime
 
 

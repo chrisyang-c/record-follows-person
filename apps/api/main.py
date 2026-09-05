@@ -214,9 +214,16 @@ def _home_card(store: Any, pid: str, role: str) -> dict[str, Any]:
     rep = trend_analyzer.analyze(pid, obs, inc, since, until, 7)  # type: ignore[arg-type]
     abnormal = [line for line in rep.lines if line.is_abnormal]
     dims = {line.dimension for line in abnormal[:2]}
+    with_v = [o for o in obs if o.vitals is not None]
+    band = _band_summary(
+        pid, with_v[-1].vitals if with_v else None, [o.vitals for o in with_v[-4:-1]]
+    )
     return {
         "abnormal": [line.model_dump(mode="json") for line in abnormal],
         "series": [s.model_dump(mode="json") for s in rep.series if s.dimension in dims],
+        # RF13：偏離他自己平常的量測範圍（observe，不是紅燈）
+        "vitals_departures": band["departures"],
+        "vitals_band_texts": [b["text"] for b in band["bands"]],
     }
 
 
@@ -411,6 +418,16 @@ def twin(patient_id: str, x_who: str | None = Header(default=None)) -> dict[str,
             "series": series.get(d, []),
             "tip": WELLNESS_TIP[d],
         }
+    with_v = [o for o in obs if o.vitals is not None]
+    band = _band_summary(
+        patient_id, with_v[-1].vitals if with_v else None, [o.vitals for o in with_v[-4:-1]]
+    )
+    if band["established"]:
+        dims["vitals"]["baseline"] = "他平常：" + "；".join(b["text"] for b in band["bands"])
+        if band["departures"]:
+            dims["vitals"]["note"] = "；".join(band["departures"])
+            if dims["vitals"]["state"] == "same":
+                dims["vitals"]["state"] = "changed"
     changed_n = sum(1 for v in dims.values() if v["state"] != "same")
     # channel 4 wearable daily metrics (facts only) + the avatar's state（本人 wellness 區）
     wear = store.load_timeline(patient_id, since=since, kinds={"wearable_daily"})
@@ -439,6 +456,7 @@ def twin(patient_id: str, x_who: str | None = Header(default=None)) -> dict[str,
             "weight_kg": profile.weight_kg,
         },
         "wearable": wear_rows,
+        "vitals_bands": band,
         "avatar": {
             "sleep_hours": last_w["sleep_hours"] if last_w else None,
             "weight_kg": profile.weight_kg,
@@ -451,6 +469,52 @@ def twin(patient_id: str, x_who: str | None = Header(default=None)) -> dict[str,
         else (f"今天有 {changed_n} 項跟平常不一樣" if changed_n else "跟平常差不多"),
         "dimensions": dims,
     }
+
+
+# --- 個人生理值正常帶（apps/api/baseline）：只描述「跟他自己平常比」，不寫回 baseline ---------
+
+
+def _band_summary(pid: str, latest_vitals: Any | None, recent_vitals: list[Any]) -> dict[str, Any]:
+    """Established bands as one-line texts, plus RF13-style departure sentences for the latest
+    measured vitals. No z-score, no percentage (CLAUDE.md §1.8)."""
+    from baseline import departure
+    from baseline.loader import bands_for
+
+    vb = bands_for(pid)
+    if vb is None:
+        return {"bands": [], "departures": [], "established": False}
+    bands = [b.model_dump(mode="json") for b in vb.bands.values() if b.established]
+    departures: list[str] = []
+    if latest_vitals is not None:
+        for b in vb.bands.values():
+            val = getattr(latest_vitals, b.metric, None)
+            if val is None:
+                continue
+            recent = [
+                getattr(v, b.metric)
+                for v in recent_vitals
+                if getattr(v, b.metric, None) is not None
+            ]
+            line = departure(b, float(val), recent=[float(r) for r in recent[-3:]])
+            if line:
+                departures.append(line)
+    return {"bands": bands, "departures": departures, "established": bool(bands)}
+
+
+@app.get("/patients/{patient_id}/vitals-bands")
+def patient_vitals_bands(
+    patient_id: str, x_who: str | None = Header(default=None)
+) -> dict[str, Any]:
+    """護理師端：這個人自己的量測範圍（p10–p90）與最近一次量測是否偏離。"""
+    store = get_store()
+    if not store.exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    role, _tabs = _authorize(patient_id, x_who, "nurse")
+    cc.log_access(patient_id, x_who, role, "vitals-bands")  # type: ignore[arg-type]
+    obs = store.load_timeline(patient_id, kinds={"observation"})
+    with_v = [o for o in obs if o.vitals is not None]
+    latest = with_v[-1].vitals if with_v else None
+    return _band_summary(patient_id, latest, [o.vitals for o in with_v[-4:-1]])
 
 
 # --- 本人 App（第四扇門）：/me ----------------------------------------------------------------
@@ -831,6 +895,7 @@ class GrantIn(BaseModel):
     scopes: list[str]
     valid_days: int | None = None
     granted_by: str
+    purpose: str = ""
 
 
 @app.get("/patients/{patient_id}/care-circle")
@@ -862,6 +927,8 @@ def care_circle_grant(
     bad = [s for s in body.scopes if s not in cc.ALL_SCOPES]
     if bad or body.role not in cc.DEFAULT_SCOPES:
         raise HTTPException(400, f"invalid scopes/role: {bad or body.role}")
+    if not body.purpose.strip():
+        raise HTTPException(400, "授權必須說明目的（purpose）")
     now = datetime.now(UTC)
     m = cc.grant(
         patient_id,
@@ -874,6 +941,7 @@ def care_circle_grant(
             valid_from=now,
             valid_to=now + timedelta(days=body.valid_days) if body.valid_days else None,
             granted_by=x_who or body.granted_by,
+            purpose=body.purpose.strip(),
         ),
     )
     cc.log_access(patient_id, x_who, cc.role_of(patient_id, x_who), f"grant:{body.member_id}")

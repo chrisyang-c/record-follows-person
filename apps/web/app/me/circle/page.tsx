@@ -20,6 +20,7 @@ export default function MeCirclePage() {
   const [who, setWho] = useState("nurse_huang");
   const [scopes, setScopes] = useState<Tab[]>(["who", "timeline"]);
   const [days, setDays] = useState(30);
+  const [purpose, setPurpose] = useState("護理評估與確認");
   const [busy, setBusy] = useState(false);
   if (pid === undefined || (!data && !error)) return <p className="text-ink-2">Loading…</p>;
   if (error) return <p role="alert" className="text-danger-ink">{error}</p>;
@@ -39,7 +40,7 @@ export default function MeCirclePage() {
     setBusy(true);
     try {
       const role = IDENTITIES[who]?.role ?? "nurse";
-      await api(`/patients/${pid}/care-circle`, { method: "POST", json: { member_id: who, role, scopes, valid_days: days || null, granted_by: pid } });
+      await api(`/patients/${pid}/care-circle`, { method: "POST", json: { member_id: who, role, scopes, valid_days: days || null, granted_by: pid, purpose } });
       reload();
       reloadLog();
     } finally {
@@ -56,7 +57,7 @@ export default function MeCirclePage() {
             <li key={m.member_id} className="flex flex-wrap items-center gap-2 py-2">
               <span className="font-medium">{m.name || IDENTITIES[m.member_id]?.name || m.member_id}</span>
               <Chip>{ROLE_LABEL[m.role as Role]}</Chip>
-              <span className="text-xs text-ink-2">{m.scopes.map((s) => TAB_LABEL[s as Tab]).join("、")}{m.valid_to ? ` · 到 ${fmtDay(m.valid_to)}` : ""}</span>
+              <span className="text-xs text-ink-2">{m.scopes.map((s) => TAB_LABEL[s as Tab]).join("、")}{m.valid_to ? ` · 到 ${fmtDay(m.valid_to)}` : ""}{m.purpose ? ` · 為了${m.purpose}` : ""}</span>
               {m.role !== "patient" && (
                 <Button variant="outline" className="ml-auto min-h-11" disabled={busy} onClick={() => void revoke(m.member_id)}>撤銷</Button>
               )}
@@ -74,6 +75,10 @@ export default function MeCirclePage() {
               ))}
             </select>
           </label>
+          <label className="block">
+            <span className="text-ink-2">為了什麼（必填）</span>
+            <input name="purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="例如：夜班交接、陪同就醫" className="mt-1 min-h-11 w-full rounded-[10px] border border-line bg-bg px-3 text-ink placeholder:text-ink-2 focus-visible:ring-2 focus-visible:ring-primary" />
+          </label>
           <fieldset>
             <legend className="text-ink-2">可以看</legend>
             <div className="mt-1 flex flex-wrap gap-2">
@@ -89,7 +94,7 @@ export default function MeCirclePage() {
             <span className="text-ink-2">有效天數（0＝不限）</span>
             <input type="number" name="valid_days" inputMode="numeric" min={0} value={days} onChange={(e) => setDays(Number(e.target.value))} className="num mt-1 min-h-11 w-full rounded-[10px] border border-line bg-bg px-3" />
           </label>
-          <Button size="lg" className="w-full" disabled={busy || scopes.length === 0} onClick={() => void grant()}>授權</Button>
+          <Button size="lg" className="w-full" disabled={busy || !purpose.trim() || scopes.length === 0} onClick={() => void grant()}>授權</Button>
         </div>
       </Card>
       <Card title="誰看過我的紀錄" headingLevel={2}>

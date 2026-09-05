@@ -26,7 +26,9 @@ def test_home_caregiver_cards(records_root):
 def test_home_nurse_cards_carry_trends(records_root):
     out = home("nurse")
     cards = [r["card"] for r in out["residents"]]
-    assert all({"abnormal", "series"} == set(c) for c in cards)
+    assert all(
+        {"abnormal", "series", "vitals_departures", "vitals_band_texts"} <= set(c) for c in cards
+    )
     assert any(c["abnormal"] for c in cards)  # the seed has a resident with a story curve
     for c in cards:
         assert len(c["series"]) <= 2

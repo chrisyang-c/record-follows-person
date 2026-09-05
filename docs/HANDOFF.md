@@ -9,6 +9,16 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 
 ---
 
+## 現況一頁（2026-09-05 晚，兩條工作流已合流）
+
+| 誰 | 做了什麼 | 在哪 |
+|---|---|---|
+| 隊友（zxc29051617） | 個人生理值正常帶（median／MAD／p10–p90、established 門檻）＋ RF13（observe）；工作區整併（CONSOLIDATION、ROADMAP、proposals）；Windows `scripts/dev.ps1`；CLAUDE.md 分工表 | `apps/api/baseline/`、`red_flags/rules.py`、docs |
+| 本輪（chrisyang-c） | OMNI-TWIN 深色殼、01 解剖全像＋3D 分身＋沙盤、登入、Care Circle、穿戴指標、問我的紀錄、唸給我聽 | `apps/web/`、`main.py`、`agents/personal.py` |
+| 統整 commit | RF13 正常帶接進 01（生命徵象面板「他平常：…」與偏離句）與護理站今日總覽（「偏離他平常」chip，warn 不是紅燈）；`GET /patients/{id}/vitals-bands`；Care Circle／access log 補 `purpose`（CONSOLIDATION §4 待辦已做，授權必填目的）；KNOWN_ISSUES 重複編號修正（#40–#42）；ROADMAP／OVERVIEW 對齊 | `tests/test_integration_bands_purpose.py` ×6 |
+
+**下一步**：ROADMAP E1（找護理師實測一週）→ E2 Retrieval → E3 Event Engine。E4 的 purpose 已提前完成，剩資源級 scope 與 session token。
+
 ## 已完成（工作區整併，2026-09-05）
 
 **這個 repo 現在是唯一的正式專案。** 只取得它就能開發、啟動、測試，不依賴工作區其他資料夾。
@@ -28,7 +38,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 
 ### 下一步（依序）
 
-1. **CONSOLIDATION §4 的 `purpose` 欄位** —— `CareCircleMember` 與 `AccessLogEntry` 缺 VISION §16 的 WHY。目的位置與驗收方式已寫好，未執行。
+1. ~~CONSOLIDATION §4 的 `purpose` 欄位~~ **已做（統整 commit）**：`CareCircleMember.purpose`、`AccessLogEntry.purpose`，授權必填，登入依角色帶預設目的。
 2. **ROADMAP E1**：找 1–3 位護理師連續用一週。後面每個 Epic 的優先序都會被這週的結果重排。
 3. ROADMAP E2 Retrieval（KNOWN_ISSUES #29 的向量檢索）。
 
@@ -82,7 +92,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 
 ## 已知問題
 
-全表在 docs/KNOWN_ISSUES.md（#1–#38）。最影響 demo 的：
+全表在 docs/KNOWN_ISSUES.md（#1–#42）。最影響 demo 的：
 - #17 測試留下的紅燈 thread 會疊卡 → 錄影前 `make reset`。
 - #18 已修（4 小時／跨日自動過期）；同一天 4 小時內連續測試仍共用一段 → 說「不對」重來或 `make reset`。
 - #26 已修：已知維度有缺口可追問一次（gap 驗證）、第二次無效改摘要卡、503 只留給 LLM 失敗。

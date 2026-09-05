@@ -105,7 +105,7 @@ function LoginInner() {
         <label className="block">
           <span className="label-caps inline-flex items-center gap-1"><KeyRound className="size-3" aria-hidden="true" />{role === "patient" ? "我的密碼" : `${targetName}的密碼`}</span>
           <input name="code" type="password" inputMode="numeric" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder="示範：出生年（4 碼）…" className="num mt-1 min-h-12 w-full rounded-[10px] border border-line bg-bg px-3 text-ink placeholder:text-ink-2 focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent" />
-          <span className="mt-1 block text-xs text-ink-2">{role === "patient" ? "只有本人知道；忘記請找家屬重設。" : "由本人或家屬告知。通過後你會以這個角色的預設範圍進入 Care Circle（一天）。"}</span>
+          <span className="mt-1 block text-xs text-ink-2">{role === "patient" ? "只有本人知道；忘記請找家屬重設。" : "由本人或家屬告知。通過後你會以這個角色的預設範圍與目的進入 Care Circle（一天），每次查看都記在「誰看過我的紀錄」。"}</span>
         </label>
 
         {err && <p role="alert" className="rounded-[10px] border border-danger bg-danger-fill p-3 text-sm text-danger-ink">{err}</p>}

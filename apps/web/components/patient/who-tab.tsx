@@ -57,6 +57,7 @@ export function WhoTab({ summary }: { summary: PatientSummary }) {
               <span className="font-medium">{IDENTITIES[e.who]?.name ?? e.who}</span>
               <span className="text-ink-2">{e.role ? ROLE_LABEL[e.role] : ""}</span>
               <span className="text-ink-2">看了 {e.what.replace("summary:", "").replace("summary", "摘要").replace("who", "這是誰").replace("timeline", "紀錄").replace("docs", "文件").replace("talk", "對話")}</span>
+              {e.purpose && <span className="text-xs text-ink-2">· 為了{e.purpose}</span>}
               <span className="ml-auto text-xs text-ink-2">{fmtDateTime(e.ts)}</span>
             </li>
           ))}
