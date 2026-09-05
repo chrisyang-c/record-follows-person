@@ -27,6 +27,7 @@ from core.settings import get_settings  # noqa: E402
 from graphs.path_a import ROUTE_LABELS, compile_incident  # noqa: E402
 from ingest import doctor_order, vitals as vitals_ingest  # noqa: E402
 from ingest.lexicon import extract_with_lexicon  # noqa: E402
+from record import care_circle  # noqa: E402
 from record.store import RecordStore  # noqa: E402
 from record_schema import (  # noqa: E402
     ISBAR,
@@ -34,6 +35,7 @@ from record_schema import (  # noqa: E402
     Baseline,
     BaselineDelta,
     BaselineEntry,
+    CareCircleMember,
     CaregiverSection,
     Condition,
     Contact,
@@ -119,6 +121,13 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
     nurses = data["nurses"]
     day1 = date.fromisoformat(data["day1"])
     last_round = date.fromisoformat(data["last_round_date"])
+    identities: dict = dict(data["identities"])
+    for r in data["residents"]:
+        identities[r["patient_id"]] = {"role": "patient", "name": r["code_name"]}
+        fam = r["emergency_contacts"][0]
+        identities[r["family_member_id"]] = {
+            "role": "family", "name": f"{fam['name']}（{fam['relation']}）", "patient_id": r["patient_id"],
+        }
 
     for r in data["residents"]:
         pid = r["patient_id"]
@@ -126,6 +135,7 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
         nurse = r["primary_nurse"]
         profile = Profile(
             patient_id=pid,
+            health_id=r["health_id"],
             code_name=r["code_name"],
             sex=r["sex"],
             birth_year=r["birth_year"],
@@ -159,6 +169,7 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
             vitals_usual=Vitals(**r["vitals_usual"]),
         )
         store.init_record(profile, baseline)
+        _seed_care_circle(store, profile, r, data, identities)
 
         # --- last round: Encounter + Order (with follow-up status for RoundPage §③) ------------
         o_prov = Provenance(source="doctor_ordered", author=nurses["doctor"], confirmed_by=nurse, ts=b_ts)
@@ -215,7 +226,30 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
         if not quiet:
             n = len(store.load_timeline(pid))
             print(f"seeded {pid} {profile.code_name}: {n} timeline entries, {len(store.load_documents(pid))} documents")
+    care_circle_save = getattr(care_circle, "save_identities")
+    care_circle_save(identities)
     return store
+
+
+def _seed_care_circle(store, profile, r, data, identities) -> None:
+    """Patient-owned access (VISION §15–18): the person, one family member, the facility's
+    caregivers, nurses and the visiting doctor — each with a scope subset, all granted by the
+    person (or their family as proxy)."""
+    pid, hid = profile.patient_id, profile.health_id
+    t0 = _dt(date.fromisoformat(data["last_round_date"]), "09:00")
+    fam_id = r["family_member_id"]
+    rows: list[tuple[str, str, str]] = [(pid, "patient", profile.code_name), (fam_id, "family", identities[fam_id]["name"])]
+    rows += [(k, v["role"], v["name"]) for k, v in identities.items() if v["role"] in ("caregiver", "nurse", "doctor")]
+    for member_id, role, name in rows:
+        care_circle.grant(
+            pid,
+            CareCircleMember(
+                health_id=hid, member_id=member_id, name=name, role=role,
+                scopes=care_circle.DEFAULT_SCOPES[role], valid_from=t0,
+                valid_to=None if role != "doctor" else _dt(date.fromisoformat(data["last_round_date"]) + timedelta(days=365), "09:00"),
+                granted_by=pid if role == "patient" else fam_id if role == "family" else pid,
+            ),
+        )
 
 
 def _seed_incident(store, profile, baseline, recent, cfg, d, nurses, lang) -> None:

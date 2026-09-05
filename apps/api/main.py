@@ -22,6 +22,7 @@ from graphs.checkpointer import is_postgres
 from ingest import discharge_pdf, doctor_order
 from ingest import vitals as vitals_ingest
 from ingest.caregiver_speech import ingest as ingest_speech
+from record import care_circle as cc
 from record import conversation as conv
 from record.store import get_store
 from red_flags.rules import RULES, render_lines
@@ -288,9 +289,42 @@ def _pending_for(patient_id: str) -> list[dict[str, Any]]:
     return items
 
 
+def _authorize(
+    patient_id: str, who: str | None, x_role: str | None = None
+) -> tuple[str, list[str]]:
+    """Who is looking, and which tabs the Care Circle lets them see. No member → 403「未獲授權」.
+    Without X-Who (older clients / tests) fall back to the X-Role header with that role's default
+    scopes so nothing silently widens: the role must still exist in DEFAULT_SCOPES."""
+    if who:
+        scopes = cc.scopes_for(patient_id, who)
+        if not scopes:
+            raise HTTPException(403, "未獲授權：你不在這個人的 Care Circle 裡")
+        role = cc.role_of(patient_id, who) or "caregiver"
+        return role, list(scopes)
+    role = (x_role or "nurse").lower()
+    if role not in cc.DEFAULT_SCOPES:
+        raise HTTPException(403, "未獲授權")
+    return role, list(cc.DEFAULT_SCOPES[role])  # type: ignore[index]
+
+
+@app.get("/whoami")
+def whoami(me: str | None = None) -> dict[str, Any]:
+    """The web stores only「我是誰」(cookie ``me``); role and display name come from here."""
+    it = cc.whoami(me)
+    if not it:
+        raise HTTPException(404, "unknown identity")
+    return it
+
+
 @app.get("/patients/{patient_id}/summary")
-def patient_summary(patient_id: str, x_role: str | None = Header(default=None)) -> dict[str, Any]:
-    """who / timeline / docs / talk in one call. Caregivers only see what they recorded."""
+def patient_summary(
+    patient_id: str,
+    tab: str | None = None,
+    x_role: str | None = Header(default=None),
+    x_who: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """who / timeline / docs / talk in one call. Caregivers only see what they recorded.
+    Access is a Care Circle lookup (X-Who); every read is logged (「誰看過我的紀錄」)."""
     from datetime import date, timedelta
 
     from agents.subagents import trend_analyzer
@@ -298,7 +332,10 @@ def patient_summary(patient_id: str, x_role: str | None = Header(default=None)) 
     store = get_store()
     if not store.exists(patient_id):
         raise HTTPException(404, "unknown patient")
-    role = (x_role or "nurse").lower()
+    role, allowed_tabs = _authorize(patient_id, x_who, x_role)
+    cc.log_access(patient_id, x_who, role, f"summary:{tab}" if tab else "summary")  # type: ignore[arg-type]
+    if role in ("patient", "family"):
+        role = "caregiver" if role == "family" else "patient"
     profile = store.load_profile(patient_id)
     baseline = store.load_baseline(patient_id)
     timeline = store.load_timeline(patient_id)
@@ -329,6 +366,8 @@ def patient_summary(patient_id: str, x_role: str | None = Header(default=None)) 
     today = date.today().isoformat()
     return {
         "role": role,
+        "who": x_who,
+        "allowed_tabs": allowed_tabs,
         "profile": profile.model_dump(mode="json"),
         "baseline": baseline.model_dump(mode="json"),
         "timeline": [e.model_dump(mode="json") for e in timeline],
@@ -346,6 +385,84 @@ def patient_summary(patient_id: str, x_role: str | None = Header(default=None)) 
             )
         ),
     }
+
+
+class GrantIn(BaseModel):
+    member_id: str
+    name: str = ""
+    role: str
+    scopes: list[str]
+    valid_days: int | None = None
+    granted_by: str
+
+
+@app.get("/patients/{patient_id}/care-circle")
+def care_circle_list(patient_id: str, x_who: str | None = Header(default=None)) -> dict[str, Any]:
+    if not get_store().exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    _authorize(patient_id, x_who, "nurse")
+    return {
+        "health_id": get_store().load_profile(patient_id).health_id,
+        "members": [m.model_dump(mode="json") for m in cc.members(patient_id)],
+        "identities": cc.identities(),
+    }
+
+
+@app.post("/patients/{patient_id}/care-circle")
+def care_circle_grant(
+    patient_id: str, body: GrantIn, x_who: str | None = Header(default=None)
+) -> dict[str, Any]:
+    """Grant access (patient or family as proxy). Scopes are a subset of who|timeline|docs|talk."""
+    from datetime import timedelta
+
+    from record_schema import CareCircleMember
+
+    store = get_store()
+    if not store.exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    if cc.role_of(patient_id, x_who) not in ("patient", "family"):
+        raise HTTPException(403, "只有本人或家屬能授權")
+    bad = [s for s in body.scopes if s not in cc.ALL_SCOPES]
+    if bad or body.role not in cc.DEFAULT_SCOPES:
+        raise HTTPException(400, f"invalid scopes/role: {bad or body.role}")
+    now = datetime.now(UTC)
+    m = cc.grant(
+        patient_id,
+        CareCircleMember(
+            health_id=store.load_profile(patient_id).health_id,
+            member_id=body.member_id,
+            name=body.name or (cc.whoami(body.member_id) or {}).get("name", body.member_id),
+            role=body.role,  # type: ignore[arg-type]
+            scopes=body.scopes,  # type: ignore[arg-type]
+            valid_from=now,
+            valid_to=now + timedelta(days=body.valid_days) if body.valid_days else None,
+            granted_by=x_who or body.granted_by,
+        ),
+    )
+    cc.log_access(patient_id, x_who, cc.role_of(patient_id, x_who), f"grant:{body.member_id}")
+    return m.model_dump(mode="json")
+
+
+@app.post("/patients/{patient_id}/care-circle/{member_id}/revoke")
+def care_circle_revoke(
+    patient_id: str, member_id: str, x_who: str | None = Header(default=None)
+) -> dict[str, Any]:
+    if cc.role_of(patient_id, x_who) not in ("patient", "family"):
+        raise HTTPException(403, "只有本人或家屬能撤銷")
+    return {"revoked": cc.revoke(patient_id, member_id, x_who or "patient")}
+
+
+@app.get("/patients/{patient_id}/access-log")
+def patient_access_log(
+    patient_id: str, limit: int = 50, x_who: str | None = Header(default=None)
+) -> dict[str, Any]:
+    """「誰看過我的紀錄」：誰、看了什麼、何時。Anyone with `who` scope may read it."""
+    if not get_store().exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    _role, tabs = _authorize(patient_id, x_who, "nurse")
+    if "who" not in tabs:
+        raise HTTPException(403, "未獲授權")
+    return {"items": [e.model_dump(mode="json") for e in cc.access_log(patient_id, limit)]}
 
 
 @app.get("/patients/{patient_id}/conversation")
@@ -368,12 +485,17 @@ def _sse(event: str, data: Any) -> str:
 
 
 @app.post("/patients/{patient_id}/talk")
-def patient_talk(patient_id: str, body: TalkIn) -> StreamingResponse:
+def patient_talk(
+    patient_id: str, body: TalkIn, x_who: str | None = Header(default=None)
+) -> StreamingResponse:
     """One caregiver message → SSE: activity events (node/llm/tool/red), streamed reply, done."""
     from graphs.talk import run_turn
 
     if not get_store().exists(patient_id):
         raise HTTPException(404, "unknown patient")
+    if x_who and "talk" not in cc.scopes_for(patient_id, x_who):
+        raise HTTPException(403, "未獲授權：沒有對話權限")
+    cc.log_access(patient_id, x_who, cc.role_of(patient_id, x_who), "talk")
     if not body.text.strip():
         raise HTTPException(400, "empty message")
 

@@ -26,6 +26,7 @@ docs/langgraph_path_a_incident.mermaid       # Path A 急症圖，節點名與 i
 docs/langgraph_path_b_routine_round.mermaid  # Path B 日常＋巡診圖
 docs/ARCHITECTURE.md                          # 唯一設計稿：層級、通道、agent、節點細節、state、demo 範圍、未決事項
 docs/一份能跟著人走的紀錄_摘要與願景.md       # 對外敘事與制度出處（README 引用）
+docs/VISION_personal_health_twin.md           # 願景文件（Personal Health Twin）；實作範圍以 ARCHITECTURE.md 與 HANDOFF.md 為準
 ```
 讀完後在 `docs/DECISIONS.md` 追加一行「已讀，日期，姓名」。Mermaid 圖是 LangGraph 節點名稱的唯一來源；改圖要先改檔再改程式。
 

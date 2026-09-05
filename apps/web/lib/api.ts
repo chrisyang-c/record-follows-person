@@ -2,7 +2,7 @@
 
 import type { Baseline, Document, PersonRecord, Profile, StructuredObservation, TimelineEntry, RedFlagResult, TrendLine, TrendReport } from "@schema";
 import { useCallback, useEffect, useState } from "react";
-import { readRole } from "@/lib/role";
+import { readMe, readRole, type Tab } from "@/lib/role";
 
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -14,10 +14,11 @@ export class ApiError extends Error {
   }
 }
 
-/** 病人頁的權限過濾靠這個 header（照護者只看自己記的）；角色來自 cookie。 */
+/** 每個請求帶「我是誰」（X-Who）；API 查 Care Circle 決定能看什麼並寫 access log。X-Role 只是舊相容。 */
 function roleHeader(): Record<string, string> {
+  const me = readMe();
   const r = readRole();
-  return r ? { "X-Role": r } : {};
+  return { ...(me ? { "X-Who": me } : {}), ...(r ? { "X-Role": r } : {}) };
 }
 
 export async function api<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
@@ -161,6 +162,7 @@ export interface Preview {
   red_flag_lines: string[];
 }
 export type { Document, PersonRecord, TimelineEntry };
+export type { AccessLogEntry, CareCircleMember } from "@schema";
 
 export const startShift = (body: Record<string, unknown>) => api<Snapshot>("/shift/start", { method: "POST", json: body });
 export const startPathA = (body: Record<string, unknown>) => api<Snapshot>("/path-a/start", { method: "POST", json: body });
@@ -216,7 +218,10 @@ export interface PendingThread {
   updated_at: string | null;
 }
 export interface PatientSummary {
-  role: "caregiver" | "nurse" | "doctor";
+  role: "patient" | "caregiver" | "nurse" | "doctor";
+  who: string | null;
+  /** Care Circle 允許這個身份看的 tab；不在裡面的 tab 顯示「未獲授權」 */
+  allowed_tabs: Tab[];
   profile: Profile;
   baseline: Baseline;
   timeline: TimelineEntry[];

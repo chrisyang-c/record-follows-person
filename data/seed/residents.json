@@ -8,6 +8,36 @@
     "head": "head_nurse_chen",
     "doctor": "dr_wu"
   },
+  "identities": {
+    "nurse_lin": {
+      "role": "nurse",
+      "name": "林護理師"
+    },
+    "nurse_huang": {
+      "role": "nurse",
+      "name": "黃護理師"
+    },
+    "head_nurse_chen": {
+      "role": "nurse",
+      "name": "陳護理長"
+    },
+    "dr_wu": {
+      "role": "doctor",
+      "name": "吳醫師"
+    },
+    "cg_xiaofang": {
+      "role": "caregiver",
+      "name": "小芳（照服員）"
+    },
+    "cg_ahua": {
+      "role": "caregiver",
+      "name": "阿華（照服員）"
+    },
+    "cg_amei": {
+      "role": "caregiver",
+      "name": "阿美（照服員）"
+    }
+  },
   "residents": [
     {
       "patient_id": "P001",
@@ -166,7 +196,9 @@
           "精神不錯",
           "走路跟平常一樣"
         ]
-      }
+      },
+      "health_id": "P-0000001",
+      "family_member_id": "fam_P001"
     },
     {
       "patient_id": "P002",
@@ -290,7 +322,9 @@
           "大便一次",
           "精神不錯"
         ]
-      }
+      },
+      "health_id": "P-0000002",
+      "family_member_id": "fam_P002"
     },
     {
       "patient_id": "P003",
@@ -420,7 +454,9 @@
           "大便正常",
           "精神跟平常一樣"
         ]
-      }
+      },
+      "health_id": "P-0000003",
+      "family_member_id": "fam_P003"
     }
   ]
 }

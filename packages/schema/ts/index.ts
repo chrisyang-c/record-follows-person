@@ -17,6 +17,10 @@ export type Shift = "day" | "evening" | "night";
 
 export type RouteDecision = "contact_contract_hospital" | "home_acute_mode_b" | "accompany_visit" | "observe" | "escalate_119";
 
+export type CareRole = "patient" | "family" | "caregiver" | "nurse" | "doctor";
+
+export type Scope = "who" | "timeline" | "docs" | "talk";
+
 export type TimelineEntry = Observation | Incident | Encounter | Order;
 
 export type Document = IncidentFile | HandoffPage | VisitPage | RoundPage | CaregiverNotes;
@@ -394,6 +398,7 @@ export interface Order {
 
 export interface Profile {
   patient_id: string;
+  /** Personal Health ID（P-0000000）：紀錄屬於本人、跟著人一輩子；機構是場域之一 */ health_id: string;
   /** 代號，非真名 */ code_name: string;
   sex: "M" | "F";
   birth_year: number;
@@ -460,6 +465,26 @@ export interface VisitPage {
   reason: string;
   recent: string[];
   medications: string[];
+}
+
+export interface CareCircleMember {
+  health_id: string;
+  /** 身份代號（cg_xiaofang、nurse_lin、fam_P001、P001…） */ member_id: string;
+  name: string;
+  role: "patient" | "family" | "caregiver" | "nurse" | "doctor";
+  /** 可見範圍：who|timeline|docs|talk 子集 */ scopes: ("who" | "timeline" | "docs" | "talk")[];
+  valid_from: string;
+  valid_to: string | null;
+  /** 誰授權（本人或代理） */ granted_by: string;
+  revoked_at: string | null;
+}
+
+export interface AccessLogEntry {
+  health_id: string;
+  who: string;
+  role: "patient" | "family" | "caregiver" | "nurse" | "doctor" | null;
+  /** 看了什麼（who|timeline|docs|talk|summary|ask…） */ what: string;
+  ts: string;
 }
 
 export interface BaselineProposal {

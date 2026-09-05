@@ -208,8 +208,16 @@ class Facility(BaseModel):
     contract_type: str = "特約醫療機構"
 
 
+HEALTH_ID_PATTERN = r"^P-\d{7}$"
+
+
 class Profile(BaseModel):
     patient_id: str
+    health_id: str = Field(
+        default="P-0000000",
+        pattern=HEALTH_ID_PATTERN,
+        description="Personal Health ID（P-0000000）：紀錄屬於本人、跟著人一輩子；機構是場域之一",
+    )
     code_name: str = Field(description="代號，非真名")
     sex: Literal["M", "F"]
     birth_year: int
@@ -229,6 +237,45 @@ class Profile(BaseModel):
     @property
     def on_anticoagulant(self) -> bool:
         return any(m.is_anticoagulant for m in self.medications)
+
+
+# ---------------------------------------------------------------------------
+# Care Circle — who may see which part of this person's record (patient-owned access)
+# ---------------------------------------------------------------------------
+
+CareRole = Literal["patient", "family", "caregiver", "nurse", "doctor"]
+Scope = Literal["who", "timeline", "docs", "talk"]
+
+
+class CareCircleMember(BaseModel):
+    health_id: str
+    member_id: str = Field(description="身份代號（cg_xiaofang、nurse_lin、fam_P001、P001…）")
+    name: str = ""
+    role: CareRole
+    scopes: list[Scope] = Field(default_factory=list, description="可見範圍：who|timeline|docs|talk 子集")
+    valid_from: datetime
+    valid_to: datetime | None = None
+    granted_by: str = Field(description="誰授權（本人或代理）")
+    revoked_at: datetime | None = None
+
+    def active(self, now: datetime | None = None) -> bool:
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+
+        now = now or _dt.now(_UTC)
+        if self.revoked_at is not None:
+            return False
+        if self.valid_from > now:
+            return False
+        return self.valid_to is None or self.valid_to > now
+
+
+class AccessLogEntry(BaseModel):
+    health_id: str
+    who: str
+    role: CareRole | None = None
+    what: str = Field(description="看了什麼（who|timeline|docs|talk|summary|ask…）")
+    ts: datetime
 
 
 # ---------------------------------------------------------------------------
@@ -548,7 +595,8 @@ __all__ = [
     "Direction", "Status", "Shift", "RouteDecision", "Provenance", "ProvenanceLine",
     "DimensionValue", "ObservationFlags", "Vitals", "FollowupQA", "StructuredObservation",
     "BaselineDelta", "RedFlagHit", "RedFlagResult", "Condition", "AllergyIntolerance",
-    "MedicationStatement", "Contact", "Facility", "Profile", "BaselineEntry", "Baseline",
+    "MedicationStatement", "Contact", "Facility", "Profile", "HEALTH_ID_PATTERN", "CareRole",
+    "Scope", "CareCircleMember", "AccessLogEntry", "BaselineEntry", "Baseline",
     "BaselineProposal", "MinimalSBAR", "TimelineBase", "Observation", "Incident", "Encounter",
     "OrderItem", "OrderFollowUp", "Order", "TimelineEntry", "ISBAR", "OnsiteAssessment",
     "CaregiverSection", "NurseSection", "Notification", "FollowUp", "DocBase", "IncidentFile",

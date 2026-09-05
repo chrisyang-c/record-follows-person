@@ -1,13 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isRole, ROLE_HOME } from "@/lib/role";
+import { DOOR_DEFAULT, IDENTITIES, isRole, ROLE_HOME } from "@/lib/role";
 
-/** GET /role?set=nurse&next=/p/P001 → 寫入 role cookie 後轉址（角色入口的三顆按鈕就是這種連結）。 */
+/**
+ * GET /role?set=nurse_lin&next=/p/P001 → 寫入 cookie me（只存「我是誰」）後轉址。
+ * 也接受角色名（set=nurse → 該扇門的預設身份），舊連結不用改。
+ */
 export function GET(req: NextRequest) {
-  const role = req.nextUrl.searchParams.get("set");
+  const raw = req.nextUrl.searchParams.get("set") ?? "";
+  const me = IDENTITIES[raw] ? raw : isRole(raw) ? DOOR_DEFAULT[raw] : null;
   const next = req.nextUrl.searchParams.get("next");
-  if (!isRole(role)) return NextResponse.redirect(new URL("/", req.url));
+  if (!me) return NextResponse.redirect(new URL("/", req.url));
+  const role = IDENTITIES[me].role;
   const target = next && next.startsWith("/") && !next.startsWith("//") ? next : ROLE_HOME[role];
   const res = NextResponse.redirect(new URL(target, req.url));
-  res.cookies.set("role", role, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 30 });
+  res.cookies.set("me", me, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 30 });
+  res.cookies.delete("role");
   return res;
 }

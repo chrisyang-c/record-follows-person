@@ -4,8 +4,9 @@ import { DIMENSION_LABELS, type Dimension } from "@schema";
 import { Sparkline } from "@/components/sparkline";
 import { Chip } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { useApi, type PatientSummary } from "@/lib/api";
-import { fmtDay } from "@/lib/format";
+import { useApi, type AccessLogEntry, type PatientSummary } from "@/lib/api";
+import { fmtDateTime, fmtDay } from "@/lib/format";
+import { IDENTITIES, ROLE_LABEL } from "@/lib/role";
 import type { TrendReport } from "@schema";
 
 /** 這是誰：profile、八維度基線（誰設、何時）、有變化的維度小圖。 */
@@ -14,6 +15,7 @@ export function WhoTab({ summary }: { summary: PatientSummary }) {
   const changed = new Set(summary.changed_dimensions);
   const { data: trend } = useApi<TrendReport>(changed.size ? `/trends/${p.patient_id}` : null);
   const series = trend?.series.filter((s) => changed.has(s.dimension)) ?? [];
+  const { data: log } = useApi<{ items: AccessLogEntry[] }>(`/patients/${p.patient_id}/access-log?limit=20`);
   return (
     <div className="space-y-4">
       <p className="text-ink-2">{p.one_liner}</p>
@@ -47,6 +49,19 @@ export function WhoTab({ summary }: { summary: PatientSummary }) {
           </table>
         </Card>
       </div>
+      <Card title="誰看過我的紀錄" headingLevel={2} meta={<span className="num" translate="no">Health ID {p.health_id}</span>}>
+        {log && log.items.length === 0 && <p className="text-sm text-ink-2">還沒有人看過。</p>}
+        <ul className="divide-y divide-line text-sm">
+          {(log?.items ?? []).map((e, i) => (
+            <li key={i} className="flex flex-wrap items-center gap-2 py-1.5">
+              <span className="font-medium">{IDENTITIES[e.who]?.name ?? e.who}</span>
+              <span className="text-ink-2">{e.role ? ROLE_LABEL[e.role] : ""}</span>
+              <span className="text-ink-2">看了 {e.what.replace("summary:", "").replace("summary", "摘要").replace("who", "這是誰").replace("timeline", "紀錄").replace("docs", "文件").replace("talk", "對話")}</span>
+              <span className="ml-auto text-xs text-ink-2">{fmtDateTime(e.ts)}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
       {series.length > 0 && (
         <Card title="近 14 天有變化的維度" headingLevel={2}>
           <div className="grid gap-4 sm:grid-cols-2">

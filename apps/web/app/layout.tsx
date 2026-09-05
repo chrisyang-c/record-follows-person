@@ -3,7 +3,7 @@ import { Inter, JetBrains_Mono, Noto_Sans_TC } from "next/font/google";
 import { cookies } from "next/headers";
 import { Nav } from "@/components/nav";
 import { RedBannerGlobal } from "@/components/red-banner-global";
-import { isRole } from "@/lib/role";
+import { identityOf } from "@/lib/role";
 import "./globals.css";
 
 const noto = Noto_Sans_TC({ variable: "--font-noto", subsets: ["latin"], weight: ["400", "500", "700"], display: "swap" });
@@ -18,14 +18,15 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width", initialScale: 1 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const raw = (await cookies()).get("role")?.value;
-  const role = isRole(raw) ? raw : null;
+  const me = (await cookies()).get("me")?.value ?? null;
+  const identity = identityOf(me);
+  const role = identity?.role ?? null;
   return (
     <html lang="zh-TW" className={`${noto.variable} ${inter.variable} ${mono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-bg text-ink">
         <a href="#main" className="skip-link">跳到主要內容</a>
         <header className="no-print border-b border-line bg-bg">
-          <Nav role={role} />
+          <Nav role={role} name={identity?.name ?? null} />
         </header>
         {role === "nurse" && <RedBannerGlobal />}
         <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
