@@ -49,7 +49,7 @@ await settle();
 await page.screenshot({ path: `${out}/talk-390-after-verify.png` });
 // --- 01 活體數位孿生（本人）
 await page.goto(`${base}/role?set=P001&next=/twin`, { waitUntil: "networkidle" });
-await page.waitForSelector("text=活體數位孿生體");
+await page.waitForSelector("h1:has-text('活體數位孿生體')");
 await settle(1200);
 await page.screenshot({ path: `${out}/twin-390-body.png`, fullPage: true });
 
@@ -71,7 +71,7 @@ await d.emulateMedia({ media: "print" });
 await d.screenshot({ path: `${out}/print-1280-white.png`, fullPage: false });
 await d.emulateMedia({ media: "screen" });
 await d.goto(`${base}/role?set=P001&next=/twin`, { waitUntil: "networkidle" });
-await d.waitForSelector("text=活體數位孿生體");
+await d.waitForSelector("h1:has-text('活體數位孿生體')");
 await d.click("button[aria-label^='睡眠']");
 await d.waitForTimeout(1200);
 await d.screenshot({ path: `${out}/twin-1280-body.png` });

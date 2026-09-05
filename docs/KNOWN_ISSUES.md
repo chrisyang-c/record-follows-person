@@ -37,3 +37,4 @@
 | 33 | 列印白底驗證用的是醫師 docs tab（事件資訊包）；RoundPage 需先跑巡診流程（約 2.5 分鐘）才會出現，本輪 `make seed` 後沒有已發布的 RoundPage。RoundPage 卡片本身以 `data-theme="white"` 呈現，列印時整頁切白色 tokens。 | 截圖 `print-1280-white.png` 是事件資訊包。 | 錄影前跑 `/nurse/round` 發布後再印。 |
 | 34 | 頂欄的地點·天氣是示意假資料（規格 §3.1 允許）；「孿生同步中」燈只代表頁面在輪詢，不代表裝置連線。 | 觀感。 | 第二階段接真資料。 |
 | 35 | 登入是 demo 等級：`POST /login` 驗證病人密碼（hash）並把身份加進 Care Circle，但 cookie `me` 仍由 `/role?set=` 寫入，直接打該網址可跳過密碼（Care Circle 仍擋住未授權的 tab）。示範密碼＝出生年。 | 只影響 demo 安全性。 | 第二階段：session token 由 API 簽發、`/role` 只接受 token。 |
+| 36 | 01 的解剖 SVG 約 900 KB（一次載入、瀏覽器快取）；器官對維度的對應是示意（如「皮膚」熱點固定在上臂、「疼痛」浮動在髖部），不是臨床定位。 | 首次載入多約 0.3 秒。 | 第二階段可換 3D 模型或依疼痛部位移動熱點。 |

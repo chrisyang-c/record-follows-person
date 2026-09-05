@@ -6,7 +6,7 @@ import { Suspense, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { identityOf, readMe } from "@/lib/role";
 import { DIMENSIONS, type Dimension } from "@schema";
-import { BodyMap, HOTSPOTS } from "@/components/twin/body-map";
+import { BodyHologram, ORGANS } from "@/components/twin/body-hologram";
 import { TrendLine } from "@/components/twin/trend-line";
 import { Chip } from "@/components/ui/badge";
 import { useApi, type TwinData } from "@/lib/api";
@@ -76,13 +76,13 @@ function TwinInner() {
 
       <div className="grid gap-4 lg:grid-cols-[55fr_45fr]">
         <section className="rounded-[12px] border border-line bg-surface p-4" aria-label="人體圖">
-          <BodyMap states={states} selected={sel} onSelect={setSel} idle={idle} />
-          <p className="mt-2 text-center text-xs text-ink-2">{idle ? "熱點全部靜態：今天還沒有人記錄" : "亮紫＝有變化（呼吸）· 青＝跟平常一樣 · 紅＝護理師處理中"}</p>
+          <BodyHologram states={states} selected={sel} onSelect={setSel} idle={idle} />
+          <p className="mt-2 text-center text-xs text-ink-2">{idle ? "熱點全部靜態：今天還沒有人記錄" : "亮紫＝有變化（呼吸）· 青＝跟平常一樣 · 紅＝護理師處理中"} · 解剖圖：EMBL-EBI anatomogram</p>
         </section>
 
         <section className="rounded-[12px] border border-line bg-surface p-5 fade-in" key={sel} aria-live="polite">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={cn("inline-flex size-10 items-center justify-center rounded-full border text-sm font-medium", d.state === "red" ? "border-danger text-danger-ink" : d.state === "changed" ? "border-accent-2/60 text-accent-2" : "border-accent/50 text-accent")}>{HOTSPOTS[sel].short.slice(0, 1)}</span>
+            <span className={cn("inline-flex size-10 items-center justify-center rounded-full border text-sm font-medium", d.state === "red" ? "border-danger text-danger-ink" : d.state === "changed" ? "border-accent-2/60 text-accent-2" : "border-accent/50 text-accent")}>{ORGANS[sel].short.slice(0, 1)}</span>
             <div className="min-w-0">
               <h2 className="text-lg font-medium">{d.label}</h2>
               <p className="text-sm text-ink-2">{d.note || (d.state === "same" ? "跟平常一樣" : STATE_LABEL[d.state])}{d.days > 1 ? `，第 ${d.days} 天` : ""}</p>

@@ -146,6 +146,23 @@ button, a, [role="button"] { touch-action: manipulation; }
 .step-in { animation: step-in 160ms ease-out both; }
 .slide-down { animation: slide-down 200ms ease-out both; }
 .fade-in { animation: fade-in 120ms ease-out both; }
+/* 01 全像人體（components/twin/body-hologram.tsx）：anatomogram 器官預設 inline 隱藏，這裡用 !important 點亮 */
+.holo svg { width: 100%; height: auto; display: block; position: relative; }
+.holo-grid {
+  background-image: linear-gradient(color-mix(in srgb, var(--accent) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, transparent) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 85%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%);
+  background-size: 24px 24px, 24px 24px, 100% 100%;
+}
+.holo #LAYER_OUTLINE path, .holo #LAYER_OUTLINE * { stroke: var(--accent) !important; stroke-opacity: 0.55 !important; stroke-width: 0.35px !important; fill: color-mix(in srgb, var(--accent) 5%, transparent) !important; }
+.holo [id^="UBERON_"], .holo [id^="UBERON_"] *, .holo [id^="CL_"], .holo [id^="CL_"] * {
+  fill: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+  stroke: var(--accent) !important; stroke-opacity: 0.75 !important; stroke-width: 0.22px !important;
+  transition: fill 120ms ease-out;
+}
+.holo .organ-state-changed, .holo .organ-state-changed * { fill: color-mix(in srgb, var(--accent-2) 30%, transparent) !important; stroke: var(--accent-2) !important; }
+.holo .organ-state-red, .holo .organ-state-red * { fill: color-mix(in srgb, var(--danger) 35%, transparent) !important; stroke: var(--danger) !important; }
+.holo .organ-on, .holo .organ-on * { fill: color-mix(in srgb, var(--accent-2) 55%, transparent) !important; stroke: var(--ink) !important; stroke-width: 0.3px !important; }
 /* 發光只給生命：01 熱點與同步燈 */
 .glow { box-shadow: 0 0 24px color-mix(in srgb, currentColor 35%, transparent); }
 /* 標籤：小型大寫、0.12em 字距 */

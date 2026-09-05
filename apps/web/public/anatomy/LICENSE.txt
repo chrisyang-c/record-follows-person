@@ -1,0 +1,2 @@
+homo_sapiens.male.svg — from EMBL-EBI Expression Atlas "anatomogram" (https://github.com/ebi-gene-expression-group/anatomogram),
+Apache License 2.0. Metadata stripped; organ ids are UBERON terms. Used here as the 01 活體數位孿生 body hologram.
