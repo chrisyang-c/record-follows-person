@@ -10,7 +10,7 @@ import { ROLE_HOME, roleOfMe, type Role } from "@/lib/role";
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const role = roleOfMe(req.cookies.get("me")?.value);
-  const guarded = /^\/(me|caregiver|nurse|doctor|p)(\/|$)/.test(pathname);
+  const guarded = /^\/(me|caregiver|nurse|doctor|p|twin)(\/|$)/.test(pathname);
   if (!guarded) return NextResponse.next();
   if (!role) {
     const url = req.nextUrl.clone();
@@ -29,4 +29,4 @@ export function proxy(req: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/me/:path*", "/caregiver/:path*", "/nurse/:path*", "/doctor/:path*", "/p/:path*"] };
+export const config = { matcher: ["/me/:path*", "/caregiver/:path*", "/nurse/:path*", "/doctor/:path*", "/p/:path*", "/twin/:path*"] };

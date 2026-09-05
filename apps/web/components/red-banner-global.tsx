@@ -15,7 +15,7 @@ export function RedBannerGlobal() {
   const red = [...latest.values()];
   if (!red.length) return null;
   return (
-    <div className="no-print mx-auto w-full max-w-6xl px-4 pt-3">
+    <div className="no-print w-full border-b border-line bg-bg px-4 pt-3 lg:px-6">
       {red.map((i) => (
         <RedFlagBanner
           key={i.thread_id}
