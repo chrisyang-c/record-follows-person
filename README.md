@@ -73,6 +73,9 @@ flowchart TD
 
 ## 快速開始
 
+需要：Python 3.12（[uv](https://docs.astral.sh/uv/)）、Node 24（pnpm）、PostgreSQL 17。
+
+**macOS / Linux**
 ```bash
 cp .env.example .env               # MODEL_PROVIDER=openai + OPENAI_API_KEY；沒 key 會自動退回 mock
 docker compose up -d postgres      # 沒 Docker：make db-local（Homebrew postgresql@17）
@@ -82,9 +85,22 @@ make api                           # http://localhost:8000  (/docs 有 OpenAPI)
 make web                           # http://localhost:3000
 ```
 
+**Windows**
+```powershell
+Copy-Item .env.example .env
+.\scripts\dev.ps1 setup            # uv sync + pnpm install（不碰 records、不碰資料庫）
+.\scripts\dev.ps1 init             # 建 DB + migrate + seed（會清空 records\，需輸入 yes）
+.\scripts\dev.ps1 api              # 另開一個終端跑 .\scripts\dev.ps1 web
+.\scripts\dev.ps1 help             # 看所有指令；status 看目前環境與資料狀態
+```
+
+> `dev.ps1` 把「會刪東西的」和「不會刪東西的」分開：日常指令保證不動 `records\` 與資料庫；
+> `init`／`reset`／`seed`／`clean-records` 會先列出將刪除什麼並要求確認（CI 用 `-Force`）。
+
 畫面：`/` 選角色（cookie）→ 角色首頁（`/caregiver` 住民卡、`/nurse` 紅燈橫幅→等我確認→今日總覽＋巡診準備、`/doctor` 巡診名單）→ 病人頁 `/p/{id}?tab=who|timeline|docs|talk`（這份紀錄的唯一入口）。`talk` 是 LINE 式聊天：每一題都由 intake_agent（LLM）依八維度缺口、profile、基線與已問過的題決定並附 reason，只有語音與文字輸入，上限 4 題；紅燈時程式先通知護理師、對話繼續由 agent 問關鍵事實並即時同步到護理師端；沒有模型就報錯停止。每則回覆下有 Agent 活動列（收合「花了 2.3 秒，7 步」，展開＝`GET /debug/trace/{thread_id}` 的內容）。`docs` 放護理師的等我確認（Path A 審核、10 秒確認）、RoundPage（可列印 A4）、事故檔、注意事項。逐步驗收指令見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
 
 測試：`make test`（api：ruff + pytest；web：eslint + vitest）；評測：`make eval`。
+Windows 用 `.\scripts\dev.ps1 check` —— 它跑的是 CI 那一組（ruff check ＋ **ruff format --check** ＋ pytest ＋ codegen 一致性），`make test` 少了後兩項。
 
 ---
 
@@ -176,7 +192,23 @@ mock 模式的 hallucination 在結構上不可能超過關鍵字命中（raw_qu
 
 ## 文件
 
-[docs/OVERVIEW.md](docs/OVERVIEW.md)（全貌，給第一次接觸的人）・[CLAUDE.md](CLAUDE.md)（開發規則）・[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)・[docs/DECISIONS.md](docs/DECISIONS.md)・[docs/design.md](docs/design.md)・[docs/UI_AUDIT.md](docs/UI_AUDIT.md)・[docs/VIDEO.md](docs/VIDEO.md)・[docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)・[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
+哪份管什麼（衝突時以 [CLAUDE.md §0.2](CLAUDE.md) 的分工表為準）：
+
+| 文件 | 管什麼 |
+|---|---|
+| [docs/OVERVIEW.md](docs/OVERVIEW.md) | 全貌，給第一次接觸的人 |
+| [CLAUDE.md](CLAUDE.md) | 開發規則、紅線、不可做的事 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | **已採納**的架構：層級、通道、節點、demo 範圍、未決事項 |
+| [docs/VISION_personal_health_twin.md](docs/VISION_personal_health_twin.md) | 長期願景。**不是規格** |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 之後做什麼、依什麼順序、**明確不做什麼** |
+| [docs/HANDOFF.md](docs/HANDOFF.md) | 只管目前進度與下一步 |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | 每個決定的日期／理由／誰 |
+| [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | 已知問題與繞法 |
+| [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) | 驗收步驟與指令 |
+| [docs/CONSOLIDATION.md](docs/CONSOLIDATION.md) | 工作區整併的來源去向清單 |
+| [docs/proposals/](docs/proposals/) | 外部提案，**未採納**；描述的不是這個 repo |
+
+其他：[docs/design.md](docs/design.md)・[docs/UI_AUDIT.md](docs/UI_AUDIT.md)・[docs/UIUX_OMNI_TWIN.md](docs/UIUX_OMNI_TWIN.md)・[docs/VIDEO.md](docs/VIDEO.md)
 
 ## LICENSE
 

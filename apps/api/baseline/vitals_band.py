@@ -6,11 +6,12 @@ But P001's usual systolic is 138 — a reading of 118 is unremarkable against th
 population and a real drop for him. ``Baseline.vitals_usual`` is one number a nurse
 wrote down; this module computes the *band* from what was actually measured.
 
-Boundaries this module respects (CLAUDE.md):
-  §1.4  pure code — no LLM call anywhere in this file
-  §1.6  never writes baseline; produces a *proposal* for ◇nurse_confirm_baseline
-  §1.8  no score, probability or confidence value is ever put in the output text
-  §11   does not write timeline, does not touch provenance
+Boundaries this module respects:
+  CLAUDE.md §1.4   pure code — no LLM call anywhere in this file
+  CLAUDE.md §1.8   no score, probability or confidence value reaches the output text
+  CLAUDE.md §11    does not write timeline, does not touch provenance
+  ARCHITECTURE §11 never writes the baseline and offers no path back into it — see the
+                   note at the bottom of this file for why
 """
 
 from __future__ import annotations
@@ -119,8 +120,13 @@ def compute_band(
             metric=metric,  # type: ignore[arg-type]
             label=VITAL_LABELS[metric],
             unit=VITAL_UNITS[metric],
-            center=0.0, spread=0.0, low=0.0, high=0.0,
-            n=0, days=0, established=False,
+            center=0.0,
+            spread=0.0,
+            low=0.0,
+            high=0.0,
+            n=0,
+            days=0,
+            established=False,
             reason="沒有量測值",
         )
 

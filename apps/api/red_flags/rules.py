@@ -200,9 +200,7 @@ def _personal_band(inp: RedFlagInput) -> list[str]:
         if band is None or value is None:
             continue
         recent = [
-            float(v)
-            for v in (getattr(m, metric, None) for m in inp.recent_vitals)
-            if v is not None
+            float(v) for v in (getattr(m, metric, None) for m in inp.recent_vitals) if v is not None
         ]
         line = departure(band, float(value), recent=recent or None)
         if line:

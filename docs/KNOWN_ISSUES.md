@@ -40,3 +40,4 @@
 | 34 | 頂欄的地點·天氣是示意假資料（規格 §3.1 允許）；「孿生同步中」燈只代表頁面在輪詢，不代表裝置連線。 | 觀感。 | 第二階段接真資料。 |
 | 35 | 登入是 demo 等級：`POST /login` 驗證病人密碼（hash）並把身份加進 Care Circle，但 cookie `me` 仍由 `/role?set=` 寫入，直接打該網址可跳過密碼（Care Circle 仍擋住未授權的 tab）。示範密碼＝出生年。 | 只影響 demo 安全性。 | 第二階段：session token 由 API 簽發、`/role` 只接受 token。 |
 | 36 | 01 的解剖 SVG 約 900 KB（一次載入、瀏覽器快取）；器官對維度的對應是示意（如「皮膚」熱點固定在上臂、「疼痛」浮動在髖部），不是臨床定位。 | 首次載入多約 0.3 秒。 | 第二階段可換 3D 模型或依疼痛部位移動熱點。 |
+| 39 | `make test` 只跑 `ruff check`，不跑 `ruff format --check`；但 CI（ci.yml L33）兩個都跑。本機 `make test` 過不代表 CI 會綠。 | commit `c0a6802` 推上 main 時 CI 應為紅（5 個檔案格式不符），已於同日修正。 | 本機改用 `.\scripts\dev.ps1 check`（lint 含 format + pytest + codegen 一致性），與 CI 同一組檢查。 |

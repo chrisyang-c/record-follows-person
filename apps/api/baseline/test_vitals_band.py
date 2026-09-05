@@ -91,7 +91,11 @@ def test_from_timeline_reads_measured_values_only():
     """caregiver 說的數字不進帶——`vitals_reported` 是人講的，`vitals` 是量的。"""
     timeline = _series([130 + (i % 9) for i in range(30)])
     reported_only = Observation(
-        id="obs-x", patient_id="P001", ts=NOW, shift="day", status="approved",
+        id="obs-x",
+        patient_id="P001",
+        ts=NOW,
+        shift="day",
+        status="approved",
         confirmed_by="nurse",
         provenance=Provenance(source="caregiver_said", author="caregiver", ts=NOW),
         observation=StructuredObservation(

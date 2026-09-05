@@ -219,9 +219,16 @@ def bands(**kw) -> VitalsBands:
     built = {}
     for metric, (low, high, center, spread) in defaults.items():
         built[metric] = VitalsBand(
-            metric=metric, label=VITAL_LABELS[metric], unit=VITAL_UNITS[metric],
-            center=center, spread=spread, low=low, high=high,
-            n=40, days=14, established=True,
+            metric=metric,
+            label=VITAL_LABELS[metric],
+            unit=VITAL_UNITS[metric],
+            center=center,
+            spread=spread,
+            low=low,
+            high=high,
+            n=40,
+            days=14,
+            established=True,
             text=f"{VITAL_LABELS[metric]} {low:.0f}–{high:.0f}{VITAL_UNITS[metric]}",
         )
     return VitalsBands(
@@ -246,9 +253,7 @@ def test_rf13_hit_below_his_own_range():
 
 
 def test_rf13_miss_inside_his_own_range():
-    r = evaluate(
-        RedFlagInput(observation=obs(), vitals=Vitals(sbp=138), vitals_bands=bands())
-    )
+    r = evaluate(RedFlagInput(observation=obs(), vitals=Vitals(sbp=138), vitals_bands=bands()))
     assert "RF13" not in ids(r)
 
 
@@ -272,7 +277,9 @@ def test_rf13_never_fires_on_an_unestablished_band():
     b.bands["sbp"].reason = "量測值只有 4 筆"
     r = evaluate(
         RedFlagInput(
-            observation=obs(), vitals=Vitals(sbp=90), vitals_bands=b,
+            observation=obs(),
+            vitals=Vitals(sbp=90),
+            vitals_bands=b,
             recent_vitals=[Vitals(sbp=92)],
         )
     )
@@ -289,7 +296,9 @@ def test_rf13_output_carries_no_score():
     """CLAUDE.md §1.8：任何分數、機率、信心值都不得出現。"""
     r = evaluate(
         RedFlagInput(
-            observation=obs(), vitals=Vitals(spo2=92), vitals_bands=bands(),
+            observation=obs(),
+            vitals=Vitals(spo2=92),
+            vitals_bands=bands(),
             recent_vitals=[Vitals(spo2=93)],
         )
     )

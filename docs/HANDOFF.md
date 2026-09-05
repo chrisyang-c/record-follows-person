@@ -3,6 +3,41 @@
 Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起直接 commit 到 `main` 並 push（不開分支／PR，見 CLAUDE.md §0.1）。
 先讀：docs/OVERVIEW.md（全貌）→ CLAUDE.md → docs/ARCHITECTURE.md → docs/ACCEPTANCE.md（驗收與指令）→ docs/DECISIONS.md（為什麼）→ docs/KNOWN_ISSUES.md。
 
+> **這份文件只管「目前進度與下一步」。** 為什麼這樣決定 → `DECISIONS.md`；
+> 之後要做什麼、依什麼順序、明確不做什麼 → `ROADMAP.md`；
+> 已知問題與繞法 → `KNOWN_ISSUES.md`。完整分工表在 CLAUDE.md §0.2。
+
+---
+
+## 已完成（工作區整併，2026-09-05）
+
+**這個 repo 現在是唯一的正式專案。** 只取得它就能開發、啟動、測試，不依賴工作區其他資料夾。
+
+| 項目 | 結果 |
+|---|---|
+| 整合清單 | `docs/CONSOLIDATION.md` —— 每份來源內容的去向（來源 → 用途 → 目的位置 → 採用狀態 → 驗收方式） |
+| 外部提案 | `docs/proposals/00-architecture.md`，頁首標明**未採納**、與本 repo 是兩條路；逐項取捨在 CONSOLIDATION §3 |
+| 分期計畫 | `docs/ROADMAP.md` —— Epic 排序、Done 條件、**明確不做**清單 |
+| 文件分工 | CLAUDE.md §0.2 新增分工表；§0.3 的 `claude plugin add` 與 §0.4 的 docker 已改為可用指令 |
+| PR 矛盾 | §0.1 說不開 PR，但 §1／§5／§8 還在講 PR —— 四處已改為 commit |
+| Windows 入口 | `scripts/dev.ps1`。日常指令不碰 `records\` 或資料庫；`init`／`reset`／`seed`／`clean-records` 會列出將刪除什麼並要求輸入 `yes`（CI 用 `-Force`） |
+| 個人生理值正常帶 | `apps/api/baseline/` ＋ RF13（`c0a6802`）；`propose_vitals_usual` 依 ARCHITECTURE §11 移除（`6c12cd2`） |
+
+**採用 `health-ref` 的限制**：它沒有 LICENSE（`chenni416/Healthcare`），本 repo 是 Apache-2.0。
+依 CLAUDE.md §0.5 **只能借想法，不能複製程式碼**。詳見 CONSOLIDATION §2。
+
+### 下一步（依序）
+
+1. **CONSOLIDATION §4 的 `purpose` 欄位** —— `CareCircleMember` 與 `AccessLogEntry` 缺 VISION §16 的 WHY。目的位置與驗收方式已寫好，未執行。
+2. **ROADMAP E1**：找 1–3 位護理師連續用一週。後面每個 Epic 的優先序都會被這週的結果重排。
+3. ROADMAP E2 Retrieval（KNOWN_ISSUES #29 的向量檢索）。
+
+### 整併期間發現、尚未處理的
+
+- `c0a6802` 推上 main 時 **CI 應該是紅的**：`ruff format --check`（ci.yml L33）會抓到 5 個檔案格式不符。已於本輪修正，但這說明「不等 CI」的規則需要本機先跑 `.\scripts\dev.ps1 check`。
+- `health-ref` 有 18 檔 / 5,528 行未提交，且 `backend/venv` 有 4,101 個檔案被 commit 進該 repo —— 屬該 repo 擁有者處理。
+- `claude_healthcare` 已依指示刪除，除 baseline 引擎外約 13,500 行不可回復（CONSOLIDATION §2.2）。
+
 ## 已完成（登入與 01 住民選擇，2026-09-05 深夜）
 
 `/login`（角色 → 身份 → 住民 → 病人密碼；示範密碼＝出生年）、`POST /login`（`tests/test_login.py` ×4）、`/` 直接轉 `/login`、頂欄「切換」。工作人員進 01 先選住民（`/twin?pid=`），修掉護理師進 01 一直 Loading 的問題。限制見 KNOWN_ISSUES #35。

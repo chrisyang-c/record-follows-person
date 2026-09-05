@@ -31,22 +31,50 @@ docs/UIUX_OMNI_TWIN.md                        # UI/UX 規格：OMNI-TWIN 深色�
 ```
 讀完後在 `docs/DECISIONS.md` 追加一行「已讀，日期，姓名」。Mermaid 圖是 LangGraph 節點名稱的唯一來源；改圖要先改檔再改程式。
 
-### 0.3 安裝 skills（UI 穩定性三件組，順序固定）
-```bash
-claude plugin add nextlevelbuilder/ui-ux-pro-max-skill   # 產 design.md，之後所有畫面從它長
-claude plugin add anthropic/frontend-design               # 防 AI 通用審美
-# 稽核：vercel-labs/agent-skills → skills/web-design-guidelines，依其 README 安裝
-```
-規則：ui-ux-pro-max 產出的 design.md 必須以本檔 §7 的 tokens 覆寫（禁止它自選 glassmorphism / neumorphism）；每個畫面完成後跑 web-design-guidelines 稽核一次並把結果貼進 PR。
+**文件分工（哪份管什麼；衝突時以這張表為準）**
+
+| 文件 | 管什麼 | 不管什麼 |
+|---|---|---|
+| `CLAUDE.md`（本檔） | 開發規則、紅線、不可做的事 | 進度、排程 |
+| `docs/ARCHITECTURE.md` | **已採納**的架構：層級、通道、節點、state、demo 範圍、未決事項 | 願景、排程 |
+| `docs/VISION_personal_health_twin.md` | 長期願景與對外敘事 | **不是規格**。實作範圍以 ARCHITECTURE 與 HANDOFF 為準 |
+| `docs/ROADMAP.md` | 之後要做什麼、依什麼順序、**明確不做什麼** | 目前進度 |
+| `docs/HANDOFF.md` | **只管**目前進度與下一步 | 為什麼這樣決定（→ DECISIONS） |
+| `docs/DECISIONS.md` | 每個架構決定的日期／理由／誰 | 待辦 |
+| `docs/KNOWN_ISSUES.md` | 已知問題與繞法 | 未來計畫（→ ROADMAP） |
+| `docs/CONSOLIDATION.md` | 工作區整併的來源去向清單 | 一次性文件，整併完成後不再更新 |
+| `docs/proposals/` | **外部提案，未採納**。讀的時候要記得它描述的不是這個 repo | 任何具約束力的規則 |
+
+### 0.3 UI 稽核 skill
+
+`web-design-guidelines` 已 vendor 進 `.claude/skills/`，**不需要安裝**，Claude Code 進 repo 就看得到。
+
+> 舊版寫的 `claude plugin add …` 指令不存在（KNOWN_ISSUES #4）。若要另外裝 marketplace 的 plugin，
+> 正確指令是 `claude plugin marketplace add <repo>` 再 `claude plugin install <name>`。
+
+規則：任何產 design.md 的工具，其輸出必須以本檔 §7 的 tokens 覆寫（禁止自選 glassmorphism / neumorphism）；每個畫面完成後跑一次 `web-design-guidelines` 稽核，結果寫進 `docs/UI_AUDIT.md`。
 
 ### 0.4 環境
-```bash
-cp .env.example .env            # 填 ANTHROPIC_API_KEY, DATABASE_URL, LINE_CHANNEL_TOKEN
-docker compose up -d postgres
-make seed                       # 3 住民 × 14 天 + 1 急症，建 /records/{patient_id}
-cd apps/api && uv sync && uv run fastapi dev
-cd apps/web && pnpm i && pnpm dev
+
+**Windows（本機主要環境）**
+```powershell
+Copy-Item .env.example .env     # 填 OPENAI_API_KEY, DATABASE_URL
+.\scripts\dev.ps1 setup         # uv sync（不碰 records、不碰資料庫）
+.\scripts\dev.ps1 init          # 建資料庫 + migrate + seed（**會清空 records**，需確認）
+.\scripts\dev.ps1 api           # 另開一個終端跑 .\scripts\dev.ps1 web
+.\scripts\dev.ps1 check         # ruff + pytest + codegen 一致性
 ```
+
+**macOS**
+```bash
+cp .env.example .env
+make db-local && make migrate && make seed   # 這台機器沒有 Docker，用 Homebrew postgresql@17
+make api                                     # 另一個終端 make web
+```
+
+> `docker compose up -d postgres` 只在有 Docker 的機器可用（KNOWN_ISSUES #2）。
+> 日常指令（api／web／check／codegen）**不會**清空 `records/` 或重建資料庫；
+> 破壞性操作只在 `init` 與 `reset`，且會先列出將被刪除的東西並要求確認。
 
 ### 0.5 外部參考
 - 隔壁目錄 `../health-ref`（Healthcare-ref）是別人的專案，**唯讀**。平常不要讀它、不要借它的東西。
@@ -55,7 +83,7 @@ cd apps/web && pnpm i && pnpm dev
 
 ---
 
-## 1. 核心原則（違反即 PR 退回）
+## 1. 核心原則（違反就不能 commit）
 
 1. **紀錄是唯一資產，agent 沒有自己的狀態。** 所有 agent 只做兩件事：寫進紀錄，或把紀錄講給某個人聽。狀態全在 PersonRecord。
 2. **AI 只起草，人才定稿。** 照護者端產出的一切都是 `status="draft"`；只有護理師在 interrupt 節點確認後才變 `approved`，才能寫 timeline、才能送出。
@@ -188,7 +216,7 @@ agent = create_deep_agent(
 ```
 - agent 對 `timeline/` **只讀**；任何寫入走 §4 的 `timeline_write`。
 - subagent 各自 context 隔離，只回結構化結果，總管不看它們的過程。
-- `pyproject.toml` 鎖 `deepagents`、`langgraph`、`langchain` 精確版本（alpha 中，API 會變）。升級要開 PR 並跑全部測試。
+- `pyproject.toml` 鎖 `deepagents`、`langgraph`、`langchain` 精確版本（alpha 中，API 會變）。升級要單獨一個 commit 並跑全部測試。
 - deepagents 採「信任模型」設計，邊界在工具層，不靠 prompt 自律。
 
 **RoundPage 固定四段**（`familiarization_writer` 輸出）
@@ -242,7 +270,7 @@ agent = create_deep_agent(
 - TypeScript strict、pnpm、Next.js App Router、Tailwind + shadcn/ui；不用 localStorage 存任何紀錄。
 - packages/schema 是唯一型別來源；改 schema 要同時跑 `make codegen`。
 - 命名：graph 節點函式名 = mermaid 節點名；agent 檔名 = agent 名。
-- 每個 PR：說明改了哪個節點／哪個閘門、跑過哪些測試、UI 稽核結果。
+- 每個 commit message：說明改了哪個節點／哪個閘門、跑過哪些測試、UI 稽核結果（§0.1 起不開 PR，commit message 就是唯一的審閱介面）。
 
 ---
 
