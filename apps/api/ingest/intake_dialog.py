@@ -17,8 +17,11 @@ MODEL_PROVIDER=mock test double).
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import UTC, datetime
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 from record_schema import (
@@ -34,6 +37,7 @@ from record_schema import (
 )
 
 from core.llm import LLMUnavailable, NextQuestionOut, get_llm
+from core.settings import get_settings
 from core.trace import trace
 from record.store import get_store
 from red_flags.rules import RedFlagInput, evaluate, render_lines
@@ -94,12 +98,57 @@ class DialogResult(BaseModel):
 # --- extraction (cached per utterance; provenance re-stamped per turn) -------------------
 
 
+def _extract_cache_key(text: str, patient_id: str) -> str:
+    """Same sentence + same resident + same model/effort + same day → same extraction.
+    The day is part of the key because the cached record prefix (baseline + 14-day timeline)
+    the model sees changes daily."""
+    s = get_settings()
+    raw = "|".join(
+        [
+            s.MODEL_PINNED,
+            s.INTAKE_REASONING_EFFORT,
+            datetime.now(UTC).date().isoformat(),
+            patient_id,
+            text,
+        ]
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _extract_cache_file(patient_id: str) -> Path:
+    store = get_store()
+    return (store.dir(patient_id) if patient_id else store.root / "_shared") / "extract_cache.json"
+
+
+def _extract_cache_load(patient_id: str) -> dict[str, str]:
+    f = _extract_cache_file(patient_id)
+    try:
+        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+    except (OSError, ValueError):
+        return {}
+
+
 @lru_cache(maxsize=512)
 def _extract_cached(text: str, patient_id: str) -> str:
+    """One model call per distinct sentence: in-process LRU in front of a per-resident JSON file
+    (records/{pid}/extract_cache.json), so a later turn — or a reloaded server — only extracts
+    the new sentence. Cache hits are traced as ``llm.extract_cache``."""
+    key = _extract_cache_key(text, patient_id)
+    disk = _extract_cache_load(patient_id)
+    if key in disk:
+        trace("llm.extract_cache", hit=True, patient_id=patient_id, text=text[:60])
+        return disk[key]
     store = get_store()
     profile = store.load_profile(patient_id) if patient_id and store.exists(patient_id) else None
     baseline = store.load_baseline(patient_id) if profile else None
-    return get_llm().extract_observation(text, "zh-TW", profile, baseline).model_dump_json()
+    out = get_llm().extract_observation(text, "zh-TW", profile, baseline).model_dump_json()
+    if get_settings().effective_provider != "mock":  # test doubles are scripted; never persist
+        f = _extract_cache_file(patient_id)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        disk = _extract_cache_load(patient_id)
+        disk[key] = out
+        f.write_text(json.dumps(disk, ensure_ascii=False), encoding="utf-8")
+    return out
 
 
 def _extract(

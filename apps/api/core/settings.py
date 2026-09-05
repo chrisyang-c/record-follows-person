@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     LINE_FAMILY_TO: str = ""
     RECORDS_ROOT: str = "../../records"
     NURSE_REVIEW_TIMEOUT_S: int = 600
+    # an open intake session is closed automatically after this many hours, or when the
+    # Taiwan-local date has changed since it started (KNOWN_ISSUES #18)
+    SESSION_EXPIRY_H: int = 4
     WORKER_SCAN_INTERVAL_S: int = 30
 
     @property

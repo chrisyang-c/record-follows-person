@@ -17,8 +17,8 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 
 ## 待做（依序）
 
-1. ~~extract 與 next_question 改 `reasoning_effort="low"` 重跑 eval~~ **已做（2026-09-05）**：`INTAKE_REASONING_EFFORT`（預設 low → Responses API）、ACCEPTANCE Eval 表三欄、KNOWN_ISSUES #26。結論：low 在這兩個 prompt 上 reasoning tokens 為 0，成本不變，hallucination 8.7%→6.5%（gpt-4.1 仍 4.3%）。**等使用者決定模型**（luna low／luna none／gpt-4.1，只改 `.env`）再往下。
-2. 對話 session 過期（KNOWN_ISSUES #18）：超過 N 小時或跨日自動 close。
+1. ~~extract 與 next_question 改 `reasoning_effort="low"` 重跑 eval~~ **已做（2026-09-05）**：`INTAKE_REASONING_EFFORT`（預設 low → Responses API）、ACCEPTANCE Eval 表三欄、KNOWN_ISSUES #26。結論：low 在這兩個 prompt 上 reasoning tokens 為 0，成本不變，hallucination 8.7%→6.5%（gpt-4.1 仍 4.3%）。**定案**：luna + intake low（README 評測段三欄表）。
+2. ~~對話 session 過期（KNOWN_ISSUES #18）~~ **已做（2026-09-05）**：`SESSION_EXPIRY_H`＝4 小時或跨台灣日期自動關閉；順手把抽取快取持久化到 `records/{id}/extract_cache.json`（每輪只抽新的一句）。
 3. 角色首頁批次 summary 端點（#19）、輪詢在分頁隱藏時暫停或改 SSE（#20）。
 4. 10 秒確認「改一句／退回」改成不鎖鍵、就地提示（#21）。
 5. SSE 客戶端斷線取消後端 graph（#22，`core/trace.run_in_thread` 加 cancel flag）。
@@ -29,8 +29,9 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 
 全表在 docs/KNOWN_ISSUES.md（#1–#26）。最影響 demo 的：
 - #17 測試留下的紅燈 thread 會疊卡 → 錄影前 `make reset`。
-- #18 session 不過期 → 同一住民多次測試會很快出摘要；說「不對」重來或 `make reset`。
-- #24／#25 成本是牌價估算、快取第一次必寫入；#26 luna 會逐字重問（已擋；intake low 實測四輪未重問）。
+- #18 已修（4 小時／跨日自動過期）；同一天 4 小時內連續測試仍共用一段 → 說「不對」重來或 `make reset`。
+- **#26 仍會 503**：luna low 偶爾連續兩次選已知維度（約每 6 輪 1 次），畫面顯示「無法繼續」，重送同一句就過；要不要放寬規則待決定。
+- #24／#25 成本是牌價估算、快取第一次必寫入；#26 見上。
 - #14 TPM 限流：deep agent 一次一位（`_DEEP_AGENT_LOCK`），三人巡診約 2.5 分鐘。
 - 測試偶發：`test_red_flag_starts_path_a_and_keeps_talking` 在 PR #11 CI 失敗一次（答案配對到含 intro 的回覆），已修（a29c551）。
 
@@ -40,13 +41,14 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 |---|---|---|
 | `MODEL_PROVIDER` | openai | 模型工廠分支（openai／anthropic／mock，mock 只給 pytest） |
 | `MODEL_PINNED` | gpt-5.6-luna | 釘住的模型；gpt-5.x 自動加 `reasoning_effort="none"` |
-| `INTAKE_REASONING_EFFORT` | 未設（settings 預設 `low`） | intake 兩個呼叫的 reasoning_effort；非 `none` 時改走 Responses API；`none` 回到與其他呼叫相同 |
+| `INTAKE_REASONING_EFFORT` | low（定案） | intake 兩個呼叫的 reasoning_effort；非 `none` 時改走 Responses API；`none` 回到與其他呼叫相同 |
 | `OPENAI_API_KEY` | 已填 | 唯一在用的 key |
 | `ANTHROPIC_API_KEY` | 有欄位、未使用 | 只在 `MODEL_PROVIDER=anthropic` 時用 |
 | `DATABASE_URL` | 本機 brew postgres（record_follows_person） | PostgresSaver + thread registry |
 | `LINE_CHANNEL_TOKEN`、`LINE_FAMILY_TO` | 空 | 空 → 家屬通知只顯示不發（`displayed_only`） |
 | `RECORDS_ROOT` | records/ | PersonRecord 目錄 |
 | `NURSE_REVIEW_TIMEOUT_S`、`WORKER_SCAN_INTERVAL_S` | 預設 | 超時升級 worker |
+| `SESSION_EXPIRY_H` | 未設（預設 4） | 對話 session 自動過期（#18 已修） |
 | `NEXT_PUBLIC_API_URL` | http://localhost:8000 | 前端打 API |
 | `PRICE_INPUT_PER_M` 等四個 | 未設（用 settings 預設 0.20／0.02／0.25／1.20） | 只影響成本估算 |
 

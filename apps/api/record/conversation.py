@@ -12,14 +12,18 @@ the approved Observation lands in the timeline when the nurse confirms (see docs
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 from record_schema import Provenance
 
 from core.ids import new_id
+from core.settings import get_settings
 from record.store import get_store
+
+TAIPEI = ZoneInfo("Asia/Taipei")
 
 Role = Literal["caregiver", "agent", "system"]
 Kind = Literal["message", "question", "summary", "closing", "event", "error"]
@@ -45,6 +49,22 @@ class SessionState(BaseModel):
     thread_id: str | None = None  # Path A thread once the nurse was notified
     started: str
     closed: str | None = None
+    closed_reason: str | None = None  # "confirmed" | "restart" | "expired" | …
+
+
+def is_expired(s: SessionState, now: datetime | None = None) -> str | None:
+    """Why an open session should be closed: older than SESSION_EXPIRY_H hours, or started on
+    another Taiwan-local day. None when still valid."""
+    now = now or datetime.now(UTC)
+    started = datetime.fromisoformat(s.started)
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=UTC)
+    hours = get_settings().SESSION_EXPIRY_H
+    if now - started > timedelta(hours=hours):
+        return f"超過 {hours} 小時"
+    if started.astimezone(TAIPEI).date() != now.astimezone(TAIPEI).date():
+        return "跨日"
+    return None
 
 
 def _dir(patient_id: str):
@@ -121,11 +141,25 @@ def save_session(patient_id: str, s: SessionState) -> None:
 
 
 def open_session(patient_id: str) -> SessionState:
-    """The current intake session; a new one starts after the previous was closed."""
+    """The current intake session; a new one starts after the previous was closed — or after it
+    expired (SESSION_EXPIRY_H hours / a new Taiwan-local day), in which case the old one is
+    closed with ``closed_reason="expired"`` and a system line is appended to the conversation."""
     s = session(patient_id)
-    if s and s.phase != "closed":
-        return s
     ts = datetime.now(UTC)
+    if s and s.phase != "closed":
+        why = is_expired(s, ts)
+        if why is None:
+            return s
+        s.phase, s.closed, s.closed_reason = "closed", ts.isoformat(), "expired"
+        save_session(patient_id, s)
+        append(
+            patient_id,
+            "system",
+            f"上一段對話已自動結束（{why}），這是新的一段。",
+            s.session_id,
+            kind="event",
+            meta={"expired": why},
+        )
     s = SessionState(
         session_id=new_id("ses", ts), dialog_id=new_id("dlg", ts), started=ts.isoformat()
     )
@@ -133,11 +167,12 @@ def open_session(patient_id: str) -> SessionState:
     return s
 
 
-def close_session(patient_id: str) -> None:
+def close_session(patient_id: str, reason: str = "closed") -> None:
     s = session(patient_id)
     if s:
         s.phase = "closed"
         s.closed = datetime.now(UTC).isoformat()
+        s.closed_reason = reason
         save_session(patient_id, s)
 
 

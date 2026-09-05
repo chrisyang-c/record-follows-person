@@ -124,10 +124,24 @@ Schema 單一來源：[packages/schema/record_schema/models.py](packages/schema/
 
 ## 評測結果
 
-`apps/api/eval/run.py` 對 46 條合成照護者語句（zh-TW，含模糊句與 5 條誘導下診斷的句子；多語語句集為第二階段）計算。CI 每次跑，結果在 [apps/api/eval/results.md](apps/api/eval/results.md)。目前（`MODEL_PROVIDER=openai` 但本機無 `OPENAI_API_KEY`，實際走 mock 確定性抽取）：
+`apps/api/eval/run.py` 對 **46 條**合成照護者語句（zh-TW，含模糊句與 5 條誘導下診斷的句子；多語語句集為第二階段）計算。三個模型設定同日各跑一次（2026-09-05），逐句結果在 [apps/api/eval/results.md](apps/api/eval/results.md)：
 
-| 指標 | 值 |
-|---|---|
+| 指標 | gpt-4.1-2025-04-14 | gpt-5.6-luna（reasoning none） | **gpt-5.6-luna（intake reasoning low）** ← 採用 |
+|---|---|---|---|
+| Hallucination rate（有 ≥1 個多抽的標籤） | 2/46 = 4.3% | 4/46 = 8.7% | 3/46 = 6.5% |
+| Omission rate（有 ≥1 個漏抽的標籤） | 1/46 = 2.2% | 2/46 = 4.3% | 2/46 = 4.3% |
+| Provenance 正確率（source=ai_extracted ∧ raw_quote ⊂ 原文） | 46/46 = 100% | 46/46 = 100% | 46/46 = 100% |
+| 輸出不含診斷詞／誘導句不下診斷 | 46/46／5/5 | 46/46／5/5 | 46/46／5/5 |
+| 逐句全對 | 43/46 | 41/46 | 42/46 |
+| 每句成本（估算，含 85% 快取命中） | — | $0.00025 | $0.00025 |
+
+樣本只有 46 句，三欄之間的差距都在 **一句之內**（多抽 2／4／3 句、漏抽 1／2／2 句），不足以分出模型優劣；三個設定的 provenance、無診斷詞與誘導句都是滿分，也就是這個專案最在意的守門（raw_quote 必須是原文子字串、AI 不下判斷）不因模型而變。
+
+**選 gpt-5.6-luna（intake `reasoning_effort=low`）的理由**：同一個模型同時跑 intake、個人 deep agent 與三個 subagent，成本是 gpt-4.1 的數分之一（每句約 $0.00025、三位住民巡診約 $0.012），prompt caching 命中率 85% 以上；low 走 Responses API，在 intake 這兩個 prompt 上不產生 reasoning tokens、成本與 none 相同，但 hallucination 從 8.7% 降到 6.5%。deep agent 與其他節點維持 `none`（chat completions 的 function tools 需要）。設定：`MODEL_PINNED=gpt-5.6-luna`、`INTAKE_REASONING_EFFORT=low`（`.env`）。
+
+守門與模型無關：`core/llm.py::_guard_quotes` 會丟掉任何不是原文子字串的 raw_quote；抽取結果依「句子＋住民＋模型＋當日」快取（`records/{id}/extract_cache.json`），同一句只送模型一次。
+
+---|---|
 | Hallucination rate（有 ≥1 個多抽的標籤） | 2/46 = 4.3% |
 | Omission rate（有 ≥1 個漏抽的標籤） | 0/46 = 0.0% |
 | Provenance 正確率（source=ai_extracted ∧ raw_quote ⊂ 原文） | 46/46 = 100% |

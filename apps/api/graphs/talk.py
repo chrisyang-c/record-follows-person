@@ -292,7 +292,7 @@ def notify_nurse(state: TalkState) -> dict[str, Any]:
         except ValueError:
             lines.append("護理師已接手，接下來由護理師記錄。")
             conv.append(pid, "system", lines[-1], s.session_id, kind="event", author="nurse")
-            conv.close_session(pid)
+            conv.close_session(pid, reason="nurse_took_over")
             ev = step.done(
                 "caregiver_report：護理師已接手（thread 不再 interrupt）",
                 "護理師已經接手",
@@ -361,7 +361,7 @@ def decide_next(state: TalkState) -> dict[str, Any]:
                 meta={"thread_id": snap["thread_id"]},
                 author="intake_agent",
             )
-            conv.close_session(pid)
+            conv.close_session(pid, reason="confirmed")
             ev = step.done(
                 f"decide_next：照護者確認 → {mode} thread {snap['thread_id']}",
                 "送給護理師了",

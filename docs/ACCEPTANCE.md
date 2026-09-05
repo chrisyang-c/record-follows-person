@@ -96,6 +96,13 @@ luna none 多抽 pain×2、cognition×2（「不舒服」「沒精神」類句�
 
 ---
 
+## 定案與後續修正（2026-09-05 下午）
+
+- **模型定案**：`MODEL_PINNED=gpt-5.6-luna`、`INTAKE_REASONING_EFFORT=low`，其他呼叫 `none`。README 評測段三欄表。
+- **抽取快取持久化**：`records/{id}/extract_cache.json`（key：模型｜effort｜當日｜住民｜句子）。實測兩個獨立程序跑同一 session：第 1 輪 `llm.extract` ×1、第 2 輪 ×0（trace `llm.extract_cache` hit ×2），原本第 N 輪會抽 N 次。`tests/test_extract_cache.py`。
+- **session 過期**（#18）：`SESSION_EXPIRY_H`＝4 小時或跨台灣日期，`open_session` 自動關閉並加系統事件；`tests/test_session_expiry.py` ×4。
+- **觀察到的失敗**：同日第二段對話「今天早餐沒吃完，說肚子脹」→ 問排便 → 答「有大便，但比較硬」，planner 兩次都選「進食與飲水」→ 依既有規則 503「無法繼續」（conversation 留有 error 行）；重送同一句後正常。記在 KNOWN_ISSUES #26。
+
 ## §12 逐項
 
 | # | 項目 | 結果 | 怎麼驗證 |
