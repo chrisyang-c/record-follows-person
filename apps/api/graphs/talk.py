@@ -36,6 +36,8 @@ from record import conversation as conv
 from record.store import get_store
 from red_flags.rules import render_lines
 
+LLM_DOWN_TEXT = "系統暫時無法回覆，請直接告訴護理師。"
+
 AFFIRM = {
     "對",
     "對啊",
@@ -392,7 +394,10 @@ def decide_next(state: TalkState) -> dict[str, Any]:
         s.phase = "intake"
     # ---- plan the next question (the model decides) ----
     t0 = time.perf_counter()
-    nq, budget_left = plan_question(obs, profile, baseline, asked, rf)
+    asked_dims = [t["dimension"] for t in state["turns"][1:] if t.get("dimension")]
+    nq, budget_left = plan_question(
+        obs, profile, baseline, asked, rf, asked_dims, [t["text"] for t in state["turns"]]
+    )
     get_stream_writer()(
         {
             "type": "llm_call",
@@ -428,6 +433,7 @@ def decide_next(state: TalkState) -> dict[str, Any]:
                 "question": nq.text,  # the bare question (the reply may carry RED_INTRO)
                 "dimension": nq.dimension,
                 "reason": nq.reason,
+                "gap": nq.gap,
                 "phase": "red" if red else "routine",
             },
             "phase": s.phase,
@@ -563,9 +569,16 @@ def _run_turn(patient_id: str, text: str, role_view: str):
                             if "system_lines" in upd:
                                 final.setdefault("system_lines", []).extend(upd["system_lines"])
         except LLMUnavailable as e:
+            # only the model itself failing lands here (planner decisions never raise)
             conv.append(
-                patient_id, "system", f"無法繼續：{e}", s.session_id, kind="error", author="system"
+                patient_id,
+                "system",
+                LLM_DOWN_TEXT,
+                s.session_id,
+                kind="error",
+                meta={"detail": str(e)},
+                author="system",
             )
-            yield "error", {"detail": str(e)}
+            yield "error", {"detail": str(e), "text": LLM_DOWN_TEXT}
             return
     yield "final", final

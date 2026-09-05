@@ -22,7 +22,15 @@ class ScriptedLLM(MockLLM):
 
     name = "scripted-test-double"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.queue: list[NextQuestionOut] = []  # decisions to return first (tests push here)
+        self.seen: list[dict] = []  # every ctx the planner sent (incl. retry notes)
+
     def next_question(self, ctx):
+        self.seen.append(ctx)
+        if self.queue:
+            return self.queue.pop(0)
         asked = ctx.get("asked") or []
         if ctx.get("budget", 0) <= 0:
             return NextQuestionOut(ask=False, reason="預算用完")

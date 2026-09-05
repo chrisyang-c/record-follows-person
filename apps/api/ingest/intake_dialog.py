@@ -36,7 +36,7 @@ from record_schema import (
     StructuredObservation,
 )
 
-from core.llm import LLMUnavailable, NextQuestionOut, get_llm
+from core.llm import NextQuestionOut, get_llm
 from core.settings import get_settings
 from core.trace import trace
 from record.store import get_store
@@ -68,6 +68,7 @@ class NextQuestion(BaseModel):
     text: str
     dimension: str | None = None
     reason: str = ""
+    gap: str | None = None  # set when this follows up a known dimension (which gap it fills)
 
 
 class Report(BaseModel):
@@ -198,21 +199,15 @@ def _apply_answer(
     normal = (
         "跟平常一樣" in text or "正常" in text or text in {"沒有", "都沒有", "沒有痛", "睡得好"}
     )
-    if dim and (dim not in extra.domains or normal):
-        # the agent asked about this dimension; keep the caregiver's words under it
+    existing = obs.domains.get(dim) if dim else None
+    if dim and (dim not in extra.domains or normal) and not (existing and not normal):
+        # the agent asked about this dimension: a「跟平常一樣」answer marks it same; an answer
+        # that names nothing under it is kept as its words only when the dimension was unknown
+        # (a known dimension keeps its original quote — the answer may belong elsewhere and
+        # has already been merged above).
         obs.domains[dim] = DimensionValue(
-            value=0.0
-            if (normal and dim == "pain")
-            else obs.domains.get(
-                dim,
-                DimensionValue(
-                    raw_quote=text,
-                    provenance=Provenance(source="ai_extracted", author="intake_agent", ts=ts),
-                    confidence=0.6,
-                    lang="zh-TW",
-                ),
-            ).value,
-            raw_quote=text,
+            value=0.0 if (normal and dim == "pain") else (existing.value if existing else None),
+            raw_quote=existing.raw_quote if existing else text,
             provenance=Provenance(
                 source="ai_extracted", author="intake_agent", ts=ts, language_original="zh-TW"
             ),
@@ -289,6 +284,7 @@ def _context(
     red: RedFlagResult,
     phase: str,
     budget: int,
+    gaps: dict[str, list[str]] | None = None,
 ) -> dict:
     label = lambda d: DIMENSION_LABELS[d]["zh-TW"]  # noqa: E731
     prof = "（無 profile）"
@@ -327,6 +323,8 @@ def _context(
         "unknown": [label(d) for d in DIMENSIONS if d not in obs.domains],
         "facts": facts,
         "asked": [f"{q}→{a}" for q, a in asked],
+        "known_gaps": "；".join(f"{label(d)}：{'、'.join(g)}" for d, g in (gaps or {}).items())
+        or "無",
         "budget": budget,
     }
 
@@ -347,11 +345,75 @@ def _same_question(a: str, b: str) -> bool:
     return bool(x) and (x == y or x in y or y in x)
 
 
-def _plan(ctx: dict, known_dims: set[str], phase: str, n: int) -> NextQuestion | None:
-    """Ask the model; validate its choice (known dimension / repeated question) and give it one
-    retry with the constraint restated. A second invalid decision is an error, not a fallback."""
+_VALUE_WORDS = ("量", "多少", "幾", "程度", "多久", "幾次", "幾杯", "幾成", "幾口")
+_DIRECTION_WORDS = ("方向", "比平常", "多還是少", "變多", "變少", "變化", "有沒有更")
+
+
+def known_gaps(obs: StructuredObservation, raw_texts: list[str]) -> dict[str, list[str]]:
+    """Per known dimension, what is still missing — the only grounds for a follow-up:
+    an unfilled sub-field (value / direction), or a clue in the caregiver's own words that the
+    extraction has not captured yet (e.g.「肚子脹」under intake when only「沒吃完」was recorded)."""
+    from ingest.lexicon import _DIM_RE, clauses
+
+    out: dict[str, list[str]] = {}
+    for dim, dv in obs.domains.items():
+        gaps: list[str] = []
+        for text in raw_texts:
+            for clause in clauses(text):
+                m = _DIM_RE[dim].search(clause)
+                if m and clause not in dv.raw_quote and m.group(0) not in dv.raw_quote:
+                    g = f"原話「{clause}」還沒記到"
+                    if g not in gaps:
+                        gaps.append(g)
+        if dv.value is None:
+            gaps.append("沒有量或程度")
+        if dv.direction == "unknown":
+            gaps.append("不知道比平常多還是少")
+        if gaps:
+            out[dim] = gaps
+    return out
+
+
+def _gap_named(gaps: list[str], gap: str | None, reason: str) -> str | None:
+    """Which listed gap the model's gap/reason points at (None = it named none of them)."""
+    said = f"{gap or ''} {reason or ''}"
+    for g in gaps:
+        if g.startswith("原話「"):
+            clause = g[3 : g.index("」")]
+            if clause in said or any(len(w) >= 1 and w in said for w in _clue_words(clause)):
+                return g
+        elif g == "沒有量或程度" and any(w in said for w in _VALUE_WORDS):
+            return g
+        elif g == "不知道比平常多還是少" and any(w in said for w in _DIRECTION_WORDS):
+            return g
+    return None
+
+
+def _clue_words(clause: str) -> list[str]:
+    """The dimension keywords inside a clause (e.g.「說肚子脹」→ ['脹'])."""
+    from ingest.lexicon import _DIM_RE
+
+    return [m.group(0) for r in _DIM_RE.values() for m in r.finditer(clause)]
+
+
+def _plan(
+    ctx: dict,
+    known_dims: set[str],
+    phase: str,
+    n: int,
+    gaps: dict[str, list[str]] | None = None,
+    asked_dims: set[str] | None = None,
+) -> NextQuestion | None:
+    """Ask the model; validate its choice and give it one retry with the constraint restated.
+
+    Valid: an unknown dimension, or a known dimension that still has a gap (``known_gaps``) the
+    model names in ``gap``/``reason`` and that has not been followed up before. A second invalid
+    decision is treated as ask=false (the caregiver gets the summary card to confirm or add to)
+    — never a 503; LLMUnavailable is reserved for the model itself failing."""
     llm = get_llm()
     asked_q = [a.split("→", 1)[0] for a in ctx.get("asked") or []]
+    gaps = gaps or {}
+    asked_dims = asked_dims or set()
 
     def invalid(o: NextQuestionOut) -> str | None:
         if not o.ask:
@@ -362,7 +424,16 @@ def _plan(ctx: dict, known_dims: set[str], phase: str, n: int) -> NextQuestion |
             return f"「{o.question.strip()}」已經問過（照護者已回答），不要重複，換一題或 ask=false"
         d = _norm_dim(o.dimension)
         if phase != "red" and d in known_dims:
-            return f"「{DIMENSION_LABELS[d]['zh-TW']}」已知，不要再問，換一個未知維度或 ask=false"
+            label = DIMENSION_LABELS[d]["zh-TW"]
+            if d in asked_dims:
+                return f"「{label}」已經追問過一次，不能再問，換一個維度或 ask=false"
+            if d not in gaps:
+                return f"「{label}」已知且沒有缺口，不要再問，換一個未知維度或 ask=false"
+            if _gap_named(gaps[d], o.gap, o.reason) is None:
+                return (
+                    f"「{label}」已知；要追問必須在 gap／reason 指出缺口"
+                    f"（{'；'.join(gaps[d])}），否則換一個未知維度或 ask=false"
+                )
         return None
 
     out = llm.next_question(ctx)
@@ -373,12 +444,16 @@ def _plan(ctx: dict, known_dims: set[str], phase: str, n: int) -> NextQuestion |
     if not out.ask:
         return None
     if why:
-        raise LLMUnavailable(f"agent 回傳無效的追問決定：{why}（見 /trace）")
+        trace("intake.plan_gave_up", why=why, question=out.question, dimension=out.dimension)
+        return None
+    d = _norm_dim(out.dimension)
+    named = _gap_named(gaps.get(d, []), out.gap, out.reason) if d in known_dims else None
     return NextQuestion(
         key=f"q{n}",
         text=out.question.strip(),
-        dimension=_norm_dim(out.dimension),
+        dimension=d,
         reason=out.reason,
+        gap=named,
     )
 
 
@@ -442,6 +517,8 @@ def plan_question(
     baseline: Baseline | None,
     asked: list[tuple[str, str]],
     rf: RedFlagResult,
+    asked_dims: list[str] | None = None,
+    raw_texts: list[str] | None = None,
 ) -> tuple[NextQuestion | None, int]:
     """Ask the model what to ask next (or nothing). Returns (question, budget_left)."""
     red = rf.notify_now
@@ -449,8 +526,10 @@ def plan_question(
     budget = (MAX_RED_TURNS if red else MAX_LLM_TURNS) - len(asked)
     nq = None
     if budget > 0:
-        ctx = _context(obs, profile, baseline, asked, rf, phase, budget)
-        nq = _plan(ctx, set(obs.domains), phase, len(asked) + 1)
+        texts = raw_texts if raw_texts is not None else [obs.raw_text]
+        gaps = known_gaps(obs, texts)
+        ctx = _context(obs, profile, baseline, asked, rf, phase, budget, gaps)
+        nq = _plan(ctx, set(obs.domains), phase, len(asked) + 1, gaps, set(asked_dims or []))
     return nq, max(budget - (1 if nq else 0), 0)
 
 
@@ -472,7 +551,9 @@ def run_dialog(
     nq: NextQuestion | None = None
     budget_left = (MAX_RED_TURNS if red else MAX_LLM_TURNS) - len(asked)
     if plan_next:
-        nq, budget_left = plan_question(obs, profile, baseline, asked, rf)
+        nq, budget_left = plan_question(
+            obs, profile, baseline, asked, rf, asked_dims, [t.text for t in turns]
+        )
     was_red = any(t.phase == "red" for t in turns[1:])
     intro = RED_INTRO if (red and nq is not None and not was_red) else None
     closing = RED_CLOSING if (red and nq is None) else None

@@ -39,7 +39,7 @@ def clauses(text: str) -> list[str]:
 
 _DIM_PATTERNS: dict[str, list[str]] = {
     "intake": [
-        r"食慾|胃口|吃(?!藥)|喝水|喝|飯|碗|粥|牛奶|營養品|進食|飲水|吞|幾口|一口|兩口|三口",
+        r"食慾|胃口|吃(?!藥)|喝水|喝|飯|碗|粥|牛奶|營養品|進食|飲水|吞|幾口|一口|兩口|三口|脹|噁心|想吐",
         r"nafsu makan|makan|minum|susu|bubur|nasi|suap|menelan",
         r"ăn|uống|cháo|sữa|nuốt|muỗng|chén",
         r"\beat|\bate|drink|appetite|meal",

@@ -87,7 +87,7 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
         if (name === "event") state.events = [...state.events, data as unknown as ActivityEvent];
         else if (name === "token") state.text += String(data.text ?? "");
         else if (name === "system") state.system = [...state.system, String(data.text ?? "")];
-        else if (name === "error") throw new Error(String(data.detail ?? "unknown"));
+        else if (name === "error") throw new Error(String(data.text ?? "系統暫時無法回覆，請直接告訴護理師。"), { cause: String(data.detail ?? "") });
         else if (name === "done") {
           const d = data as unknown as TalkDone;
           const sys: ConvMessage[] = state.system.map((t, i) => ({ id: `sys_${localId}_${i}`, patient_id: pid, session_id: "", role: "system", kind: "event", text: t, ts: new Date().toISOString(), meta: { red: d.red } }));
@@ -101,9 +101,11 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
       });
     } catch (e) {
       // 沒有模型／模型失敗：畫面上顯示錯誤並停止，不退回規則版
-      const msg = (e as Error).message;
-      setError(msg);
-      setMessages((ms) => [...ms, { id: `err_${localId}`, patient_id: pid, session_id: "", role: "system", kind: "error", text: `無法繼續：${msg}`, ts: new Date().toISOString(), meta: {} }]);
+      const err = e as Error;
+      const msg = err.message || "系統暫時無法回覆，請直接告訴護理師。";
+      const detail = typeof err.cause === "string" ? err.cause : "";
+      setError(role === "caregiver" || !detail ? msg : `${msg}（${detail}）`);
+      setMessages((ms) => [...ms, { id: `err_${localId}`, patient_id: pid, session_id: "", role: "system", kind: "error", text: msg, ts: new Date().toISOString(), meta: { detail } }]);
     } finally {
       setLive(null);
     }

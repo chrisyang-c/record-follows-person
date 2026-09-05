@@ -410,6 +410,10 @@ class NextQuestionOut(BaseModel):
     )
     question: str = Field(default="", description="一句日常口語的問題，對照護者說")
     reason: str = Field(default="", description="為什麼問這題（存進 trace，給護理師看）")
+    gap: str | None = Field(
+        default=None,
+        description="只有選「已知但仍有缺口」的維度時才填：要補的是哪個缺口（照抄缺口文字）",
+    )
 
 
 class ISBARDraftOut(BaseModel):
@@ -744,7 +748,8 @@ NEXT_Q_SYSTEM = """你是長照機構的 Intake Agent，正在用聊天跟照服
 原則：
 1. 一次只問一題，用台灣日常口語對照服員說（≤ 30 字），像「王伯今天有喝水嗎？大概幾杯？」，
    不用醫療術語、不用表單語。
-2. 已知的維度不要再問；已問過的題目不要重複。
+2. 已問過的題目不要重複。已知的維度原則上不再問；只有「已知但仍有缺口」清單裡列出的維度
+   可以追問一次，追問時 gap 照抄清單裡的缺口文字、reason 說明要補什麼；每個維度最多追問一次。
 3. 依這個人的慢性病、用藥與基線決定優先順序（COPD→呼吸咳嗽、失智→精神反應、
    抗凝血劑→跌倒後的頭部／瘀青、
    壓傷→皮膚、糖尿病→進食飲水），並考慮已知觀察之間的關聯（吃得少→問喝水、大小便）。
@@ -762,7 +767,9 @@ def _next_question_impl(self: ChatModelLLM, ctx: dict[str, Any]) -> NextQuestion
     prompt = (
         f"phase：{ctx.get('phase')}\n"
         f"照服員第一句：{ctx.get('said')}\n已知維度：{ctx.get('known') or '無'}\n"
-        f"未知維度：{ctx.get('unknown')}\n事件／紅燈事實：{ctx.get('facts') or '無'}\n"
+        f"未知維度：{ctx.get('unknown')}\n"
+        f"已知但仍有缺口（可追問一次，gap 照抄缺口文字）：{ctx.get('known_gaps') or '無'}\n"
+        f"事件／紅燈事實：{ctx.get('facts') or '無'}\n"
         f"已問過（問→答）：{ctx.get('asked') or '無'}\n剩餘追問預算：{ctx.get('budget')} 題"
         + (f"\n注意：{ctx['note']}" if ctx.get("note") else "")
     )
@@ -780,7 +787,12 @@ def _next_question_impl(self: ChatModelLLM, ctx: dict[str, Any]) -> NextQuestion
             "llm.next_question",
             provider=self.name,
             input=prompt,
-            output={"ask": res.ask, "dimension": res.dimension, "question": res.question},
+            output={
+                "ask": res.ask,
+                "dimension": res.dimension,
+                "question": res.question,
+                "gap": res.gap,
+            },
             reason=res.reason,
             duration_ms=tm.ms,
         )
