@@ -8,6 +8,8 @@ BUILDMODE 2026 × SITCON ・ Healthcare AI 賽道。紀錄屬於本人，誰能�
 
 ![ci](https://github.com/chrisyang-c/record-follows-person/actions/workflows/ci.yml/badge.svg)
 
+目前是可獨立開發／驗證的 **synthetic-data demo**，不是可上線的醫療資料平台。登入 cookie、部分 API 授權與資料隔離仍有缺口；不要接真實病人資料或公開暴露服務。2026-09-06 的實碼 [review](docs/PROJECT_REVIEW.md)、[驗證範圍](docs/VALIDATION.md) 與 [分期 roadmap](docs/ROADMAP.md) 分開維護；只需修改這個 repo，舊來源已可還原封存。
+
 ---
 
 ## 問題與制度出處
@@ -73,11 +75,13 @@ flowchart TD
 
 ## 快速開始
 
-需要：Python 3.12（[uv](https://docs.astral.sh/uv/)）、Node 24（pnpm）、PostgreSQL 17。
+需要：Python 3.12（[uv](https://docs.astral.sh/uv/)）、Node 24、pnpm 10.12.1、PostgreSQL 17；Windows 使用 PowerShell 7。只做程式檢查不需要啟動資料庫，完整啟動驗收才需要 PostgreSQL。只 clone 此 repo 即可，不需要 `health-ref` 或外層 docs。
 
 **macOS / Linux**
 ```bash
 cp .env.example .env               # MODEL_PROVIDER=openai + OPENAI_API_KEY；沒 key 會自動退回 mock
+cd apps/api && uv sync --frozen && cd ../..
+cd apps/web && pnpm install --frozen-lockfile && cd ../..
 docker compose up -d postgres      # 沒 Docker：make db-local（Homebrew postgresql@17）
 make migrate                       # PostgresSaver.setup() + threads 表（只在這裡跑）
 make seed                          # 3 住民 × 14 天 × 2 班 + 第 12 天一次急症 → records/
@@ -87,20 +91,23 @@ make web                           # http://localhost:3000
 
 **Windows**
 ```powershell
-Copy-Item .env.example .env
+if (!(Test-Path .env)) { Copy-Item .env.example .env } # 保留已有設定
 .\scripts\dev.ps1 setup            # uv sync + pnpm install（不碰 records、不碰資料庫）
-.\scripts\dev.ps1 init             # 建 DB + migrate + seed（會清空 records\，需輸入 yes）
+docker compose up -d postgres     # 或自行啟動 PostgreSQL 17，確認 .env DATABASE_URL
+.\scripts\dev.ps1 migrate          # 建 checkpoint 與 registry 表
+.\scripts\dev.ps1 seed             # 僅首次示範：會清空 records\，需輸入 yes
 .\scripts\dev.ps1 api              # 另開一個終端跑 .\scripts\dev.ps1 web
+.\scripts\dev.ps1 check            # 完整 API + web gate；不使用真模型、不發 LINE
 .\scripts\dev.ps1 help             # 看所有指令；status 看目前環境與資料狀態
 ```
 
-> `dev.ps1` 把「會刪東西的」和「不會刪東西的」分開：日常指令保證不動 `records\` 與資料庫；
-> `init`／`reset`／`seed`／`clean-records` 會先列出將刪除什麼並要求確認（CI 用 `-Force`）。
+> `check` 不重設既有紀錄；API 正常使用會寫資料，`migrate` 會建立資料表，`codegen` 會更新產生檔。
+> `init/reset/seed/clean-records` 會清資料，先列出目標並要求確認；不要當日常啟動指令。
+> 缺 pnpm 會明確失敗。只需要 API 時可用 `setup -ApiOnly`／`check -ApiOnly`，但不算完整驗收。
 
 畫面：`/` 選角色（cookie）→ 角色首頁（`/caregiver` 住民卡、`/nurse` 紅燈橫幅→等我確認→今日總覽＋巡診準備、`/doctor` 巡診名單）→ 病人頁 `/p/{id}?tab=who|timeline|docs|talk`（這份紀錄的唯一入口）。`talk` 是 LINE 式聊天：每一題都由 intake_agent（LLM）依八維度缺口、profile、基線與已問過的題決定並附 reason，只有語音與文字輸入，上限 4 題；紅燈時程式先通知護理師、對話繼續由 agent 問關鍵事實並即時同步到護理師端；沒有模型就報錯停止。每則回覆下有 Agent 活動列（收合「花了 2.3 秒，7 步」，展開＝`GET /debug/trace/{thread_id}` 的內容）。`docs` 放護理師的等我確認（Path A 審核、10 秒確認）、RoundPage（可列印 A4）、事故檔、注意事項。逐步驗收指令見 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
 
-測試：`make test`（api：ruff + pytest；web：eslint + vitest）；評測：`make eval`。
-Windows 用 `.\scripts\dev.ps1 check` —— 它跑的是 CI 那一組（ruff check ＋ **ruff format --check** ＋ pytest ＋ codegen 一致性），`make test` 少了後兩項。
+完整檢查：Windows 用 `.\scripts\dev.ps1 check`；macOS/Linux 用 `make check`。涵蓋 ruff check／format、API tests、web lint／tests、腳本回歸、臨時資料 mock eval、唯讀 codegen 比對、web build 後 typecheck。獨立資料庫＋重啟＋瀏覽器驗證見 [VALIDATION](docs/VALIDATION.md)；程式 gate 成功不等於完整臨床流程都測過。
 
 ---
 
@@ -153,20 +160,13 @@ Schema 單一來源：[packages/schema/record_schema/models.py](packages/schema/
 | 逐句全對 | 43/46 | 41/46 | 42/46 |
 | 每句成本（估算，含 85% 快取命中） | — | $0.00025 | $0.00025 |
 
-樣本只有 46 句，三欄之間的差距都在 **一句之內**（多抽 2／4／3 句、漏抽 1／2／2 句），不足以分出模型優劣；三個設定的 provenance、無診斷詞與誘導句都是滿分，也就是這個專案最在意的守門（raw_quote 必須是原文子字串、AI 不下判斷）不因模型而變。
+樣本只有 46 句，多抽最多相差 2 句、漏抽最多相差 1 句；單次小樣本不足以證明模型優劣。這些是 2026-09-05 保存的歷史評測，本輪沒有重新呼叫真模型。引用子字串、詞彙檢查與人工確認是必要邊界，但不是回答逐句有證據或臨床安全性的充分證明。
 
 **選 gpt-5.6-luna（intake `reasoning_effort=low`）的理由**：同一個模型同時跑 intake、個人 deep agent 與三個 subagent，成本是 gpt-4.1 的數分之一（每句約 $0.00025、三位住民巡診約 $0.012），prompt caching 命中率 85% 以上；low 走 Responses API，在 intake 這兩個 prompt 上不產生 reasoning tokens、成本與 none 相同，但 hallucination 從 8.7% 降到 6.5%。deep agent 與其他節點維持 `none`（chat completions 的 function tools 需要）。設定：`MODEL_PINNED=gpt-5.6-luna`、`INTAKE_REASONING_EFFORT=low`（`.env`）。
 
 守門與模型無關：`core/llm.py::_guard_quotes` 會丟掉任何不是原文子字串的 raw_quote；抽取結果依「句子＋住民＋模型＋當日」快取（`records/{id}/extract_cache.json`），同一句只送模型一次。
 
----|---|
-| Hallucination rate（有 ≥1 個多抽的標籤） | 2/46 = 4.3% |
-| Omission rate（有 ≥1 個漏抽的標籤） | 0/46 = 0.0% |
-| Provenance 正確率（source=ai_extracted ∧ raw_quote ⊂ 原文） | 46/46 = 100% |
-| 輸出不含診斷詞 | 46/46 = 100% |
-| 誘導句（「他應該是感冒了吧」等）不下診斷 | 5/5 |
-
-mock 模式的 hallucination 在結構上不可能超過關鍵字命中（raw_quote 必須是原文子字串）；填入 `OPENAI_API_KEY` 後走 `ChatOpenAI(model=MODEL_PINNED, temperature=0)`，同一道守門仍在（`core/llm.py::_guard_quotes`）。
+2026-09-06 的 mock gate：多抽 2/46、漏抽 0/46、來源子字串檢查 46/46、誘導句 5/5；這是程式回歸，不是上述真模型結果，也不會覆寫它。數字與限制見 [VALIDATION](docs/VALIDATION.md)。
 
 ---
 
@@ -206,6 +206,8 @@ mock 模式的 hallucination 在結構上不可能超過關鍵字命中（raw_qu
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | 已知問題與繞法 |
 | [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) | 驗收步驟與指令 |
 | [docs/CONSOLIDATION.md](docs/CONSOLIDATION.md) | 工作區整併的來源去向清單 |
+| [docs/PROJECT_REVIEW.md](docs/PROJECT_REVIEW.md) | 本輪實碼 review、風險與補強優先序 |
+| [docs/VALIDATION.md](docs/VALIDATION.md) | 可重現驗證、實際結果與未涵蓋範圍 |
 | [docs/proposals/](docs/proposals/) | 外部提案，**未採納**；描述的不是這個 repo |
 
 其他：[docs/design.md](docs/design.md)・[docs/UI_AUDIT.md](docs/UI_AUDIT.md)・[docs/UIUX_OMNI_TWIN.md](docs/UIUX_OMNI_TWIN.md)・[docs/VIDEO.md](docs/VIDEO.md)

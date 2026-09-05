@@ -6,21 +6,23 @@ Output: packages/schema/ts/index.ts (imported by apps/web via the ``@schema`` al
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, TypeAdapter
-
 import record_schema as rs
+from pydantic import BaseModel, TypeAdapter
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "ts" / "index.ts"
 
 ROOT_MODELS: list[str] = [
-    n for n in rs.__all__ if isinstance(getattr(rs, n), type) and issubclass(getattr(rs, n), BaseModel)
+    n
+    for n in rs.__all__
+    if isinstance(getattr(rs, n), type) and issubclass(getattr(rs, n), BaseModel)
 ]
 ROOT_ALIASES: dict[str, Any] = {
     "Lang": rs.Lang,
@@ -106,7 +108,7 @@ def emit_interface(name: str, schema: dict[str, Any], defs: dict[str, Any]) -> s
     return f"{head}export interface {name} {{\n{body}\n}}\n"
 
 
-def main() -> None:
+def render() -> tuple[str, int]:
     defs: dict[str, Any] = {}
     root_schemas: dict[str, Any] = {}
     for name in ROOT_MODELS:
@@ -149,12 +151,29 @@ def main() -> None:
     )
     text = "\n".join(out)
     text = re.sub(r"\n{3,}", "\n\n", text)
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    return text, len(emitted)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="Compare without modifying any files")
+    parser.add_argument("--output", type=Path, default=OUT, help="Generated TypeScript file")
+    args = parser.parse_args(argv)
+    text, count = render()
+    if args.check:
+        if not args.output.is_file() or args.output.read_text(encoding="utf-8") != text:
+            print(f"Schema types are out of date: {args.output}. Run codegen.", file=sys.stderr)
+            return 1
+        print(f"Schema types are synchronized: {args.output}")
+        return 0
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     # newline="\n" so the generated file is byte-identical on every platform. Without it
     # Windows writes CRLF and every codegen run produces a whole-file diff.
-    OUT.write_text(text, encoding="utf-8", newline="\n")
-    print(f"wrote {OUT} ({len(text)} bytes, {len(emitted)} types)", file=sys.stderr)
+    args.output.write_text(text, encoding="utf-8", newline="\n")
+    print(f"wrote {args.output} ({len(text)} characters, {count} types)", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

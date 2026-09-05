@@ -3,6 +3,7 @@
 格式：日期｜決定｜理由｜誰。改變核心原則（CLAUDE.md §1）需全隊同意。
 
 ## 已讀紀錄（§0.2）
+- 已讀，2026-09-06，Codex：CLAUDE.md、ARCHITECTURE、兩張 Mermaid、摘要與願景、VISION_personal_health_twin、UIUX_OMNI_TWIN；本輪不改臨床節點或紅燈規則。
 - 已讀，2026-09-04，Claude（agent，代 chrisyang-c 執行）：CLAUDE.md、docs/ARCHITECTURE.md、docs/langgraph_path_a_incident.mermaid、docs/langgraph_path_b_routine_round.mermaid、docs/一份能跟著人走的紀錄_摘要與願景.md
 
 ## 我對這份設計的理解（2026-09-04，Claude）
@@ -81,3 +82,10 @@
 | 2026-09-05 | `check` 子指令除了 lint 與 pytest，另外驗證 `packages/schema/ts/index.ts` 是否與 pydantic schema 同步（跑 codegen 後 git 不得有差異）。 | 與 ci.yml L42–45 同一個檢查。改了 pydantic 卻忘記跑 codegen 是 CI 常紅的原因，本機先擋掉。 | Claude |
 | 2026-09-05 | 依使用者指示參考 `../health-ref`（隊友 Jennifer 的專案，無 LICENSE）：**只借想法並重寫**，唯一原檔複製的是 3D 模型 `my_avatar.glb`（使用者明確同意，`apps/web/public/models/LICENSE.txt` 記出處）。借入：3D 分身進 01（膚色依睡眠、身材依體重、表情依心情、嘴型同步）、沙盤模擬（兩個分身＋拉桿，標「示意，不是預測或診斷」）、穿戴每日指標（新 timeline kind `wearable_daily`，只有事實數值、無品質分數）、複合圖、「唸給我聽」、本人自記（寫進對話串而非 timeline）、回答聚焦維度。**不借**：營養品推薦與購買連結、讓模型直接依數字給建議的聊天、Chroma／HNSWLib 向量庫。 | CLAUDE.md §0.5；紅線 §1.3／§1.9（建議與數字只在本人 wellness 區）。 | 使用者 |
 | 2026-09-05 | 兩條工作流合流：隊友的個人正常帶（RF13）接進 01 生命徵象面板（「他平常：…」＋偏離句、state 改 changed）與護理站今日總覽（warn chip「偏離他平常」，不進紅燈橫幅），新增 `GET /patients/{id}/vitals-bands`；Care Circle／access log 補 `purpose`（授權必填、登入依角色帶預設目的）；KNOWN_ISSUES 重複編號（兩邊各自加了 #37/#38）改為 #40/#41 並依號排序。 | 使用者指示「統整並 merge」；RF13 是 observe，放進紅燈會淹掉要立刻叫人的規則（隊友的決定，維持）。 | 使用者 |
+| 2026-09-06 | 唯一正式目錄維持 record-follows-person；外層 docs 與 health-ref 完整移至工作區外可還原封存，不永久刪除。 | 使用者要求整理到只需維護一個 repo；來源與 Git 未提交修改都需保留。搬移核對見 CONSOLIDATION。 | 使用者授權／Codex 執行 |
+| 2026-09-06 | 更正舊整併推論：無原件不能證明已刪文件完全重複或不可回復；特定模型許可不代表整個參考 repo 有授權。 | 保留歷史決策，不把推論當查證事實。現況以 CONSOLIDATION §2–3 為準。 | Codex |
+| 2026-09-06 | 長期目標保留 Personal Health Twin；工程先可信身分／病人隔離、用途政策、儲存契約、第一條外部資料，再擴檢索與事件。護理使用者研究可並行，不是全部平台工作的前置封鎖。 | 本輪實碼 review 找到直接 API 存取缺口；功能頁面或未加權百分比不足以衡量平台完成度。 | Codex（排序建議，見 ROADMAP） |
+| 2026-09-06 | 不採整包架構不等於排除 claim evidence、版本更正、health graph；內部品質欄位與臨床 UI 分數禁令分開。 | 更正先前把 provenance 等同 citation gate、PersonRecord 等同交易日誌的推論；不放寬原臨床顯示紅線。 | Codex |
+| 2026-09-06 | 完整 check 不吞工具失敗，API-only 必須明示；codegen --check 唯讀，mock eval 用暫存資料；build 在 typecheck 前。 | 12 個工具回歸案例驗證失敗傳遞與未提交型別不被覆寫；make test 補 format，CI 加 Windows gate 及 Postgres 重啟 smoke。 | Codex |
+| 2026-09-06 | 更正「日常指令不碰資料」：API 會寫紀錄、migrate 會建表；check 不重設資料，codegen 會更新生成檔。init/reset 的自訂目標限制仍列為 KNOWN_ISSUES #47。 | 避免錯誤安全保證；本輪未執行任何主專案資料重設。 | Codex |
+| 2026-09-06 | 推送前同步 `0ee23aa`：保留正常帶 UI／endpoint、purpose schema／grant／audit／UI 與六個整合測試；重做交接及 review 現況核對。 | 不覆蓋遠端並行工作；purpose 基礎欄位完成與用途政策未完成分開記錄。 | Codex |

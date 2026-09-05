@@ -1,129 +1,74 @@
-# CONSOLIDATION — 工作區整併（2026-09-05）
+# CONSOLIDATION — 唯一專案與來源去向
 
-> 目標：**只取得這個 repo，就能開發、啟動、測試**。工作區其他資料夾只供參考，不再是產品運作的依賴。
+> 最後核對：2026-09-06。`D:\Health AI Bridge\record-follows-person` 是唯一正式開發目錄；只 clone 此 repo，不需要旁邊的參考專案。
 
-本文件記錄整併期間每一份來源內容的去向。沒有列在這裡的東西，就是沒有被檢查過。
+## 1. 現在應留下什麼
 
----
+```text
+D:\Health AI Bridge\
+└── record-follows-person\     唯一需要持續修改、提交及推送的專案
 
-## 0. 整併前後的工作區
-
-```
-整併前                              整併後
-D:\Health AI Bridge\               D:\Health AI Bridge\
-├── record-follows-person\   ←──── ├── record-follows-person\   唯一正式專案
-├── Healthcare\             ─改名─→ ├── health-ref\             參考來源，唯讀
-├── claude_healthcare\      ─刪除            （內容見 §2）
-├── gpt_healthcare\         ─刪除
-├── docs\00-architecture.md ─收錄─→ └── docs\ 外層只剩這一份提案的原件
-└── …最終版.md              ─刪除
+D:\Health AI Bridge Archive\20260906-consolidation\
+├── README.md                  備份範圍與還原說明
+├── docs\                     外層架構提案原件
+└── health-ref\               參考專案完整工作樹、.git 與未提交修改
 ```
 
-**重要更正**：`health-ref` **只等於原本的 `Healthcare`**（robocopy `/MOVE`，逐位元相同，git repo 與 5,528 行未提交的工作都完好）。它**不包含** `claude_healthcare` 或 `gpt_healthcare` 的內容 —— 那兩個是分別刪除的，不是併進去的。
+外層兩個資料夾已移出工作區，沒有永久刪除來源檔案。封存不是開發相依，不需上傳本 repo，也不要從封存目錄繼續開發本產品。個人 `.env`、執行期 `records/`、資料庫及工具仍須自行配置／備份，不屬於 Git 可攜性的承諾。
 
----
+### 本輪封存驗證
 
-## 1. 整合清單
-
-| # | 來源 | 用途 | 目的位置 | 採用狀態 | 驗收方式 |
-|---|---|---|---|---|---|
-| 1 | `claude_healthcare/twin/baseline/` | 個人生理值正常帶（median／MAD／p10–p90）、established 門檻 | `apps/api/baseline/` | **已採用** `c0a6802` | `pytest baseline/` 全過；`test_band_not_established_on_too_few_readings` 驗證門檻 |
-| 2 | `claude_healthcare/twin/detection/` 的「偵測不用 LLM」原則 | 紅燈規則不呼叫模型 | `red_flags/rules.py` | **已存在**（本 repo §1.4 早有同一條） | `test_rules_module_never_calls_an_llm` |
-| 3 | `claude_healthcare/twin/consent/` Zone 0–4 分區授權 | 依內容敏感度分區 | — | **不採用** | 本 repo 用 Care Circle scope（`who/timeline/docs/talk`），兩套不相容，見 §3 |
-| 4 | `claude_healthcare/twin/ai/citation_gate.py` | 沒有來源的句子不准輸出 | — | **不採用** | 本 repo 用 provenance ＋ `timeline_write` 守門達成同一目的 |
-| 5 | `claude_healthcare/twin/core/` 斷言日誌（append-only、雙時間軸） | 唯一權威資料來源 | — | **不採用** | 本 repo 用 PersonRecord ＋ `timeline_write`，見 §3 |
-| 6 | `claude_healthcare/twin/packet/` Event Packet 組裝器 | 依角色投影的事件資訊包 | — | **不採用** | 本 repo 的 `IncidentFile`（事件資訊包）已涵蓋 |
-| 7 | `claude_healthcare/web/` 四角色前端 | Patient／Caregiver／Nurse／Doctor 介面 | — | **不採用** | 本 repo 的四扇門更完整（OMNI-TWIN 殼、列印白底、body hologram） |
-| 8 | `claude_healthcare` 其餘（約 13,500 行） | — | — | **已刪除，未保存** | 見 §2 的風險說明 |
-| 9 | `gpt_healthcare/docs/PROJECT_MASTER.md` 等 5 份 | 產品願景 | — | **重複** | 與 `docs/VISION_personal_health_twin.md` 內容重疊，無獨有資訊 |
-| 10 | 根目錄 `…最終版.md`（35.4 KB） | 產品願景 | — | **重複** | 與 `docs/VISION_personal_health_twin.md` 同一份檔案（同 35,4xx bytes） |
-| 11 | 外層 `docs/00-architecture.md`（50 KB） | 平台架構提案 | `docs/proposals/00-architecture.md` | **收錄為待審提案** | 逐項採納狀態記在該檔頁首；未採納者維持提案狀態 |
-| 12 | `health-ref` 的 `HealthEvent` 通用事件模型 | 事件不寫死成「跌倒」 | 候選 → `docs/ROADMAP.md` Epic 2 | **僅供參考（想法）** | 見 §2 授權限制：只能借想法，不能移植程式碼 |
-| 13 | `health-ref` 的 `ConsentGrant.purpose` / `AuditLog.purpose` | 授權與稽核記錄「為了什麼目的」 | `packages/schema`（`CareCircleMember`、`AccessLogEntry`） | **已移植（想法，重寫）** | 見 §4 |
-| 14 | `health-ref` 其餘（前端 6 頁、twin_service、SQLAlchemy 模型、3,993 行 CSS） | — | — | **僅供參考** | 本 repo 皆有對應且更完整的實作 |
-| 15 | Windows 開發入口 | 從 repo 根目錄啟動／檢查／codegen | `scripts/dev.ps1` | **已採用** | 見 §5 |
-
----
-
-## 2. `health-ref` 的授權限制（硬約束）
-
-```
-health-ref  =  github.com/chenni416/Healthcare
-LICENSE     :  沒有
-package.json:  "license": ""，"private": true
-本 repo     :  Apache-2.0
-```
-
-**沒有授權檔 = 著作權法預設保留所有權利。** 依 CLAUDE.md §0.5：只借想法，或 MIT／Apache／CC0 授權下的程式碼。
-
-因此：
-
-- ❌ **不得複製 `health-ref` 的任何程式碼進本 repo** —— 把無授權的碼放進 Apache-2.0 專案是授權違規。
-- ✅ 可以借**想法**，自行重寫，並在檔案頂端註明「概念參考：chenni416/Healthcare（無授權宣告，僅借用概念）」。
-
-清單第 12、13 項是唯二值得借的想法，兩項都會自行重寫。
-
-### 2.1 兩個要讓擁有者知道的事
-
-1. **`health-ref` 有 18 個檔案、5,528 行新增沒有提交。** 角色從 `caregiver|nurse` 擴成 `patient|family|caregiver|nurse|doctor`、`src/index.css` 加了 4,629 行、router／langgraph_service／test_api 都改過。放在本機未推的狀態風險很高。
-2. **`backend/venv` 有 4,101 個檔案被 commit 進該 repo。** 這是它 `.git` 15 MB 的來源。處理方式是 `git rm -r --cached backend/venv` ＋ 補 `.gitignore`，但那是該 repo 擁有者的決定。
-
-### 2.2 `claude_healthcare` 已不可回復
-
-依使用者指示刪除。除了第 1 項（baseline 引擎）已移植，其餘約 13,500 行沒有備份。設計文件本身保存在第 11 項。**這是整併期間唯一不可逆的損失，記錄於此以免日後誤以為它在 `health-ref` 裡。**
-
----
-
-## 3. 兩套架構方向的取捨
-
-外層提案（`docs/proposals/00-architecture.md`）與本 repo 是兩條不同的路。**不能靠複製檔案合成**，逐項決定如下：
-
-| 議題 | 提案的做法 | 本 repo 的做法 | 決定 |
-|---|---|---|---|
-| 權威資料 | append-only 斷言日誌，雙時間軸 | PersonRecord ＋ `timeline_write` 單一寫入點 | **維持本 repo**。兩者都達成「只增不改」，本 repo 的已有 20 個測試檔繞著它建立 |
-| 授權模型 | Zone 0–4 依**內容敏感度**分區 | Care Circle scope 依**頁面**分區（who/timeline/docs/talk） | **維持本 repo**，但補 purpose 欄位（§4）。Zone 分區留在 ROADMAP 作為 Consent Engine 的候選 |
-| AI 輸出守門 | CitationGate：型別上不存在無來源的 Claim | provenance ＋ 護理師確認閘門 | **維持本 repo**。同一個目的，本 repo 的做法與 LangGraph interrupt 結構一致 |
-| 前端 | Vite ＋ 原生 JS | Next.js App Router ＋ Tailwind | **維持本 repo** |
-| 讀取 API | GraphQL 欄位級 `@zone` | REST | **維持本 repo** |
-| 儲存 | Postgres ＋ Neo4j ＋ TimescaleDB | 檔案系統 ＋ Postgres（LangGraph checkpointer） | **維持本 repo**；正式儲存層列入 ROADMAP |
-| 個人基準線 | median／MAD／三尺度 | 護理師寫的 `vitals_usual` | **已合流**（第 1 項）：兩者並存，帶只描述比較，不寫回 baseline |
-
-**唯一已合流的是基準線。** 其餘皆維持本 repo，提案文件保留在 `docs/proposals/` 供日後逐項再議。
-
----
-
-## 4. 待移植：授權與稽核的 purpose 欄位
-
-VISION §16 定義存取要回答 `WHO / WHAT / WHEN / WHY / HOW MUCH`。本 repo 現況：
-
-| 維度 | `CareCircleMember` | `AccessLogEntry` |
-|---|---|---|
-| WHO | `member_id`、`role` ✅ | `who`、`role` ✅ |
-| WHAT | `scopes` ✅ | `what` ✅ |
-| WHEN | `valid_from`／`valid_to` ✅ | `ts` ✅ |
-| **WHY** | **缺** | **缺** |
-| HOW MUCH | `scopes` ✅ | — |
-
-**採用狀態：已移植（2026-09-05 統整 commit）。** 目的位置 `packages/schema/record_schema/models.py`。
-驗收方式：`CareCircleMember.purpose` 與 `AccessLogEntry.purpose` 存在且非空；`/patients/{id}/access-log` 回傳含 purpose；`tests/test_care_circle.py` 新增一個「授權必須說明目的」的案例。
-
-
----
-
-## 5. 開發入口
-
-`Makefile` 的 `db-local`／`reset` 綁 Homebrew，只在 macOS 可用。新增 `scripts/dev.ps1` 作為 Windows 入口，指令與 Makefile 對應。
-
-**安全邊界（brief 要求）**：日常指令（`api`／`web`／`test`／`lint`／`codegen`）**不會**清空 `records/` 或重建資料庫。破壞性操作是獨立且需要明確確認的指令（`init`／`reset`），會先列出將被刪除的東西並要求輸入 `yes`。
-
----
-
-## 6. 剩餘差異與未完成項目
-
-| 項目 | 狀態 |
+| 來源 → 封存 | 搬移前後核對 |
 |---|---|
-| §4 的 purpose 欄位 | 已執行：schema、seed、登入、授權端點必填、access log 帶入、前端顯示；`tests/test_integration_bands_purpose.py` |
-| ROADMAP 的 12 個平台 Epic | 未排程，見 `docs/ROADMAP.md` |
-| `health-ref` 的未提交工作與 venv 問題 | 已通知，屬該 repo 擁有者 |
-| `claude_healthcare` 的 13,500 行 | 已刪除，不可回復（§2.2） |
-| web 端測試未在此機器驗證 | 這台機器沒有 pnpm；api 側 133 測試全過、ruff 乾淨 |
+| 外層 `docs/` → 封存 `docs/` | 1 個檔案，51,619 bytes；原件 SHA-256 `7A62B214FC2B96F7D123E93233FECFA444993B23ABFDBD90653C744AEB3E1928` |
+| `health-ref/` → 封存 `health-ref/` | 7,779 個檔案，196,928,057 bytes；排序後「相對路徑＋檔案大小」清單指紋相同：`F4AA5F148D065CD3AAEF6D8ED340382018DF642030F10F19A8AE4212AB685E3F` |
+| 參考專案 Git | HEAD `877131da0c3358b680f184247d748debfda7dbb3`；搬移後仍有 18 個 tracked 檔案修改、5,528 行新增、485 行刪除 |
+
+第二項是檔案清單／大小核對，不是逐檔內容雜湊；不把它寫成「逐位元驗證」。提案原文與 repo 版本去除新增頁首、統一換行後一致。
+
+## 2. 來源整合清單
+
+較早一輪的刪除與內容盤點沿用當時交接；本輪能核對的是目前 repo 與實際仍存在的封存。未留原件者不能重新證明完整性。
+
+| # | 來源 | 現在的去向／狀態 | 驗收或剩餘工作 |
+|---|---|---|---|
+| 1 | `claude_healthcare/twin/baseline/` | `apps/api/baseline/`，已採用 | 正常帶門檻與禁止自動寫回 baseline 的測試 |
+| 2 | detection 的「偵測不用 LLM」 | 本 repo `red_flags/rules.py` 已有同一原則 | 紅燈模組不得呼叫 LLM 的測試 |
+| 3 | consent Zone 0–4 | 未直接搬碼；內容敏感度政策仍是候選 | 與現有 scope 可組合，不宣稱兩者天生互斥；見 ROADMAP M2 |
+| 4 | `citation_gate.py` | 未搬碼；claim-level evidence 列入 M5 | provenance 與護理師批准不能替代逐句證據驗證 |
+| 5 | core 斷言日誌／雙時間軸 | 未搬碼；保留 PersonRecord，版本與更正列入 M3 | `write_timeline` 不是完整 append-only/bitemporal 保證 |
+| 6 | Event Packet | 目前保留 IncidentFile；通用事件封包待 M6 | 驗證跨事件、角色投影、證據引用，不能只因名稱近似視為完成 |
+| 7 | 原四角色 web | 保留本 repo Next.js | 未逐頁移植；目前頁面可建置不代表功能完全等價 |
+| 8 | `claude_healthcare` 其餘約 13,500 行 | 上輪交接稱已刪除、未保存 | 本輪未刪除；沒有原件，未調查 Git／磁碟／雲端復原可能性，不宣稱不可回復 |
+| 9 | `gpt_healthcare` 的 5 份文件 | 上輪判定與 VISION 重疊後刪除 | 本輪無原件，不以該判定證明沒有獨有內容 |
+| 10 | 外層 `…最終版.md` | 上輪判定與 VISION 重複後刪除 | 檔案大小相近不足以證明內容相同；本輪無原件可重新比對 |
+| 11 | 外層 `docs/00-architecture.md` | repo `docs/proposals/00-architecture.md`；原件封存 | 原文保留，逐項採納；不是另一個必須維護的產品 |
+| 12 | `health-ref` 通用 HealthEvent | 概念參考，M6 自行實作 | 內部 confidence/quality 可建模，受限的是臨床畫面的輸出，不是一概禁用 schema 欄位 |
+| 13 | `health-ref` purpose／audit 想法 | `0ee23aa` 已補欄位、grant 必填、登入預設及 UI 顯示 | M2 尚需政策判斷與 request purpose，不能把字串欄位視為 Consent Engine 完成 |
+| 14 | `health-ref` 其他內容 | 完整封存；`512a402` 已有獨立重寫的 UI 想法及特定模型資產 | 授權按資產核對，見 §3；不宣稱其全部能力已被本 repo 覆蓋 |
+| 15 | Windows 開發與驗證入口 | `scripts/dev.ps1`、腳本回歸測試、runtime smoke | 完整前後端 gate 不靜默跳過；結果見 VALIDATION |
+
+## 3. 外部來源與資產界線
+
+`health-ref` 來源是 `chenni416/Healthcare`，目前沒有 repo 層級的 LICENSE 宣告。這不自動證明每份資產均不得使用，也不等於整份程式可以放入 Apache-2.0 專案。
+
+- 沒有適用授權或明確許可的程式碼不直接複製；功能想法可獨立實作，保留來源註記。
+- `apps/web/public/models/my_avatar.glb` 是例外的特定資產：`512a402` 已收錄，其許可與來源記於同目錄 `LICENSE.txt`。這份記錄不延伸為整個參考 repo 的授權；公開發布前仍應確認權利鏈及再散布條件。
+- `apps/web/public/anatomy/` 另有自己的來源／授權，分開追蹤。
+- 不修改封存的參考專案，不把它的 venv、未提交修改或 `.git` 併入本 repo。
+
+## 4. 架構不是整包二選一
+
+保留 Next.js、REST、LangGraph、PersonRecord 與批准閘門。未搬入另一套應用不代表拒絕 Health Graph、欄位級政策、claim-level evidence、版本／更正與正式儲存。
+
+PersonRecord 可以逐步成為 domain abstraction；PostgreSQL 的關聯查詢可先承載 health graph 關係，不必一開始同時維運 Neo4j、TimescaleDB、向量資料庫。具體排序與 Done 在 [ROADMAP](ROADMAP.md)，目前問題證據在 [PROJECT_REVIEW](PROJECT_REVIEW.md)。
+
+`0ee23aa` 已有 purpose 欄位與授權時非空檢查。Purpose 下一步仍要分清：grant 的允許目的、單次請求目的、政策結果、拒絕原因及 audit；還要處理舊資料遷移、撤銷後失效與 API 負向測試。本輪只完成整併與驗證，不宣稱已實作 Consent Engine。
+
+## 5. 開發入口與驗證
+
+Windows 使用 PowerShell 7：`.\scripts\dev.ps1 setup` 安裝鎖定的 API＋web 相依；`.\scripts\dev.ps1 check` 跑完整靜態與測試 gate。只有明確加 `-ApiOnly` 才跳過前端，輸出會標示範圍，不算完整驗收。
+
+`check` 的 mock eval 使用臨時資料，不覆寫已保存的真模型報告；codegen `--check` 只比對、不重寫 TypeScript。`api` 正常操作會寫紀錄，`migrate` 會建立資料表，不能聲稱所有日常指令都不碰資料。`init/reset/seed/clean-records` 是會清資料的指令，保留確認提示。
+
+可重現指令、測試數量與未涵蓋事項統一記在 [VALIDATION](VALIDATION.md)。

@@ -5,8 +5,10 @@
 .DESCRIPTION
     安全邊界（這是這個腳本存在的主要理由）：
 
-      日常指令  setup / api / web / worker / test / lint / check / codegen / eval / status
-                絕對不會碰 records\ 或資料庫。
+      日常指令不會清空 records\ 或重建資料庫。
+      setup / test / check 預設包含 API 與 web；缺少工具或檢查失敗就停止。
+      -ApiOnly 明確只處理 API，不能作為完整前後端驗收。
+      check 的 eval 使用 mock 與暫存輸出；codegen 比對不改寫檔案。
 
       破壞性    init / reset / seed / clean-records
                 會先列出「將被刪除什麼」，並要求輸入 yes 才執行。
@@ -18,7 +20,8 @@
     .\scripts\dev.ps1 setup      # 裝相依（安全）
     .\scripts\dev.ps1 init       # 第一次：建 DB + migrate + seed（會清 records，要確認）
     .\scripts\dev.ps1 api        # 起 API（安全）
-    .\scripts\dev.ps1 check      # ruff + pytest + codegen 一致性（安全）
+    .\scripts\dev.ps1 check      # API + web 完整程式檢查（不含啟動驗收）
+    .\scripts\dev.ps1 check -ApiOnly  # 明確只檢查 API，web 未驗證
     .\scripts\dev.ps1 reset -Force
 #>
 
@@ -30,7 +33,9 @@ param(
                  'init', 'reset', 'seed', 'clean-records')]
     [string]$Command = 'help',
 
-    [switch]$Force
+    [switch]$Force,
+
+    [switch]$ApiOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,6 +44,10 @@ $ApiDir  = Join-Path $Root 'apps\api'
 $WebDir  = Join-Path $Root 'apps\web'
 $Records = Join-Path $Root 'records'
 $DbName  = 'record_follows_person'
+
+if ($ApiOnly -and $Command -notin @('setup', 'test', 'check')) {
+    throw '-ApiOnly 只適用於 setup、test、check。'
+}
 
 # ── 工具探索 ────────────────────────────────────────────────
 
@@ -56,7 +65,19 @@ function Get-Uv {
 }
 
 function Get-Pnpm {
-    Find-Tool 'pnpm' @() ' 安裝：npm i -g pnpm'
+    Find-Tool 'pnpm' @("$env:APPDATA\npm\pnpm.cmd") ' 安裝：npm i -g pnpm@10.12.1'
+}
+
+function Get-DevTools {
+    # Resolve all required tools before beginning a partial install or verification.
+    $toolSet = @{ Uv = Get-Uv; Pnpm = $null }
+    if ($ApiOnly) {
+        Write-Host '  範圍：API-only；已明確跳過 web，不能宣稱前後端已驗證。' -ForegroundColor Yellow
+    } else {
+        $toolSet.Pnpm = Get-Pnpm
+        Write-Host '  範圍：API + web。' -ForegroundColor Cyan
+    }
+    return $toolSet
 }
 
 function Get-Psql {
@@ -124,16 +145,16 @@ function Cmd-Help {
     Write-Host ''
     Write-Host '  一份能跟著人走的紀錄 — Windows 開發入口' -ForegroundColor Cyan
     Write-Host ''
-    Write-Host '  安全（不會碰 records\ 或資料庫）' -ForegroundColor Green
+    Write-Host '  日常指令（不會清空 records\ 或重建資料庫）' -ForegroundColor Green
     @(
         @('status',  '顯示環境、資料庫、records、git 狀態'),
-        @('setup',   'uv sync + pnpm install'),
+        @('setup',   'uv sync --frozen + pnpm install --frozen-lockfile'),
         @('api',     'FastAPI 開發伺服器 :8000'),
         @('web',     'Next.js 開發伺服器 :3000'),
         @('worker',  '逾時升級 worker'),
-        @('test',    'ruff + pytest（web 側若有 pnpm 一併跑）'),
+        @('test',    'ruff check/format + pytest + web lint/test'),
         @('lint',    'ruff check + format --check'),
-        @('check',   'lint + test + codegen 一致性檢查'),
+        @('check',   'test + 腳本回歸 + mock eval + 唯讀 codegen + web build/typecheck'),
         @('codegen', 'pydantic → TypeScript'),
         @('eval',    '抽取評測 → apps/api/eval/results.md'),
         @('migrate', 'PostgresSaver.setup() + thread registry（不刪資料）')
@@ -150,6 +171,7 @@ function Cmd-Help {
 
     Write-Host ''
     Write-Host '  加 -Force 可跳過確認（給 CI 用）。' -ForegroundColor DarkGray
+    Write-Host '  setup/test/check 預設需要 uv + pnpm；-ApiOnly 明確略過 web。' -ForegroundColor DarkGray
     Write-Host ''
 }
 
@@ -168,8 +190,8 @@ function Cmd-Status {
         Get-Content $envFile | Where-Object { $_ -match '^\s*[A-Z_]+=' } | ForEach-Object {
             $k, $v = $_ -split '=', 2
             $shown = if ($v -and $v.Trim()) { '已設定' } else { '（空）' }
-            if ($k -match 'KEY|TOKEN|SECRET|PASSWORD') { '    {0,-28} {1}' -f $k, $shown | Write-Host }
-            else { '    {0,-28} {1}' -f $k, $v | Write-Host }
+            # Connection URLs may contain credentials too; status never prints values.
+            '    {0,-28} {1}' -f $k, $shown | Write-Host
         }
     } else { Write-Host '    沒有 .env（從 .env.example 複製一份）' -ForegroundColor DarkYellow }
 
@@ -189,15 +211,12 @@ function Cmd-Status {
 }
 
 function Cmd-Setup {
-    $uv = Get-Uv
-    Write-Host '  uv sync…' -ForegroundColor Cyan
-    Invoke-In $ApiDir $uv @('sync')
-    try {
-        $pnpm = Get-Pnpm
-        Write-Host '  pnpm install…' -ForegroundColor Cyan
-        Invoke-In $WebDir $pnpm @('install')
-    } catch {
-        Write-Host "  跳過 web：$_" -ForegroundColor DarkYellow
+    $toolSet = Get-DevTools
+    Write-Host '  uv sync --frozen…' -ForegroundColor Cyan
+    Invoke-In $ApiDir $toolSet.Uv @('sync', '--frozen')
+    if (-not $ApiOnly) {
+        Write-Host '  pnpm install --frozen-lockfile…' -ForegroundColor Cyan
+        Invoke-In $WebDir $toolSet.Pnpm @('install', '--frozen-lockfile')
     }
     Write-Host '  完成。下一步：.\scripts\dev.ps1 init（第一次）或 .\scripts\dev.ps1 api' -ForegroundColor Green
 }
@@ -213,38 +232,37 @@ function Cmd-Codegen {
 
 function Cmd-Lint {
     $uv = Get-Uv
-    Invoke-In $ApiDir $uv @('run', 'ruff', 'check', '.')
-    Invoke-In $ApiDir $uv @('run', 'ruff', 'format', '--check', '.')
+    Invoke-In $ApiDir $uv @('run', '--frozen', 'ruff', 'check', '.')
+    Invoke-In $ApiDir $uv @('run', '--frozen', 'ruff', 'format', '--check', '.')
 }
 
 function Cmd-Test {
-    $uv = Get-Uv
-    Invoke-In $ApiDir $uv @('run', 'ruff', 'check', '.')
-    Invoke-In $ApiDir $uv @('run', 'pytest', '-q')
-    try {
-        $pnpm = Get-Pnpm
-        Invoke-In $WebDir $pnpm @('lint')
-        Invoke-In $WebDir $pnpm @('test')
-    } catch {
-        Write-Host "  跳過 web 測試：$_" -ForegroundColor DarkYellow
+    param($ToolSet = $null)
+    if ($null -eq $ToolSet) { $ToolSet = Get-DevTools }
+    Cmd-Lint
+    Invoke-In $ApiDir $ToolSet.Uv @('run', '--frozen', 'pytest', '-q')
+    if (-not $ApiOnly) {
+        Invoke-In $WebDir $ToolSet.Pnpm @('lint')
+        Invoke-In $WebDir $ToolSet.Pnpm @('test')
     }
 }
 
 function Cmd-Check {
-    <# lint + test + 「codegen 產物是否與 schema 同步」。
-       最後這項是 CI 常漏的：改了 pydantic 卻忘記跑 codegen，TS 型別就過期了。 #>
-    Cmd-Test
+    $toolSet = Get-DevTools
+    Cmd-Test $toolSet
+    Invoke-In $ApiDir $toolSet.Uv @('run', '--frozen', 'ruff', 'check', (Join-Path $Root 'scripts'), (Join-Path $Root 'packages\schema\codegen.py'))
+    Invoke-In $ApiDir $toolSet.Uv @('run', '--frozen', 'ruff', 'format', '--check', (Join-Path $Root 'scripts'), (Join-Path $Root 'packages\schema\codegen.py'))
+    Invoke-In $ApiDir $toolSet.Uv @('run', '--frozen', 'pytest', (Join-Path $Root 'scripts\tests'), '-q')
+    Invoke-In $ApiDir $toolSet.Uv @('run', '--frozen', 'python', (Join-Path $Root 'scripts\check_eval.py'))
     Write-Host '  檢查 codegen 是否同步…' -ForegroundColor Cyan
-    Cmd-Codegen
-    Push-Location $Root
-    try {
-        $diff = git status --porcelain -- 'packages/schema/ts/index.ts'
-        if ($diff) {
-            git checkout -- 'packages/schema/ts/index.ts'
-            throw 'packages/schema/ts/index.ts 與 schema 不同步。請跑 .\scripts\dev.ps1 codegen 並提交結果。'
-        }
-        Write-Host '  codegen 同步 ✓' -ForegroundColor Green
-    } finally { Pop-Location }
+    Invoke-In $ApiDir $toolSet.Uv @('run', '--frozen', 'python', (Join-Path $Root 'packages\schema\codegen.py'), '--check')
+    if (-not $ApiOnly) {
+        # Next.js build creates route types required by the subsequent tsc check.
+        Invoke-In $WebDir $toolSet.Pnpm @('build')
+        Invoke-In $WebDir $toolSet.Pnpm @('typecheck')
+    }
+    $scope = if ($ApiOnly) { 'API-only；web 未驗證' } else { 'API + web' }
+    Write-Host "  程式檢查通過（$scope；不含完整啟動驗收）。" -ForegroundColor Green
 }
 
 function Cmd-CleanRecords {

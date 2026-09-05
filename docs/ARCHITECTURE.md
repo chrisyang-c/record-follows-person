@@ -4,6 +4,8 @@
 
 本文件是唯一的系統設計稿。維度定義以 `CLAUDE.md §3` 為準；LangGraph 節點名稱以 `docs/langgraph_path_a_incident.mermaid`、`docs/langgraph_path_b_routine_round.mermaid` 為準。
 
+2026-09-06 現況補記：本文保留最初的層級與節點設計，不能把所有示例 state 或 demo 範圍當成最新程式快照。現在已有 `/login`、`/me`、`/twin`、Care Circle、模擬 sensor／wearable 與 3D 分身；型別以 `packages/schema/record_schema/models.py`、節點以 Mermaid 與同步測試為準。當前進度見 HANDOFF，分期見 ROADMAP，授權與儲存的實作缺口見 PROJECT_REVIEW。長照是第一個場景，不是縮減 Personal Health Twin 願景。
+
 ---
 
 ## 0. 層級
@@ -248,10 +250,10 @@ Checkpointer 用 PostgreSQL，interrupt 節點：護理師確認（A、B 都有�
 | Intake（語音→結構化，多輪追問上限 4 題） | 影像分析（用固定摘要） |
 | Baseline Comparator（規則） | Timeline Curator（demo 資料先整理好） |
 | Triage 規則層＋紅燈推播 | 119／特約醫療機構通知（畫面提示即可） |
-| Nurse Assist ISBAR 預填＋護理師確認畫面 | 超時升級（旁白帶過） |
-| Incident Compiler → 一份兩區塊的事故檔 | 家屬通知（顯示文字不真發） |
+| Nurse Assist ISBAR 預填＋護理師確認畫面；API／獨立 worker 掃 deadline | 分散式 durable worker、retry／DLQ 尚未完成 |
+| Incident Compiler → 一份兩區塊的事故檔 | LINE 未設 token 時只顯示；真實通道交付可靠性未完成 |
 | Familiarization Writer → 一頁 RoundPage | Roster 排序（demo 用 3 位住民） |
-| Order Ingest → 注意事項（多語） | baseline 更新（顯示提案即可） |
+| Order Ingest → 中文注意事項＋醫囑 baseline 提案／護理師確認後寫入 | 多語與真實醫院資料接入仍未完成 |
 
 Demo 資料：3 位住民、各 14 天觀察、其中 1 位有一次急症。這樣路徑 A 和 B 都演得到，RoundPage 也有趨勢可看。
 
@@ -287,9 +289,9 @@ provenance 每行有來源。AI 的行永遠標 `ai_extracted`，只有護理師
 
 ---
 
-## 11. 還沒想清楚的（要決定）
+## 11. 原始未決事項的現況（2026-09-06）
 
-- 照護者「看一眼是不是這個意思」要不要做成必要步驟？加了更準，少了更快。建議：紅燈不做，其他做。
-- baseline 多久滾動一次？建議：只在醫囑或護理師確認時更新，不自動漂移，否則「平常」會被慢慢惡化帶走。
-- Familiarization Writer 一頁放不放趨勢圖？建議放一張，八維度選變化最大的兩個。
-- 路徑 A 的追蹤要問幾次？建議一次，指定時間由護理師設。
+- 照護者確認：目前已有「我理解的是」摘要卡；是否所有非紅燈通道都必須明確確認，仍需流程驗收／使用者決策，不能靠 UI 存在宣稱已定案。
+- baseline：已採納不自動漂移。醫囑提案經護理師確認後更新；統計正常帶只比較，不提供從量測自動回寫基線的入口。保留其回歸測試。
+- 熟悉頁趨勢圖：已採納呈現有變化的維度，限制兩個；實作／列印可用性仍需個案驗收。
+- Path A 追蹤：次數、護理師可設定的時間、無回覆後如何升級仍待決策。不可擅自把建議「一次」寫成正式臨床政策。

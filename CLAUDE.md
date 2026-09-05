@@ -16,9 +16,9 @@ gh auth status || gh auth login
 gh repo create record-follows-person --public --source=. --remote=origin --description "每個人有一份跟著他走的紀錄，和一個替這份紀錄說話的 agent"
 git add . && git commit -m "chore: bootstrap" && git push -u origin main
 ```
-- 若 repo 已存在：`git remote -v` 確認 origin，`git pull --rebase origin main`。
-- 分支規則（2026-09-05 起）：不開分支、不開 PR、不等 CI；所有變更直接 commit 到 `main` 並 push。
-- 每次 commit 前只跑受影響那一側的測試：api 改動 `cd apps/api && uv run pytest -q`；web 改動 `cd apps/web && pnpm typecheck && pnpm test`。過了就推。
+- 若 repo 已存在：先查 `git status` 與 `git remote -v`，再 fetch；乾淨且可 fast-forward 才更新，不覆蓋別人的未提交修改。
+- 分支規則：目前直接 commit 到 `main` 並 push，不另開 PR。推送必須符合當次使用者授權；使用者要求驗證時，需回報該 commit 的 CI 結果。
+- 完整交付前跑 `.\scripts\dev.ps1 check`（macOS/Linux：`make check`）。日常小改可先跑受影響測試，但不能把 API-only／未建置／未啟動說成完整驗收；runtime 驗證另外見 `docs/VALIDATION.md`。
 
 ### 0.2 先讀這些檔案（不讀完不准動架構）
 ```
@@ -42,7 +42,9 @@ docs/UIUX_OMNI_TWIN.md                        # UI/UX 規格：OMNI-TWIN 深色�
 | `docs/HANDOFF.md` | **只管**目前進度與下一步 | 為什麼這樣決定（→ DECISIONS） |
 | `docs/DECISIONS.md` | 每個架構決定的日期／理由／誰 | 待辦 |
 | `docs/KNOWN_ISSUES.md` | 已知問題與繞法 | 未來計畫（→ ROADMAP） |
-| `docs/CONSOLIDATION.md` | 工作區整併的來源去向清單 | 一次性文件，整併完成後不再更新 |
+| `docs/CONSOLIDATION.md` | 工作區整併、封存與來源去向清單；發現史實錯誤可更正 | 功能待辦 |
+| `docs/PROJECT_REVIEW.md` | 有程式證據的缺陷與缺口快照 | 已完成承諾、另一套 roadmap |
+| `docs/VALIDATION.md` | 驗證指令、結果與未涵蓋範圍 | 生產可用或臨床有效性的保證 |
 | `docs/proposals/` | **外部提案，未採納**。讀的時候要記得它描述的不是這個 repo | 任何具約束力的規則 |
 
 ### 0.3 UI 稽核 skill
@@ -56,13 +58,15 @@ docs/UIUX_OMNI_TWIN.md                        # UI/UX 規格：OMNI-TWIN 深色�
 
 ### 0.4 環境
 
-**Windows（本機主要環境）**
+**Windows（本機主要環境；使用 PowerShell 7，不使用 Bash）**
 ```powershell
-Copy-Item .env.example .env     # 填 OPENAI_API_KEY, DATABASE_URL
-.\scripts\dev.ps1 setup         # uv sync（不碰 records、不碰資料庫）
-.\scripts\dev.ps1 init          # 建資料庫 + migrate + seed（**會清空 records**，需確認）
+Copy-Item .env.example .env     # 僅首次；不要覆蓋已有設定。無 key 可用 MODEL_PROVIDER=mock
+.\scripts\dev.ps1 setup         # API + web，鎖定相依；需要 uv 與 pnpm 10.12.1
+docker compose up -d postgres  # 或自行啟動 PostgreSQL 17；DATABASE_URL 須對應
+.\scripts\dev.ps1 migrate       # 建 checkpoint 與 registry 表
+.\scripts\dev.ps1 seed          # 僅首次示範；**會清空 records**，需確認
 .\scripts\dev.ps1 api           # 另開一個終端跑 .\scripts\dev.ps1 web
-.\scripts\dev.ps1 check         # ruff + pytest + codegen 一致性
+.\scripts\dev.ps1 check         # API + web + tooling + mock eval + codegen + build + typecheck
 ```
 
 **macOS**
@@ -73,13 +77,14 @@ make api                                     # 另一個終端 make web
 ```
 
 > `docker compose up -d postgres` 只在有 Docker 的機器可用（KNOWN_ISSUES #2）。
-> 日常指令（api／web／check／codegen）**不會**清空 `records/` 或重建資料庫；
-> 破壞性操作只在 `init` 與 `reset`，且會先列出將被刪除的東西並要求確認。
+> `check` 不重設既有紀錄；API 正常操作會寫入紀錄，`migrate` 會建立資料表，`codegen` 會更新產生檔。
+> `init/reset/seed/clean-records` 會清資料並要求確認；`init` 是本機 PostgreSQL 建庫路徑，不是 Docker 必要步驟。
+> 沒有 pnpm 時完整 setup/check 必須失敗；只有明確使用 `-ApiOnly` 才略過 web，不能稱全綠。
 
 ### 0.5 外部參考
-- 隔壁目錄 `../health-ref`（Healthcare-ref）是別人的專案，**唯讀**。平常不要讀它、不要借它的東西。
-- 只有使用者明確說「參考 health-ref 做 X」時，才去讀對應的那一部分；只借想法，或 MIT／Apache／CC0 授權下的程式碼，借用的檔案頂端註明出處（專案名、路徑、授權）。
-- 沒有明確指示時，Claude Code 不得 `ls`、`grep`、`cat` 該目錄，也不得把它的內容寫進本 repo。
+- 參考專案已封存到工作區外；位置與搬移驗證見 `docs/CONSOLIDATION.md`。不得把封存當執行相依或平行開發目錄。
+- 只有使用者明確要求參考時才讀相應部分；程式碼需要適用授權或明確許可，否則只借想法並獨立實作。借用資產註明專案、路徑及許可範圍。
+- `my_avatar.glb` 的特定許可已記於 `apps/web/public/models/LICENSE.txt`，不代表整個 `health-ref` 取得 blanket 授權。新來源逐項檢查，不自動延伸。
 
 ---
 
@@ -109,7 +114,7 @@ apps/api/                 FastAPI + LangGraph + deepagents
   ingest/                 通道 Ingest：caregiver_speech.py, doctor_order.py, discharge_pdf.py(mock), vitals.py(hardcoded)
   eval/                   抽取評測腳本與合成語句集
 apps/web/                 Next.js App Router + Tailwind + shadcn/ui
-  app/page.tsx            角色入口（三顆大按鈕 → /role?set= 寫 cookie）；app/about 舊首頁
+  app/page.tsx            登入入口；/login、/role、/me、/twin 的 demo cookie 不是正式身分驗證
   app/caregiver, nurse, doctor   角色首頁（照護者：住民卡；護理師：紅燈→等我確認→今日總覽；醫師：巡診名單）
   app/p/[id]              病人頁 = 單一入口，?tab=who|timeline|docs|talk；proxy.ts 依 cookie 角色限制 tab
   app/nurse/round         巡診準備（串流顯示 roster_agent → trend_analyzer → familiarization_writer）
@@ -261,7 +266,7 @@ agent = create_deep_agent(
 
 **無障礙**：正文對比 ≥4.5:1；tap target ≥44px（照護者 ≥56px）；夜班深色變體 `#0F1B2D`，紅燈維持高對比。
 **AI 與人的樣式必須不同**：AI 草稿＝虛線＋淡藍；人確認＝實線＋綠勾。
-**禁止**：通用 AI 漸層、紫色光暈、neon、玻璃擬態、emoji 當臨床狀態、深色為預設。
+**臨床區禁止**：以裝飾性光暈、neon、玻璃擬態或 emoji 取代臨床狀態。深色預設與 01 wellness 熱點依上方 OMNI-TWIN 規格；RoundPage／列印維持白底。
 
 ---
 

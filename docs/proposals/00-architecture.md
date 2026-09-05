@@ -2,14 +2,14 @@
 >
 > | | |
 > |---|---|
-> | 來源 | 外部提案（D:\Health AI Bridge\docs\00-architecture.md），2026-09-05 收錄 |
+> | 來源 | 外部提案原件，2026-09-05 收錄；2026-09-06 原件移至工作區外封存，見 CONSOLIDATION |
 > | 狀態 | **提案**。本專案的架構以 [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) 為準 |
 > | 已採納 | 只有 §6 個人基準線（median／MAD／established 門檻）→ `apps/api/baseline/`，commit `c0a6802` |
-> | 逐項取捨 | 見 [`docs/CONSOLIDATION.md`](../CONSOLIDATION.md) §3 |
+> | 逐項取捨 | 見 [`docs/CONSOLIDATION.md`](../CONSOLIDATION.md) §2–4 與 [`ROADMAP`](../ROADMAP.md) |
 >
-> **它與本專案是兩條不同的路。** 斷言日誌、Zone 0–4 分區、CitationGate、GraphQL、
-> Neo4j／TimescaleDB 都**沒有被採納**；本專案用 PersonRecord、Care Circle scope、
-> provenance ＋ `timeline_write` 守門、REST、檔案系統 ＋ Postgres checkpointer。
+> **不整包搬入，不等於排除全部能力。** 以下原文保留作提案；版本／更正、細粒度政策、
+> claim-level evidence 與 health graph 能力均可逐項設計。它們不等於必須改成 GraphQL、
+> Neo4j／TimescaleDB；既有 provenance 與批准閘門也不等於已完成這些能力。
 >
 > 讀這份文件時請記得：**它描述的不是這個 repo。** 保留它是為了日後逐項再議，
 > 不是為了照著做。

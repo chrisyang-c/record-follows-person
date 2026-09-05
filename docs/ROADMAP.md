@@ -1,195 +1,74 @@
-# ROADMAP — 從照護迴圈到健康資料平台
+# ROADMAP — Personal Health Twin 的分期實作
 
-> **這份文件管「之後要做什麼、依什麼順序」。**
-> 長期願景在 [`VISION_personal_health_twin.md`](VISION_personal_health_twin.md)；
-> 已採納的架構在 [`ARCHITECTURE.md`](ARCHITECTURE.md)；
-> 目前進度與下一步在 [`HANDOFF.md`](HANDOFF.md)。
+更新：2026-09-06。長期方向以 [VISION](VISION_personal_health_twin.md) 為準；已採納的介面、資料規則與流程見 [ARCHITECTURE](ARCHITECTURE.md)。當前工作只在 [HANDOFF](HANDOFF.md) 維護；實碼 review 見 [PROJECT_REVIEW](PROJECT_REVIEW.md)。
 
----
+## 1. 目標與排序
 
-## 0. 先講一件會影響全部排序的事
+目標是以人為中心的終身健康資料、個人 AI 與照護協調平台。現有長照流程是第一個完整應用場景；平台能力與使用者價值都需要各自驗收。
 
-拿 `VISION_personal_health_twin.md`（36,000 字）當規格算完成度，會得到一個
-**數學上正確、決策上有害**的數字：每個方向都同樣「沒做完」，所以挑哪個都對，也都不對。
+每個里程碑保留既有流程可用，先建立介面與相容讀取，再遷移儲存。只允許一個明確的權威寫入來源；影子投影可以重建，不能變成另一份可獨立修改的病歷。資料庫、圖引擎與向量庫的產品選型另寫 DECISIONS，不因列入願景而一次全部引進。
 
-VISION 描述的是需要多人多年、要跟醫院簽資料協議、要過 SaMD 認定的東西。
-CLAUDE.md §0.2 已經寫明：**實作範圍以 ARCHITECTURE.md 與 HANDOFF.md 為準**，VISION 是願景。
+不使用缺乏權重及逐項證據的完成百分比。每個任務必須有問題、影響路徑、依賴、驗收及回退方式。
 
-所以這份 ROADMAP 的分母不是 VISION，是：
+## 2. 分期計畫
 
-> **一個居家護理師連續用一週之後，願不願意繼續用。**
-
-這個分母有出口、可驗證，而且會自動告訴你哪些平台層是必要的（大部分不是）。
-
----
-
-## 1. 已經在的東西（不要重做）
-
-Path A 急症與 Path B 日常兩條流程走完，含退回與超時升級；照護者對話（模型決定每一題、
-缺口驗證、摘要卡）；Health ID、Care Circle、access log、以病人為核心的登入；
-本人 App（解剖全像人體圖、3D 分身與沙盤、穿戴每日指標、終身時間軸、問我的紀錄與唸給我聽）；模擬跌倒訊號、硬條件紅燈、四鍵驗證、
-事件資訊包；個人生理值正常帶與 RF13（已接進 01 與護理站）；Care Circle 含 purpose；OMNI-TWIN 深色殼、列印白底。
-
-**api 140 個測試、ruff 乾淨、評測 46 句：provenance 100%、無診斷詞 100%、hallucination 6.5%。**
-
----
-
-## 2. 排序原則
-
-**每個 Epic 結束時，demo 必須仍然能跑，而且要多一件看得見的事。**
-
-這條原則排除了「由下往上重建平台」的順序（Identity → Consent → Canonical → FHIR →
-Ingestion → Storage → …）。那個順序前六個 Epic 全是平台層，做完之前畫面一個字都不會變；
-而 Canonical／Storage／FHIR 每一個都要動 `record/store.py`，在 Storage 完成之前會同時
-存在 `records/{id}/*.json` 與資料庫兩個真相來源 —— 那段期間任何一次 demo 都可能是壞的。
-
----
-
-## 3. Epic 排序
-
-### E1　真正驗證產品命題　⭐ 最高優先
-
-整個專案的論點是「照服員講一句話 → 護理師省下寫紀錄的時間」。
-現在的證據是 46 句**自己寫的**合成語句 —— 那證明抽取穩定，不證明護理師願意用。
-
-| | |
-|---|---|
-| 做什麼 | 找 1–3 位居家護理師或機構護理師，用現有系統連續操作一週 |
-| 新增 | `docs/FIELD_NOTES.md`：每次使用的實際語句、卡住的地方、放棄的地方 |
-| 不寫程式 | 這個 Epic 的產出是**證據**，不是功能 |
-| Done | 有一份真人使用紀錄；`KNOWN_ISSUES` 多出至少 5 條來自真實使用的問題 |
-
-**為什麼排第一**：後面每一個 Epic 的優先序都會被這一週的結果重排。沒有它，
-下面的排序全是推測。
-
----
-
-### E2　Retrieval：「問我的紀錄」真的能回答
-
-| | |
-|---|---|
-| 現況 | KNOWN_ISSUES #29：關鍵字 bigram，「心臟開刀」找不到「心臟手術」 |
-| 新增目錄 | `apps/api/retrieval/`（embed.py、index.py、search.py） |
-| schema | `RetrievalChunk`（chunk_id、health_id、text、source_ref、embedding_ref、ts） |
-| endpoint | 沿用 `POST /me/{id}/ask`，內部換檢索；新增 `GET /debug/retrieval/{id}?q=` |
-| 儲存 | `records/{id}/index/`（demo 規模用檔案；向量庫列在 E6） |
-| jobs | timeline 寫入後重建該住民的索引（背景，非阻塞） |
-| 前端 | 不變 |
-| 測試 | 同義詞案例集（心臟開刀／心臟手術、血壓藥／降壓藥…）≥20 組；每個答案仍必須引用既有行 |
-| Done | 同義詞測試 ≥90% 命中；**答案沒有來源時仍然說「紀錄裡沒有這件事」**，不得因為檢索變強而開始捏造 |
-
-**為什麼排這裡**：最小、最獨立、不動 `store`，而且修的是 `/me` 的核心賣點。
-
----
-
-### E3　Event Engine：從「跌倒」抽象化
-
-| | |
-|---|---|
-| 現況 | `SensorEvent` 只描述跌倒；Path A 是為跌倒寫的 |
-| 新增 | `packages/schema`：`HealthEvent`（type、source、detected_at、evidence、status、verification、assignments、escalation、resolution） |
-| 遷移 | `SensorEvent` 成為 `HealthEvent` 的一個 `source="wearable"` 特例；`record/events.py` 改讀寫 `HealthEvent` |
-| 狀態機 | `DETECTED → NOTIFIED → ACKNOWLEDGED → VERIFIED → UNDER_REVIEW → ESCALATED → RESOLVED → FOLLOW_UP` |
-| 事件型別 | fall、hypoxia、abnormal_bp、fever、medication_miss、reduced_intake、confusion、wound、post_op_change、discharge |
-| endpoint | `GET/POST /events`、`POST /events/{id}/verify`、`POST /events/{id}/assign` |
-| 前端 | Clinical Queue 依 `event.type` 而非寫死跌倒 |
-| 測試 | 每個狀態轉換的合法／非法各一；`test_sensor_fall.py` 改寫為 `HealthEvent` 版本後仍全過 |
-| Done | 新增一種事件型別（例如發燒）**不需要改 Path A 的任何節點** |
-
-**紅線**：`HealthEvent` **不得有 `confidence`／`severity`／`weight` 欄位**。
-CLAUDE.md §1.8 禁止分數出現在照護者／護理師／醫師介面；把它放進資料模型，
-早晚會漏到畫面上。感測原始值另存，只給護理師。
-（概念參考：chenni416/Healthcare 的 `HealthEvent`；該專案無授權宣告，僅借用概念，
-其 `confidence: float` 與 evidence `weight` 欄位**刻意不採用**。）
-
----
-
-### E4　Consent／Policy Engine
-
-| | |
-|---|---|
-| 現況 | KNOWN_ISSUES #35：`/role?set=` 可繞過密碼；scope 只有四種頁面級 |
-| ~~先做~~ 已做 | `CareCircleMember.purpose`、`AccessLogEntry.purpose`（CONSOLIDATION §4）—— 授權必填目的，登入依角色帶預設目的 |
-| 再做 | 資源級 scope：從 `who/timeline/docs/talk` 細到 `meds/labs/imaging/events` |
-| 再做 | 緊急開鎖：獨立憑證、TTL、不可抑制的通知、事後可申訴 |
-| endpoint | `POST /patients/{id}/emergency-access`、`GET /patients/{id}/access-log?purpose=` |
-| 測試 | 角色 × scope × purpose 的窮舉矩陣；每一格一個案例 |
-| Done | 授權矩陣測試全綠；`/role?set=` 不再能繞過（session token 由 API 簽發） |
-
-**為什麼 OIDC 不排這裡**：OIDC 解決「證明你是誰」，你們的差異化在「**誰能看我的紀錄**」——
-那是 Consent，不是 Authentication。接 Keycloak 不會讓 Care Circle 變細粒度。
-先把 Policy Engine 做對，登入層之後換掉不影響它（現在 cookie-only 的設計反而讓這件事很容易）。
-
----
-
-### E5　Canonical Model ＋ Storage
-
-| | |
-|---|---|
-| 為什麼排在這裡 | 前三個 Epic 已經把 domain 邊界磨清楚，現在遷移知道要遷什麼 |
-| 做法 | **保持 `store` 的介面不動**，在後面塞一個 `PostgresBackend` → 雙寫 → 比對 → 切換 → 移除 filesystem backend |
-| 不做法 | ~~「改成用 Postgres」~~ —— 這個差別決定遷移期間 demo 會不會壞 |
-| tables | persons、external_identifiers、consents、relationships、encounters、conditions、medications、procedures、observations、events、workflows、audit |
-| 測試 | 兩個 backend 跑同一組 `record/test_store.py`，結果必須相同 |
-| Done | 切換 backend 只改一個環境變數；20 個測試檔全過 |
-
----
-
-### E6　之後（順序視 E1 結果重排）
-
-| Epic | 內容 | 前置 |
+| 階段 | 工作與主要位置 | 完成條件 |
 |---|---|---|
-| E6 FHIR Adapter | Patient／Encounter／Condition／Observation／MedicationStatement／Procedure／DocumentReference／Provenance 的 import/export | E5 |
-| E7 Device Platform | 真實穿戴裝置 connector、pairing、stream ingestion | E3、E5 |
-| E8 Vector Store | E2 的檔案索引換成 pgvector／Qdrant | E2、E5 |
-| E9 Identity／OIDC | session token 由 API 簽發、MFA、真正 IdP | E4 |
-| E10 Observability | metrics、distributed trace、SLO、alerts | — |
-| E11 Backup／DR | backup、restore、retention | E5 |
-| E12 Deployment | staging／prod、IaC、secrets、rolling deploy | E5 |
+| M0 整併與可靠驗收 | 唯一 repo；scripts/dev.ps1；唯讀 codegen；來源封存；文件收斂 | 缺工具及執行失敗不誤報全綠；dirty 型別檔不被清除；API/web 檢查與實際啟動證據分開記錄；工作區只留主專案 |
+| M1 可信身分與病人隔離 | API 統一認證入口、web session、每個讀寫端點的病人與動作授權 | 未登入／偽造角色拒絕；病人 A 不得讀寫 B；未授權者不得 resume、修改 baseline、授權他人或讀 trace；撤銷及過期立即生效 |
+| M2 Consent 與用途稽核 | 共用 schema、care_circle、授權決策及 API 回應投影 | 區分 allowed purposes 與本次 purpose；後端驗證用途、資源、時間及代理資格；允許／拒絕都有稽核；舊資料不自動獲得更大權限 |
+| M3 紀錄與儲存契約 | RecordStore 與直接操作檔案的 events/conversation/care_circle/agent backend | 版本／更正／冪等／併發契約；來源與紀錄寫入一致；失敗可恢復；備份還原可驗證；再按相同契約接 Postgres adapter |
+| M4 第一條外部資料接入 | ingest adapters、來源識別、共用模型及原件索引 | 一種合成 FHIR Bundle 能驗證、正規化、匯入及匯出；重複匯入不重複建紀錄；不確定身分待確認；來源可回溯 |
+| M5 有證據的個人查詢 | retrieval、structured queries、source anchors、逐句回答驗證 | 病人／權限預過濾；時間、同義詞、否定、矛盾與缺資料案例；每項事實主張對應支持它的來源，找不到時表明未找到相關證據 |
+| M6 通用事件與照護任務 | HealthEvent、workflow、通知 outbox、追蹤工作佇列 | 跌倒以外再走通一種合成事件；重複訊號可去重；狀態轉換有角色限制；誤報／取消／重開有分支；通知與到期追蹤可重試並留痕 |
+| M7 正式部署與營運 | migrations、環境隔離、secrets、監控、備份還原、資產清單 | staging 完成端到端驗收；重啟、連線故障與恢復有證據；正式環境禁止 demo 身分與靜默記憶體降級 |
 
----
+`0ee23aa` 已完成 purpose 的 schema、grant 必填與 UI 顯示；M2 接續用途政策、可信 actor、拒絕稽核及遷移，不重做已完成的欄位。
 
-## 4. 明確不做（第二階段以後）
+M1 是接觸真實資料或部署給外部使用者前的必要工作。可以延後選定 OIDC 供應商，不能延後伺服器可信身分與授權檢查。M2 的 purpose 不能只靠新增非空字串驗收。
 
-這一節跟 Epic 清單一樣重要 —— **沒有「不做什麼」，就沒有進度。**
+M3 的第一步是整理存取契約與可回復性，不是一次重寫所有儲存。向量、圖與時序投影都要引用版本化來源。切換前比較結果與重啟行為；切換失敗能退回原權威來源，不能用無協調的兩邊雙寫掩蓋不一致。
 
-| 項目 | 出處 | 理由 |
-|---|---|---|
-| Health Graph 知識圖 | OVERVIEW §8 已列 | 每位住民約 10 個診斷、7 種用藥；這個規模用一張策展的對照表（藥 → 已知副作用 → 症狀）就做得到，不需要圖資料庫 |
-| 多語（印尼語／越南語）介面 | CLAUDE.md §12 | Demo 只用 zh-TW；schema 的 `lang` 欄位保留 |
-| 02 風格美學／03 心理情緒／04 全資產生命週期 | UIUX_OMNI_TWIN | 五維度 rail 只有 01 與 05 有內容 |
-| 3D 人體**解剖**模型（器官級） | KNOWN_ISSUES #36、#40 | 01 已有向量解剖圖＋ 3D 分身（外觀，非解剖）；器官級 3D 不做 |
-| 通道 5 家屬觀察、通道 6 健保雲端藥歷 | ARCHITECTURE §2 | 第二階段 |
-| 影像分析、119／特約通知實發、LINE 實發 | ARCHITECTURE §8 | Demo 範圍內顯示不真發 |
+M6 不把所有事件強迫走同一條直線。紅燈可以先通知；誤報能關閉；已解決仍可能需要追蹤。既有 Path A/B 的人工審核點與純程式紅燈規則必須保留，臨床判斷由適當專業角色確認。
 
----
+## 3. 平台能力的後續接入條件
 
-## 5. ARCHITECTURE §11 的四個未決事項
-
-這四個是**具體且到現在還開著**的決定，比 12 個 Epic 更該先處理：
-
-| # | 問題 | 文件裡的建議 | 現況 |
-|---|---|---|---|
-| 1 | 照護者「看一眼是不是這個意思」要不要做成必要步驟？ | 紅燈不做，其他做 | 已實作摘要卡（非紅燈） ✅ |
-| 2 | baseline 多久滾動一次？ | **只在醫囑或護理師確認時更新，不自動漂移** | 已遵守；`propose_vitals_usual` 因此被移除（commit `6c12cd2`） |
-| 3 | Familiarization Writer 一頁放不放趨勢圖？ | 放一張，選變化最大的兩個維度 | 已實作 ✅ |
-| 4 | 路徑 A 的追蹤要問幾次？ | 一次，指定時間由護理師設 | `schedule_follow_up` 已有，時間是否可由護理師設 —— **未確認** |
-
----
-
-## 6. 為什麼不用「完成 40–45%」當排程基準
-
-那個數字的分母是 VISION，而 VISION 的許多項目在 ARCHITECTURE 裡被明確標為
-第二／第三階段或「假做」：
-
-| 被算成「缺」的 | 文件裡的實際狀態 |
+| 能力 | 接入條件與首個可驗收切片 |
 |---|---|
-| Wearables「幾乎缺」、Home IoT「缺」 | ARCHITECTURE §2 通道 7：**第三階段** |
-| 家屬觀察「部分」 | 通道 5：第二階段 |
-| 健保雲端藥歷 | 通道 6：第二階段 |
-| baseline 更新 | §8「假做」清單：顯示提案即可 |
-| 超時升級 | §8「假做」清單：旁白帶過 |
-| 影像分析、119 通知、LINE | §8「假做」清單 |
+| 外部 identifiers／identity linking | M1/M3；來源系統＋外部 ID 唯一，疑似同人由人確認，可解除連結 |
+| FHIR 與 terminology | M3/M4；明定支援版本、resources、code system、units、錯誤與未知欄位處理；不宣稱完整 FHIR server |
+| 文件解析 | 保留原檔、頁碼／段落 anchor、抽取版本與人工更正；先完成一種出院摘要 |
+| 藥物／檢驗／影像 | 狀態、時間、劑量／單位／參考區間及來源先建模，再做臨床 explorer 頁面 |
+| Health Graph | Patient–Condition–Medication–Encounter–Event 的關係與證據先落地；可以先用關聯表，不以引進 Neo4j 作為完成條件 |
+| Device platform | M4/M6；先接一款裝置，驗 pairing、時鐘、缺值、品質、重送、離線及撤銷；保留模擬器測試 |
+| Twin current state | 明定 history/current/context 聚合及過期／缺資料狀態；臨床 baseline 與衍生統計正常帶分開 |
+| OIDC／MFA／機構身分 | M1 session 契約穩定後整合真實 IdP；角色與病人授權仍由後端核對 |
+| AI eval | 持續加入檢索、證據支持、拒答、注入、跨病人、流程回歸；mock 與真模型結果分別記錄 |
+| Observability／DR | 從 M0 起保留失敗與驗證證據；M3 起完成定期備份與還原；M7 前有告警及責任人 |
 
-把設計上的階段界線算成完成度缺口，會得到一個看起來很慘、但其實是照計畫走的數字。
-**沒有逐項驗收與權重依據的百分比，不拿來當排程基準。**
+## 4. 並行的使用者驗證
+
+邀請 1–3 位照護／護理使用者操作合成案例，記錄耗時、完成率、錯誤與不理解的地方。若合作條件允許，可延長至一週。
+
+這是並行的研究軌，不阻擋 M0–M3 工程；未取得使用者回饋時如實標示。驗收為案例與觀察證據，不設定「一定找出五個問題」這類會扭曲結果的指標。訪談與聯絡須由使用者安排或另行授權，不自動對外發訊息。
+
+## 5. 暫緩與重新評估
+
+| 暫緩 | 重新評估條件 |
+|---|---|
+| Neo4j、獨立向量庫、獨立時序庫、微服務拆分 | 既有查詢／容量／隔離需求有量測證據且現有儲存不能滿足 |
+| DID/VC、跨院 SMART launch | 有實際合作方、身份／撤銷契約與測試環境 |
+| 多語及 02–04 wellness 模組 | 核心流程及授權穩定、使用者需求成立 |
+| 3D 新動畫及預測式外觀 | 目前分身已存在；先處理資料時間、缺值、來源與「示意」限制 |
+| 真裝置、醫院連線、真實通知 | 各接入條件與端到端失敗處理完成，另行取得必要的合作與連線設定 |
+
+## 6. 不可混用的概念
+
+- provenance 與人工確認不等於逐句 claim 的證據支持驗證。
+- append-only 檔案不等於具有原子交易、雙時間版本與可回放能力。
+- 頁面 scope 與內容敏感度可以共同參與 policy，不是只能二選一。
+- 不在臨床介面顯示模型分數，不等於所有內部品質／不確定性欄位都要刪除。是否保存及哪些角色可見另定 schema 與 API 投影；不自動放寬現有顯示規則。
+- 時序共現或圖上相連不能當成因果證據。
+- 133 等歷史測試數字不固定作為 Done；以當次完整測試報告及 commit 為準。
+
+ARCHITECTURE §11 的摘要確認、baseline、趨勢圖沿用已存在決策；追蹤次數與由護理師設定時間的行為列入 M6，先檢查目前節點是否真的排入可執行佇列。

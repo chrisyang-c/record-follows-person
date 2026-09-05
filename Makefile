@@ -1,4 +1,4 @@
-.PHONY: db db-local migrate seed api web worker test lint eval codegen audit clean-records reset reset-docker
+.PHONY: db db-local migrate seed api web worker test check lint eval codegen audit clean-records reset reset-docker
 
 API_DIR=apps/api
 WEB_DIR=apps/web
@@ -29,8 +29,15 @@ web:           ## Next.js dev server on :3000
 	cd $(WEB_DIR) && pnpm dev
 
 test:          ## api unit + graph tests, web lint + tests
-	cd $(API_DIR) && uv run ruff check . && uv run pytest -q
+	cd $(API_DIR) && uv run ruff check . && uv run ruff format --check . && uv run pytest -q
 	cd $(WEB_DIR) && pnpm lint && pnpm test
+
+check: test    ## full code checks; runtime verification is a separate smoke command
+	cd $(API_DIR) && uv run ruff check ../../scripts ../../packages/schema/codegen.py && uv run ruff format --check ../../scripts ../../packages/schema/codegen.py
+	cd $(API_DIR) && uv run pytest ../../scripts/tests -q
+	cd $(API_DIR) && uv run python ../../scripts/check_eval.py
+	cd $(API_DIR) && uv run python ../../packages/schema/codegen.py --check
+	cd $(WEB_DIR) && pnpm build && pnpm typecheck
 
 lint:
 	cd $(API_DIR) && uv run ruff check . && uv run ruff format --check .

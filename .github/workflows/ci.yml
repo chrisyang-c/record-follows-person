@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: sync
-        run: cd apps/api && uv sync
+        run: cd apps/api && uv sync --frozen
       - name: lint
         run: cd apps/api && uv run ruff check . && uv run ruff format --check .
       - name: migrate (PostgresSaver.setup + registry)
@@ -40,9 +40,15 @@ jobs:
       - name: eval (extraction)
         run: cd apps/api && uv run python -m eval.run
       - name: codegen is up to date
-        run: |
-          cd apps/api && uv run python ../../packages/schema/codegen.py
-          git diff --exit-code -- ../../packages/schema/ts/index.ts
+        run: cd apps/api && uv run python ../../packages/schema/codegen.py --check
+      - name: create disposable smoke database
+        run: psql -h localhost -U rfp -d postgres -c 'CREATE DATABASE rfp_smoke_ci'
+        env:
+          PGPASSWORD: rfp
+      - name: HTTP workflow survives process restart with PostgreSQL
+        run: cd apps/api && uv run python ../../scripts/smoke_runtime.py
+        env:
+          RFP_SMOKE_DATABASE_URL: postgresql://rfp:rfp@localhost:5432/rfp_smoke_ci
       - uses: actions/upload-artifact@v4
         with:
           name: eval-results
@@ -68,3 +74,22 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
       - run: cd apps/web && pnpm typecheck
+
+  windows-tooling:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+        working-directory: apps/api
+      - name: tooling style
+        run: uv run ruff check ../../scripts ../../packages/schema/codegen.py
+        working-directory: apps/api
+      - name: tooling format
+        run: uv run ruff format --check ../../scripts ../../packages/schema/codegen.py
+        working-directory: apps/api
+      - name: failure propagation and non-mutating codegen regressions
+        run: uv run pytest ../../scripts/tests -q
+        working-directory: apps/api
