@@ -159,7 +159,7 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
   const placeholder = listening ? "聽你說…" : busy ? "…" : phase === "confirm" ? "對／不對，或再補一句…" : phase === "red" ? "還有什麼要跟護理師說的…" : `${name}今天…`;
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-9rem)] w-full max-w-[390px] flex-col">
+    <div className="mx-auto flex min-h-[calc(100dvh-13rem)] w-full max-w-[390px] flex-col lg:min-h-[calc(100dvh-9rem)]">
       <div className="flex-1 space-y-3 px-1 py-3">
         {messages.length === 0 && !live && <p className="rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-base">{name}今天怎麼樣？講一句就好。</p>}
         {rows.map((r) =>
@@ -205,7 +205,7 @@ export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary;
       </div>
 
       <form
-        className="sticky bottom-0 flex items-end gap-2 border-t border-line bg-bg px-1 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
+        className="sticky bottom-14 flex items-end gap-2 border-t border-line bg-bg px-1 pt-2 pb-2 lg:bottom-0 lg:pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
         onSubmit={(e) => {
           e.preventDefault();
           void send(input);
