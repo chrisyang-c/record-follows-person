@@ -106,6 +106,10 @@ luna none 多抽 pain×2、cognition×2（「不舒服」「沒精神」類句�
 
 - **角色首頁一次呼叫（#19）＋輪詢暫停（#20）**：`GET /home/{role}`；瀏覽器實測護理站只打 `/home/nurse` ×1 與 `/nurse/inbox`（不再每人一次 `/trends`），照護者／醫師首頁各只打 `/home/{role}`；console 無錯誤。`usePolling` 取代四處 `setInterval`，`lib/polling.test.tsx` 驗證隱藏時暫停、回前景立即刷新。api 99 passed；web typecheck／lint／vitest（3）綠。
 
+## 登入（以病人為核心）與 01 住民選擇（2026-09-05 深夜）
+
+`/login`：選角色 → 選身份 → 選住民 → 輸入病人密碼（本人用自己的）。`POST /login` 驗 hash；不在 Care Circle 的身份通過後以角色預設範圍加入一天，access log 記 `login:granted`。`tests/test_login.py` ×4（本人正確／錯誤密碼 401／醫師用病人密碼取得範圍／護理師沒選住民 400）。工作人員進 01 先選住民（`/twin?pid=`）。截圖：`login-390.png`、`twin-1280-pick.png`。
+
 ## OMNI-TWIN 殼 × 臨床安全核心（2026-09-05 晚，docs/UIUX_OMNI_TWIN.md §9 九步各一個 commit）
 
 | 步 | commit | 內容 | 證據 |

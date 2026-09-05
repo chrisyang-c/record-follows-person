@@ -10,8 +10,10 @@ record read passes it as ``X-Who``. A tab outside the member's scopes renders「
 
 from __future__ import annotations
 
+import hashlib as _hashlib
 import json
 from datetime import UTC, datetime
+from datetime import timedelta as _timedelta
 from typing import Any
 
 from record_schema import AccessLogEntry, CareCircleMember, CareRole, Scope
@@ -158,3 +160,63 @@ def access_log(patient_id: str, limit: int = 50) -> list[AccessLogEntry]:
         if x.strip()
     ]
     return rows[-limit:][::-1]
+
+
+# --- 登入：以病人為核心，其他人要有病人密碼 ------------------------------------------------
+
+
+def _code_file(patient_id: str):
+    return get_store().dir(patient_id) / "access.json"
+
+
+def set_access_code(patient_id: str, code: str) -> None:
+    """Store only the hash（demo：seed 用出生年）。"""
+    f = _code_file(patient_id)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(
+        json.dumps({"sha256": _hashlib.sha256(code.encode()).hexdigest()}), encoding="utf-8"
+    )
+
+
+def check_access_code(patient_id: str, code: str | None) -> bool:
+    f = _code_file(patient_id)
+    if not f.exists() or not code:
+        return False
+    return (
+        json.loads(f.read_text(encoding="utf-8"))["sha256"]
+        == _hashlib.sha256(code.strip().encode()).hexdigest()
+    )
+
+
+def login(who: str, patient_id: str | None, code: str | None, days: int = 1) -> dict[str, Any]:
+    """本人：自己的密碼。其他身份：輸入病人密碼 → 若不在 Care Circle 就以該角色預設範圍加入
+    （有效 ``days`` 天，granted_by＝病人）；已在圈內則只記一筆 access log。
+    回 {who, role, name, patient_id}。"""
+    it = whoami(who)
+    if not it:
+        raise KeyError("unknown identity")
+    role: CareRole = it["role"]
+    pid = who if role == "patient" else (it.get("patient_id") or patient_id)
+    if not pid or not get_store().exists(pid):
+        raise ValueError("要先選一位住民")
+    if not check_access_code(pid, code):
+        raise PermissionError("密碼不對")
+    if not scopes_for(pid, who):
+        now = datetime.now(UTC)
+        grant(
+            pid,
+            CareCircleMember(
+                health_id=get_store().load_profile(pid).health_id,
+                member_id=who,
+                name=it.get("name", who),
+                role=role,
+                scopes=DEFAULT_SCOPES[role],
+                valid_from=now,
+                valid_to=None if role == "patient" else now + _timedelta(days=days),
+                granted_by=pid,
+            ),
+        )
+        log_access(pid, who, role, "login:granted")
+    else:
+        log_access(pid, who, role, "login")
+    return {"who": who, "role": role, "name": it.get("name", who), "patient_id": pid}

@@ -69,3 +69,4 @@
 | 2026-09-05 | 介面依 VISION §28 對齊但沿用既有路由與元件：/me 首頁五段＋三子頁（用藥／影像／檢驗標第二階段）、/caregiver 依 §28.2（家屬只看自己那位）、/nurse 改名 Clinical Queue 三段、/doctor docs tab 加縱向摘要於 RoundPage 上方（檢驗／影像／臨床紀錄／AI 助理標第二階段）。不做 Health Graph、真實穿戴、EHR 對接。 | 使用者指示。 | Claude |
 | 2026-09-05 | UI 改為 OMNI-TWIN 殼（docs/UIUX_OMNI_TWIN.md，使用者提供）：深色為預設（§6 tokens），白色主題只給 RoundPage／列印；五維度 rail 只有 01 與 05 有內容；01 活體數位孿生為 wellness 語氣（允許大數字與一般建議），05 艙維持臨床語氣；四種動畫、發光只給熱點與同步燈。九步各一個 commit（e1ebc96→3d748d0＋本輪）。 | 使用者指示（2026-09-05）：「殼可以科幻，鏈不能」。 | 使用者 |
 | 2026-09-05 | `--primary` 成為 `--accent` 的別名、新增 `--on-primary`，既有元件不改 class 名即切到深色；AI／人／紅燈的樣式契約改靠形狀（虛線／實線／左 4px 紅線）而非顏色。 | 深色下顏色對比與語意不可靠；一次換 tokens 比逐檔改 class 安全。 | Claude |
+| 2026-09-05 | 登入介面以病人為核心：`/login` 選角色 → 選身份 → 選住民 → 輸入病人密碼（本人用自己的）；`POST /login` 驗 hash，通過後不在 Care Circle 者以角色預設範圍加入一天並記 access log。01 給工作人員時先選住民（`/twin?pid=`）。 | 使用者指示（2026-09-05）：其他人要看要輸入病人密碼。 | 使用者 |

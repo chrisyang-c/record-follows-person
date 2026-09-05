@@ -693,6 +693,26 @@ def _authorize(
     return role, list(cc.DEFAULT_SCOPES[role])  # type: ignore[index]
 
 
+class LoginIn(BaseModel):
+    who: str
+    patient_id: str | None = None
+    code: str | None = None
+
+
+@app.post("/login")
+def login(body: LoginIn) -> dict[str, Any]:
+    """登入：以病人為核心。本人輸入自己的密碼；家屬／照護者／護理師／醫師要輸入病人的密碼，
+    通過後才在 Care Circle 裡（不在圈內者以角色預設範圍加入一天）。密碼只存 hash。"""
+    try:
+        return cc.login(body.who, body.patient_id, body.code)
+    except KeyError:
+        raise HTTPException(404, "unknown identity") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    except PermissionError:
+        raise HTTPException(401, "密碼不對，請向本人或家屬確認") from None
+
+
 @app.get("/whoami")
 def whoami(me: str | None = None) -> dict[str, Any]:
     """The web stores only「我是誰」(cookie ``me``); role and display name come from here."""

@@ -124,7 +124,7 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
     last_round = date.fromisoformat(data["last_round_date"])
     identities: dict = dict(data["identities"])
     for r in data["residents"]:
-        identities[r["patient_id"]] = {"role": "patient", "name": r["code_name"]}
+        identities[r["patient_id"]] = {"role": "patient", "name": r["code_name"], "patient_id": r["patient_id"]}
         fam = r["emergency_contacts"][0]
         identities[r["family_member_id"]] = {
             "role": "family", "name": f"{fam['name']}（{fam['relation']}）", "patient_id": r["patient_id"],
@@ -171,6 +171,7 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
         )
         store.init_record(profile, baseline)
         _seed_care_circle(store, profile, r, data, identities)
+        care_circle.set_access_code(pid, str(r.get("access_code", r["birth_year"])))
         _seed_history(store, profile, r.get("history", []), nurses)
 
         # --- last round: Encounter + Order (with follow-up status for RoundPage §③) ------------

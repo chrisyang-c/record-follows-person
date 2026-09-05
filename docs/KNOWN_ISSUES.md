@@ -36,3 +36,4 @@
 | 32 | omni-twin-3.v0.build 需登入才看得到預覽與 chat（Preview setup failed／read-only），本輪未能讀取其 UI 想法。 | 尚未併入。 | 使用者匯出截圖或原始碼後再對齊。 |
 | 33 | 列印白底驗證用的是醫師 docs tab（事件資訊包）；RoundPage 需先跑巡診流程（約 2.5 分鐘）才會出現，本輪 `make seed` 後沒有已發布的 RoundPage。RoundPage 卡片本身以 `data-theme="white"` 呈現，列印時整頁切白色 tokens。 | 截圖 `print-1280-white.png` 是事件資訊包。 | 錄影前跑 `/nurse/round` 發布後再印。 |
 | 34 | 頂欄的地點·天氣是示意假資料（規格 §3.1 允許）；「孿生同步中」燈只代表頁面在輪詢，不代表裝置連線。 | 觀感。 | 第二階段接真資料。 |
+| 35 | 登入是 demo 等級：`POST /login` 驗證病人密碼（hash）並把身份加進 Care Circle，但 cookie `me` 仍由 `/role?set=` 寫入，直接打該網址可跳過密碼（Care Circle 仍擋住未授權的 tab）。示範密碼＝出生年。 | 只影響 demo 安全性。 | 第二階段：session token 由 API 簽發、`/role` 只接受 token。 |

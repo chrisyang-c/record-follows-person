@@ -236,7 +236,8 @@
           "facility": "示意醫院 A 神經內科",
           "summary": "MMSE 篩檢後確診，開始 Donepezil。"
         }
-      ]
+      ],
+      "access_code": "1940"
     },
     {
       "patient_id": "P002",
@@ -394,7 +395,8 @@
           "summary": "發燒咳嗽住院，出院後轉入機構，薦骨壓傷開始照護。",
           "ended": "2025-12-17"
         }
-      ]
+      ],
+      "access_code": "1936"
     },
     {
       "patient_id": "P003",
@@ -565,7 +567,8 @@
           "summary": "喘與痰增加住院，出院後入住機構。",
           "ended": "2026-03-08"
         }
-      ]
+      ],
+      "access_code": "1943"
     }
   ]
 }

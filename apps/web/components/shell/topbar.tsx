@@ -36,7 +36,7 @@ export function TopBar({ identity }: { identity: Identity | null }) {
           <span className="glow size-2 rounded-full bg-accent" aria-hidden="true" />
           孿生同步中
         </span>
-        {identity ? (
+        {identity && (
           <Link href={ROLE_HOME[identity.role]} className="flex min-h-11 items-center gap-2 rounded-lg px-1 hover:bg-surface" aria-label={`${ROLE_LABEL[identity.role]} ${identity.name}，回自己的艙`}>
             <span className="hidden text-right leading-tight sm:block">
               <span className="block text-sm font-medium">{identity.name}</span>
@@ -44,8 +44,12 @@ export function TopBar({ identity }: { identity: Identity | null }) {
             </span>
             <span className="inline-flex size-9 items-center justify-center rounded-full border border-line bg-surface-2 text-sm font-medium" aria-hidden="true">{identity.name.slice(0, 1)}</span>
           </Link>
-        ) : (
-          <Link href="/" className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm text-ink hover:bg-surface">選擇身份</Link>
+        )}
+        {identity && (
+          <Link href="/login" className="hidden min-h-11 items-center rounded-lg px-2 text-xs text-ink-2 hover:text-ink sm:inline-flex">切換</Link>
+        )}
+        {!identity && (
+          <Link href="/login" className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm text-ink hover:bg-surface">登入</Link>
         )}
       </div>
     </header>

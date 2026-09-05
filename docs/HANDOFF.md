@@ -3,6 +3,10 @@
 Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起直接 commit 到 `main` 並 push（不開分支／PR，見 CLAUDE.md §0.1）。
 先讀：CLAUDE.md → docs/ARCHITECTURE.md → docs/ACCEPTANCE.md（驗收與指令）→ docs/DECISIONS.md（為什麼）→ docs/KNOWN_ISSUES.md。
 
+## 已完成（登入與 01 住民選擇，2026-09-05 深夜）
+
+`/login`（角色 → 身份 → 住民 → 病人密碼；示範密碼＝出生年）、`POST /login`（`tests/test_login.py` ×4）、`/` 直接轉 `/login`、頂欄「切換」。工作人員進 01 先選住民（`/twin?pid=`），修掉護理師進 01 一直 Loading 的問題。限制見 KNOWN_ISSUES #35。
+
 ## 已完成（OMNI-TWIN 殼，2026-09-05 深夜）
 
 依 docs/UIUX_OMNI_TWIN.md §9 九步各一個 commit（`git log --grep 'ui(omni-'`）：深色 tokens 預設＋白色列印、殼（頂欄／rail／麵包屑／底部 tab）、四艙進殼、元件系統、Clinical Queue 重排（#21 修）、01 人體圖與 `GET /twin/{id}`、/me 八小卡、手機版面、列印與對比稽核。細節：ACCEPTANCE「OMNI-TWIN 殼」、UI_AUDIT 同名段、DECISIONS 末兩行、KNOWN_ISSUES #33–#34。**規格 §7 動畫只有四種、§10 不可違反已併入 CLAUDE.md §1.9。**
@@ -40,7 +44,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person ・ 2026-09-05 起�
 
 ## 已知問題
 
-全表在 docs/KNOWN_ISSUES.md（#1–#34）。最影響 demo 的：
+全表在 docs/KNOWN_ISSUES.md（#1–#35）。最影響 demo 的：
 - #17 測試留下的紅燈 thread 會疊卡 → 錄影前 `make reset`。
 - #18 已修（4 小時／跨日自動過期）；同一天 4 小時內連續測試仍共用一段 → 說「不對」重來或 `make reset`。
 - #26 已修：已知維度有缺口可追問一次（gap 驗證）、第二次無效改摘要卡、503 只留給 LLM 失敗。

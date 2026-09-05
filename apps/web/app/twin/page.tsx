@@ -2,7 +2,9 @@
 
 import { ScanLine } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useState, useSyncExternalStore } from "react";
+import { useSearchParams } from "next/navigation";
+import { identityOf, readMe } from "@/lib/role";
 import { DIMENSIONS, type Dimension } from "@schema";
 import { BodyMap, HOTSPOTS } from "@/components/twin/body-map";
 import { TrendLine } from "@/components/twin/trend-line";
@@ -20,12 +22,35 @@ const STATE_LABEL = { same: "跟平常一樣", changed: "有變化", red: "護�
  * （維度名＋一句狀態、大數字、14 天趨勢、最近一筆照護者原話、一句一般建議）。底部八維度橫向 tab。
  * wellness 語氣只在這裡與 /me；沒有今天的紀錄時熱點全部靜態。
  */
-export default function TwinPage() {
-  const pid = useMyPatientId();
+function TwinInner() {
+  const mine = useMyPatientId();
+  const sp = useSearchParams();
+  const me = useSyncExternalStore(() => () => {}, () => readMe(), () => null);
+  const identity = identityOf(me);
+  const pid = mine ?? sp.get("pid") ?? null;
   const { data, error } = useApi<TwinData>(pid ? `/twin/${pid}` : null, [pid]);
+  const { data: residents } = useApi<{ patient_id: string; code_name: string; room: string }[]>(!pid ? "/residents" : null);
   const [sel, setSel] = useState<Dimension>("intake");
-  if (pid === undefined || (!data && !error)) return <p className="text-ink-2">Loading…</p>;
-  if (pid === null) return <p role="alert" className="text-danger-ink">這個身份沒有對應的紀錄。<Link href="/" className="ml-2 text-accent hover:underline">選擇身份</Link></p>;
+  if (mine === undefined) return <p className="text-ink-2">Loading…</p>;
+  if (pid === null) {
+    // 家屬／照護者／護理師／醫師：先選要看的人（01 是本人視角，工作人員代看）
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-medium">活體數位孿生體</h1>
+        <p className="text-ink-2">{identity ? `${identity.name}，` : ""}01 是本人視角。你要看哪一位？（能看多少由 Care Circle 決定）</p>
+        <ul className="grid gap-3 sm:grid-cols-3">
+          {(residents ?? []).map((r) => (
+            <li key={r.patient_id}>
+              <Link href={`/twin?pid=${r.patient_id}`} className="flex min-h-16 items-center justify-between rounded-[12px] border border-line bg-surface px-4 hover:border-accent">
+                <span className="text-lg font-medium">{r.code_name}</span><span className="text-sm text-ink-2">{r.room}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  if (!data && !error) return <p className="text-ink-2">Loading…</p>;
   if (error) return <p role="alert" className="text-danger-ink">{error}</p>;
   const t = data!;
   const idle = !t.today_ts;
@@ -37,6 +62,7 @@ export default function TwinPage() {
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center gap-3">
+        {!mine && <Link href="/twin" className="text-xs text-ink-2 hover:text-ink">← 換一位</Link>}
         <span className="inline-flex size-12 items-center justify-center rounded-full border border-accent/60 text-accent"><ScanLine className="size-6" aria-hidden="true" /></span>
         <div className="min-w-0">
           <h1 className="text-2xl font-medium">活體數位孿生體</h1>
@@ -91,5 +117,13 @@ export default function TwinPage() {
         </ul>
       </nav>
     </div>
+  );
+}
+
+export default function TwinPage() {
+  return (
+    <Suspense fallback={<p className="text-ink-2">Loading…</p>}>
+      <TwinInner />
+    </Suspense>
   );
 }
