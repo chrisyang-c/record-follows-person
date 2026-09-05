@@ -48,6 +48,11 @@ cd apps/api && uv sync && uv run fastapi dev
 cd apps/web && pnpm i && pnpm dev
 ```
 
+### 0.5 外部參考
+- 隔壁目錄 `../health-ref`（Healthcare-ref）是別人的專案，**唯讀**。平常不要讀它、不要借它的東西。
+- 只有使用者明確說「參考 health-ref 做 X」時，才去讀對應的那一部分；只借想法，或 MIT／Apache／CC0 授權下的程式碼，借用的檔案頂端註明出處（專案名、路徑、授權）。
+- 沒有明確指示時，Claude Code 不得 `ls`、`grep`、`cat` 該目錄，也不得把它的內容寫進本 repo。
+
 ---
 
 ## 1. 核心原則（違反即 PR 退回）
