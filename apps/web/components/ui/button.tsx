@@ -8,7 +8,7 @@ const button = cva(
   {
     variants: {
       variant: {
-        primary: "bg-primary text-white hover:bg-primary-hover",
+        primary: "bg-primary text-on-primary hover:bg-primary-hover",
         secondary: "bg-surface text-ink border border-line hover:bg-surface-hover",
         ghost: "bg-transparent text-ink-2 hover:bg-surface hover:text-ink",
         // 文字用 --ink（§7 的 --ok / --danger 白字對比不足），原色只做邊框

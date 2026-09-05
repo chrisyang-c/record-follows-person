@@ -22,7 +22,7 @@ function Row({ r }: { r: HomeResident }) {
         )}
         {!data && <p className="text-sm text-ink-2">尚未發布 RoundPage</p>}
       </div>
-      <Link href={`/p/${r.patient_id}?tab=docs`} className="inline-flex min-h-12 items-center rounded-[10px] bg-primary px-4 text-white hover:bg-primary-hover">看一頁 →</Link>
+      <Link href={`/p/${r.patient_id}?tab=docs`} className="inline-flex min-h-12 items-center rounded-[10px] bg-primary px-4 text-on-primary hover:bg-primary-hover">看一頁 →</Link>
     </li>
   );
 }

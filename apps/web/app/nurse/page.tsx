@@ -88,7 +88,7 @@ export default function NurseHome() {
                   {i.deadline && <span>期限 {fmtDateTime(i.deadline)}</span>}
                   {i.escalation_level > 0 && <Chip tone="warn">已升級 {i.escalation_level} 次</Chip>}
                 </div>
-                <Link href={`/p/${i.patient_id}?tab=docs`} className="mt-3 inline-flex min-h-14 w-full items-center justify-center rounded-[10px] bg-primary px-4 text-white hover:bg-primary-hover">
+                <Link href={`/p/${i.patient_id}?tab=docs`} className="mt-3 inline-flex min-h-14 w-full items-center justify-center rounded-[10px] bg-primary px-4 text-on-primary hover:bg-primary-hover">
                   {i.red_flag ? "事件資訊包 / 護理評估" : "審核 ISBAR"}
                 </Link>
               </Card>

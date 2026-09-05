@@ -26,7 +26,7 @@ export function RoundPageView({
   const Title = headingLevel === 1 ? "h1" : "h2";
   const Section = headingLevel === 1 ? "h2" : "h3";
   return (
-    <article className={cn("print-page mx-auto max-w-[190mm] p-6 shadow-[var(--shadow-card)]", approved ? "confirmed" : "ai-draft")}>
+    <article data-theme="white" className={cn("print-page mx-auto max-w-[190mm] rounded-[12px] p-6", approved ? "confirmed" : "ai-draft")}>
       <header className="mb-4 flex flex-wrap items-baseline gap-2 border-b border-line pb-3">
         <Title className="text-xl font-medium">RoundPage · 熟悉頁</Title>
         <span className="text-sm text-ink-2">

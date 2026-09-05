@@ -52,7 +52,7 @@ function PersonCard({ r }: { r: HomeResident }) {
           ))}
         </ul>
       )}
-      <Link href={`/p/${r.patient_id}?tab=talk`} className={`mt-3 flex min-h-14 items-center justify-center gap-1 rounded-[10px] px-4 text-base font-medium ${pendingFall ? "bg-danger-ink text-white" : "bg-primary text-white hover:bg-primary-hover"}`}>
+      <Link href={`/p/${r.patient_id}?tab=talk`} className={`mt-3 flex min-h-14 items-center justify-center gap-1 rounded-[10px] px-4 text-base font-medium ${pendingFall ? "bg-danger-ink text-on-primary" : "bg-primary text-on-primary hover:bg-primary-hover"}`}>
         {pendingFall ? "請確認他的狀況" : "講一句今天怎麼樣"} <ChevronRight className="size-5" aria-hidden="true" />
       </Link>
       {c.care_team && (

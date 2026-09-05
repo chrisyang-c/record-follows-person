@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   description: "每個人有一份跟著他走的紀錄，和一個替這份紀錄說話的 agent。",
 };
 
-export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#0b0f14", width: "device-width", initialScale: 1 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const me = (await cookies()).get("me")?.value ?? null;

@@ -25,7 +25,7 @@ export function RedBannerGlobal() {
             ...(i.caregiver_reports.length ? [`照護者目前回報（${i.turn_count}）：${i.caregiver_reports.slice(-2).map((r) => `${r.question} ${r.answer}`).join("；")}`] : []),
           ]}
           action={
-            <Link href={`/p/${i.patient_id}?tab=docs`} className="inline-flex min-h-14 items-center justify-center rounded-[10px] bg-danger-ink px-4 text-base font-medium text-white hover:underline focus-visible:ring-2 focus-visible:ring-danger">
+            <Link href={`/p/${i.patient_id}?tab=docs`} className="inline-flex min-h-14 items-center justify-center rounded-[10px] bg-danger-ink px-4 text-base font-medium text-on-primary hover:underline focus-visible:ring-2 focus-visible:ring-danger">
               到場評估 →
             </Link>
           }

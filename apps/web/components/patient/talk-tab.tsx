@@ -41,7 +41,7 @@ function Bubble({ m, role }: { m: ConvMessage; role: Role }) {
   const red = !!m.meta.red || m.meta.phase === "red";
   return (
     <div className={cn("flex flex-col gap-1", me ? "items-end" : "items-start")}>
-      <div className={cn("max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-base leading-relaxed", me ? "rounded-br-md bg-primary text-white" : "rounded-bl-md bg-surface text-ink", !me && red && "border border-danger")}>
+      <div className={cn("max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-base leading-relaxed", me ? "rounded-br-md bg-primary text-on-primary" : "rounded-bl-md bg-surface text-ink", !me && red && "border border-danger")}>
         {m.text}
       </div>
       {!me && m.meta.activity && <ActivityBar events={m.meta.activity} role={role} />}

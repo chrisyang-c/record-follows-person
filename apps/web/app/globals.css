@@ -1,19 +1,56 @@
 @import "tailwindcss";
 
-/* ---- Tokens: CLAUDE.md §7 (single source; see docs/design.md) ---- */
+/* ---- Tokens: docs/UIUX_OMNI_TWIN.md §6（§7-dark，預設）；白色主題 [data-theme="white"] 沿用原 CLAUDE.md §7 ----
+   規則：--primary 是 --accent 的別名（既有元件用 primary）；發光只給 01 熱點與同步燈（.glow）。 */
 :root {
+  --bg: #0b0f14;
+  --surface: #121822;
+  --surface-2: #182130;
+  --line: #223042;
+  --ink: #e6edf3;
+  --ink-2: #8fa3b8;
+  --accent: #35e0c8;
+  --accent-2: #a78bfa;
+  --primary: var(--accent);
+  --on-primary: #0b0f14;
+  --ok: #3ddc97;
+  --warn: #f5b84a;
+  --danger: #ff6b6b;
+  /* 填色＝原色 8–12% 疊在 surface 上；填色上的文字在深色底直接用原色（對比 ≥ 6:1） */
+  --ai-fill: color-mix(in srgb, var(--accent-2) 8%, var(--surface));
+  --ai-line: color-mix(in srgb, var(--accent-2) 40%, transparent);
+  --danger-fill: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  --ok-fill: color-mix(in srgb, var(--ok) 10%, var(--surface));
+  --warn-fill: color-mix(in srgb, var(--warn) 12%, var(--surface));
+  --ok-ink: #3ddc97;
+  --warn-ink: #f5b84a;
+  --danger-ink: #ff8a8a;
+  --primary-hover: #5ae8d4;
+  --surface-hover: #182130;
+  --ok-fill-hover: color-mix(in srgb, var(--ok) 18%, var(--surface));
+  --danger-fill-hover: color-mix(in srgb, var(--danger) 18%, var(--surface));
+  --radius-card: 12px;
+  --shadow-card: none;
+  color-scheme: dark;
+}
+
+/* 白色主題（CLAUDE.md §7 原 tokens）：RoundPage、事件資訊包列印版、醫師頁可切換 */
+[data-theme="white"] {
   --bg: #ffffff;
   --surface: #f7f9fc;
+  --surface-2: #eef2f7;
   --line: #e3e8ef;
   --ink: #0f1b2d;
   --ink-2: #5b6b7f;
+  --accent: #1f6feb;
+  --accent-2: #6d5bd0;
   --primary: #1f6feb;
+  --on-primary: #ffffff;
   --ok: #1fa971;
   --warn: #d98a00;
   --danger: #d64545;
   --ai-fill: #eaf2ff;
-  /* 衍生 tokens（docs/design.md §1、DECISIONS 2026-09-05）：
-     *-fill 填色、*-ink 填色上的文字（§7 原色白底對比不足 4.5:1）、*-hover 加深 6% */
+  --ai-line: #1f6feb;
   --danger-fill: #fbe9e9;
   --ok-fill: #e8f7f0;
   --warn-fill: #fff4e0;
@@ -24,26 +61,10 @@
   --surface-hover: #eef2f7;
   --ok-fill-hover: #d6f0e4;
   --danger-fill-hover: #f5d5d5;
-  --radius-card: 12px;
   --shadow-card: 0 1px 2px rgba(15, 27, 45, 0.06);
   color-scheme: light;
-}
-
-/* 夜班深色變體（不是預設；紅燈維持高對比） */
-[data-theme="night"] {
-  --bg: #0f1b2d;
-  --surface: #16233a;
-  --line: #2a3a55;
-  --ink: #f5f7fa;
-  --ink-2: #aeb9c9;
-  --ai-fill: #1c2e4a;
-  --danger-fill: #4a1f1f;
-  --ok-fill: #143528;
-  --warn-fill: #3d2d0f;
-  --ok-ink: #7fd8b0;
-  --warn-ink: #f0b95a;
-  --danger-ink: #f28b8b;
-  color-scheme: dark;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 @theme inline {
@@ -67,12 +88,16 @@
   --color-surface-hover: var(--surface-hover);
   --color-ok-fill-hover: var(--ok-fill-hover);
   --color-danger-fill-hover: var(--danger-fill-hover);
+  --color-surface-2: var(--surface-2);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-on-primary: var(--on-primary);
+  --color-ai-line: var(--ai-line);
   /* 拉丁與數字 Inter 在前；CJK 由 Noto Sans TC 補上 */
   --font-sans: var(--font-inter), var(--font-noto), "Inter", "Noto Sans TC", system-ui, sans-serif;
   --font-latin: var(--font-inter), "Inter", system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
   --radius-card: 12px;
-  --shadow-card: 0 1px 2px rgba(15, 27, 45, 0.06);
 }
 
 html {
@@ -108,20 +133,30 @@ button, a, [role="button"] { touch-action: manipulation; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-/* AI vs 人：樣式契約（docs/design.md §3） */
-.ai-draft { border: 1.5px dashed var(--primary); background: var(--ai-fill); border-radius: var(--radius-card); }
-.confirmed { border: 1.5px solid var(--ok); background: var(--bg); border-radius: var(--radius-card); }
-.red-flag { border: 2px solid var(--danger); background: var(--danger-fill); border-radius: var(--radius-card); }
+/* AI vs 人：樣式契約（docs/UIUX_OMNI_TWIN.md §5）——靠形狀（虛線／實線／勾）不靠顏色 */
+.ai-draft { border: 1px dashed var(--ai-line); background: var(--ai-fill); border-radius: var(--radius-card); }
+.confirmed { border: 1px solid var(--ok); background: var(--surface); border-radius: var(--radius-card); }
+.red-flag { border: 1px solid var(--line); border-left: 4px solid var(--danger); background: var(--danger-fill); border-radius: var(--radius-card); color: var(--ink); }
+/* 發光只給生命：01 熱點與同步燈 */
+.glow { box-shadow: 0 0 24px color-mix(in srgb, currentColor 35%, transparent); }
+/* 標籤：小型大寫、0.12em 字距 */
+.label-caps { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+/* 臨床數字：等寬，對比 ≥ 7:1 */
+.clinical-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+/* wellness 大數字：只在 01 與 /me */
+.big-num { font-family: var(--font-latin); font-weight: 600; font-size: 40px; line-height: 1; color: var(--accent-2); }
 
 .skip-link {
   position: absolute; left: -999px; top: 8px; z-index: 100;
-  background: var(--primary); color: #fff; padding: 8px 12px; border-radius: 8px;
+  background: var(--primary); color: var(--on-primary); padding: 8px 12px; border-radius: 8px;
 }
 .skip-link:focus { left: 8px; }
 
 /* ---- Print: RoundPage A4 ---- */
 @page { size: A4; margin: 14mm; }
 @media print {
+  /* 列印永遠白底（docs/UIUX_OMNI_TWIN.md §8）：整頁切到白色主題 tokens */
+  :root { --bg: #ffffff; --surface: #f7f9fc; --surface-2: #eef2f7; --line: #e3e8ef; --ink: #0f1b2d; --ink-2: #5b6b7f; --accent: #1f6feb; --accent-2: #6d5bd0; --primary: #1f6feb; --on-primary: #fff; --ok: #1fa971; --warn: #d98a00; --danger: #d64545; --ai-fill: #eaf2ff; --ai-line: #1f6feb; --danger-fill: #fbe9e9; --ok-fill: #e8f7f0; --warn-fill: #fff4e0; --ok-ink: #14724d; --warn-ink: #8a5700; --danger-ink: #a83232; color-scheme: light; }
   html, body { background: #fff !important; color: #000 !important; font-size: 11pt; }
   .no-print { display: none !important; }
   /* 病人頁「文件」tab：只印 RoundPage 那一張 */

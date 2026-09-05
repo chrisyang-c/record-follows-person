@@ -43,7 +43,7 @@ export function SensorEventCard({ e, codeName }: { e: SensorEvent & { code_name?
         )}
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Link href={`/p/${e.patient_id}?tab=docs`} className="inline-flex min-h-14 flex-1 items-center justify-center rounded-[10px] bg-primary px-4 text-white hover:bg-primary-hover">
+        <Link href={`/p/${e.patient_id}?tab=docs`} className="inline-flex min-h-14 flex-1 items-center justify-center rounded-[10px] bg-primary px-4 text-on-primary hover:bg-primary-hover">
           {e.thread_id ? "事件資訊包 / 護理評估" : "看這個人"}
         </Link>
         <Link href={`/p/${e.patient_id}?tab=talk`} className="inline-flex min-h-14 items-center justify-center rounded-[10px] border border-line px-4 hover:border-primary">對話</Link>

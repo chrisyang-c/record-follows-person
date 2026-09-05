@@ -27,6 +27,7 @@ docs/langgraph_path_b_routine_round.mermaid  # Path B 日常＋巡診圖
 docs/ARCHITECTURE.md                          # 唯一設計稿：層級、通道、agent、節點細節、state、demo 範圍、未決事項
 docs/一份能跟著人走的紀錄_摘要與願景.md       # 對外敘事與制度出處（README 引用）
 docs/VISION_personal_health_twin.md           # 願景文件（Personal Health Twin）；實作範圍以 ARCHITECTURE.md 與 HANDOFF.md 為準
+docs/UIUX_OMNI_TWIN.md                        # UI/UX 規格：OMNI-TWIN 深色殼 × 臨床安全核心（取代 §7 白色單一主題）
 ```
 讀完後在 `docs/DECISIONS.md` 追加一行「已讀，日期，姓名」。Mermaid 圖是 LangGraph 節點名稱的唯一來源；改圖要先改檔再改程式。
 
@@ -59,6 +60,7 @@ cd apps/web && pnpm i && pnpm dev
 6. **baseline 只在確認時更新。** 系統只能產「提案」，`nurse_confirm_baseline` 通過才寫入。
 7. **合成資料，去識別化後才進 LLM。** repo 內不得有任何真實個資。
 8. **任何信心值、機率、分數不得出現在照護者與醫師介面。** 感測事件的原始值（加速度、靜止秒數、心率、SpO₂）只給護理師；照護者與醫師端只看到「可能跌倒」、驗證結果與觀察到的事實。
+9. **兩種語氣，一條界線（docs/UIUX_OMNI_TWIN.md §10）。** 分數、百分比、生理年齡、活力值、建議語句只允許在 01 活體數位孿生與 /me 的 wellness 區；05 艙內家屬、護理師、醫師頁面不出現任何分數、機率、信心值、建議。紅燈橫幅不可關閉，只可由護理師標「已處理」。RoundPage 與事件資訊包列印版白底。四鍵是全系統唯一的按鈕式回覆。
 
 ---
 
@@ -204,9 +206,11 @@ agent = create_deep_agent(
 
 ---
 
-## 7. UI：白色未來感醫療
+## 7. UI：OMNI-TWIN 殼 × 臨床安全核心（2026-09-05 起）
 
-**Tokens（覆寫 ui-ux-pro-max 的 design.md）**
+**規格以 `docs/UIUX_OMNI_TWIN.md` 為準**（殼可以科幻，鏈不能）：深色預設（§6 tokens：`--bg #0B0F14`、`--surface #121822`、`--accent #35E0C8`、`--accent-2 #A78BFA`…），白色主題 `[data-theme="white"]` 保留給 RoundPage、事件資訊包列印版與醫師頁切換；發光只給 01 熱點與同步燈；動畫只有四種且 `prefers-reduced-motion` 全關；紅燈橫幅不可關閉。下面的白色 tokens 是 `[data-theme="white"]` 的內容，仍是列印版的唯一來源。
+
+**白色主題 Tokens（`[data-theme="white"]`；覆寫 ui-ux-pro-max 的 design.md）**
 ```
 --bg: #FFFFFF        --surface: #F7F9FC     --line: #E3E8EF
 --ink: #0F1B2D       --ink-2: #5B6B7F
