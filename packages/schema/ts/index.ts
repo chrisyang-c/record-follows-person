@@ -19,9 +19,11 @@ export type RouteDecision = "contact_contract_hospital" | "home_acute_mode_b" | 
 
 export type CareRole = "patient" | "family" | "caregiver" | "nurse" | "doctor";
 
+export type LifeEventType = "condition" | "hospitalization" | "surgery" | "fall" | "other";
+
 export type Scope = "who" | "timeline" | "docs" | "talk";
 
-export type TimelineEntry = Observation | Incident | Encounter | Order;
+export type TimelineEntry = Observation | Incident | Encounter | Order | LifeEvent;
 
 export type Document = IncidentFile | HandoffPage | VisitPage | RoundPage | CaregiverNotes;
 
@@ -362,6 +364,24 @@ export interface IncidentFile {
   follow_up: FollowUp | null;
 }
 
+/** 終身時間軸的大事件（年層只顯示這些＋事故）：疾病確診、住院、手術、跌倒。
+來自出院摘要／病歷匯入（demo 為 seed），provenance 記來源機構。 */
+export interface LifeEvent {
+  id: string;
+  patient_id: string;
+  ts: string;
+  status: "draft" | "approved";
+  confirmed_by: string | null;
+  provenance: Provenance;
+  related_ids: string[];
+  kind: "life_event";
+  event_type: "condition" | "hospitalization" | "surgery" | "fall" | "other";
+  title: string;
+  summary: string;
+  facility: string;
+  ended: string | null;
+}
+
 export interface Observation {
   id: string;
   patient_id: string;
@@ -533,7 +553,7 @@ export interface TrendReport {
 export interface PersonRecord {
   profile: Profile;
   baseline: Baseline;
-  timeline: (Observation | Incident | Encounter | Order)[];
+  timeline: (Observation | Incident | Encounter | Order | LifeEvent)[];
   documents: (IncidentFile | HandoffPage | VisitPage | RoundPage | CaregiverNotes)[];
   provenance: ProvenanceLine[];
 }

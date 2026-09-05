@@ -198,7 +198,45 @@
         ]
       },
       "health_id": "P-0000001",
-      "family_member_id": "fam_P001"
+      "family_member_id": "fam_P001",
+      "history": [
+        {
+          "date": "2008-03-12",
+          "type": "condition",
+          "title": "確診高血壓",
+          "facility": "示意醫院 A",
+          "summary": "門診確診，開始服用降壓藥。"
+        },
+        {
+          "date": "2015-06-20",
+          "type": "hospitalization",
+          "title": "心房顫動住院 5 天",
+          "facility": "示意醫院 A",
+          "summary": "心悸就醫，住院調整心律藥，出院起服用 Warfarin。",
+          "ended": "2015-06-25"
+        },
+        {
+          "date": "2019-11-03",
+          "type": "surgery",
+          "title": "白內障手術（右眼）",
+          "facility": "示意醫院 B",
+          "summary": "日間手術，術後視力改善。"
+        },
+        {
+          "date": "2023-02-14",
+          "type": "fall",
+          "title": "在家浴室跌倒",
+          "facility": "示意醫院 A 急診",
+          "summary": "右髖挫傷，X 光無骨折，急診觀察後返家。"
+        },
+        {
+          "date": "2024-08-01",
+          "type": "condition",
+          "title": "確診輕度失智",
+          "facility": "示意醫院 A 神經內科",
+          "summary": "MMSE 篩檢後確診，開始 Donepezil。"
+        }
+      ]
     },
     {
       "patient_id": "P002",
@@ -324,7 +362,39 @@
         ]
       },
       "health_id": "P-0000002",
-      "family_member_id": "fam_P002"
+      "family_member_id": "fam_P002",
+      "history": [
+        {
+          "date": "2003-05-08",
+          "type": "condition",
+          "title": "確診第 2 型糖尿病",
+          "facility": "示意診所 C",
+          "summary": "健檢發現，開始口服藥與飲食控制。"
+        },
+        {
+          "date": "2017-09-30",
+          "type": "hospitalization",
+          "title": "低血糖住院 3 天",
+          "facility": "示意醫院 A",
+          "summary": "在家昏沉送醫，調整降血糖藥。",
+          "ended": "2017-10-03"
+        },
+        {
+          "date": "2021-04-18",
+          "type": "condition",
+          "title": "確診慢性腎臟病第 3 期",
+          "facility": "示意醫院 A 腎臟科",
+          "summary": "定期追蹤腎功能，調整用藥劑量。"
+        },
+        {
+          "date": "2025-12-10",
+          "type": "hospitalization",
+          "title": "肺部感染住院 7 天",
+          "facility": "示意醫院 A",
+          "summary": "發燒咳嗽住院，出院後轉入機構，薦骨壓傷開始照護。",
+          "ended": "2025-12-17"
+        }
+      ]
     },
     {
       "patient_id": "P003",
@@ -456,7 +526,46 @@
         ]
       },
       "health_id": "P-0000003",
-      "family_member_id": "fam_P003"
+      "family_member_id": "fam_P003",
+      "history": [
+        {
+          "date": "2012-10-22",
+          "type": "condition",
+          "title": "確診帕金森氏症",
+          "facility": "示意醫院 B 神經內科",
+          "summary": "手抖與步態改變就醫確診，開始 Levodopa。"
+        },
+        {
+          "date": "2016-01-15",
+          "type": "surgery",
+          "title": "右膝人工關節置換",
+          "facility": "示意醫院 B 骨科",
+          "summary": "退化性膝關節炎，術後復健三個月。",
+          "ended": "2016-01-22"
+        },
+        {
+          "date": "2020-07-09",
+          "type": "condition",
+          "title": "確診慢性阻塞性肺病",
+          "facility": "示意醫院 B 胸腔科",
+          "summary": "長年吸菸，肺功能檢查後確診，開始吸入劑。"
+        },
+        {
+          "date": "2024-11-27",
+          "type": "fall",
+          "title": "在家客廳跌倒",
+          "facility": "示意醫院 B 急診",
+          "summary": "左手腕挫傷，無骨折。"
+        },
+        {
+          "date": "2026-03-02",
+          "type": "hospitalization",
+          "title": "COPD 急性惡化住院 6 天",
+          "facility": "示意醫院 B",
+          "summary": "喘與痰增加住院，出院後入住機構。",
+          "ended": "2026-03-08"
+        }
+      ]
     }
   ]
 }

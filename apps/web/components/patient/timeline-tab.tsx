@@ -10,7 +10,7 @@ import { Chip, ProvenanceBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ConvMessage, PatientSummary } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
-import { INCIDENT_LABEL, SHIFT_LABEL } from "@/lib/labels";
+import { INCIDENT_LABEL, LIFE_EVENT_LABEL, SHIFT_LABEL } from "@/lib/labels";
 import type { Role } from "@/lib/role";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +20,7 @@ const KIND: Record<TimelineEntry["kind"], { label: string; tone: "neutral" | "pr
   incident: { label: "事故", tone: "danger" },
   encounter: { label: "巡診", tone: "ok" },
   order: { label: "醫囑", tone: "warn" },
+  life_event: { label: "大事件", tone: "neutral" },
 };
 
 type Row = { ts: string; id: string; entry?: TimelineEntry; msg?: ConvMessage };
@@ -33,6 +34,7 @@ function Entry({ e }: { e: TimelineEntry }) {
         <span className="text-ink-2">{fmtDateTime(e.ts)}</span>
         {e.kind === "observation" && <span className="text-ink-2">{SHIFT_LABEL[(e as Observation).shift]}</span>}
         {e.kind === "incident" && <Chip tone="danger">{INCIDENT_LABEL[e.incident_kind] ?? e.incident_kind}</Chip>}
+        {e.kind === "life_event" && <Chip tone={e.event_type === "fall" ? "danger" : "neutral"}>{LIFE_EVENT_LABEL[e.event_type]}</Chip>}
         <span className="ml-auto" />
         <ProvenanceBadge source={e.provenance.source} author={e.provenance.author} />
         {e.confirmed_by && <ConfirmedChip by={e.confirmed_by} at={e.provenance.ts} />}
@@ -58,6 +60,9 @@ function Entry({ e }: { e: TimelineEntry }) {
         </div>
       )}
       {e.kind === "incident" && <p className="mt-2">{e.summary}</p>}
+      {e.kind === "life_event" && (
+        <p className="mt-2"><span className="font-medium">{e.title}</span>{e.summary ? ` — ${e.summary}` : ""}{e.facility ? <span className="text-ink-2">（{e.facility}）</span> : null}</p>
+      )}
       {e.kind === "encounter" && <p className="mt-2">{e.summary}（<span translate="no">{e.doctor}</span>）</p>}
       {e.kind === "order" && (
         <div className="mt-2">

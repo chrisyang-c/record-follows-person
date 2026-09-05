@@ -32,6 +32,7 @@ ROOT_ALIASES: dict[str, Any] = {
     "Shift": rs.Shift,
     "RouteDecision": rs.RouteDecision,
     "CareRole": rs.CareRole,
+    "LifeEventType": rs.LifeEventType,
     "Scope": rs.Scope,
     "TimelineEntry": rs.TimelineEntry,
     "Document": rs.Document,

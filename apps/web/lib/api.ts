@@ -234,6 +234,25 @@ export interface PatientSummary {
   recorded_today: boolean;
   notes_count: number;
 }
+// ---- 本人 App /me ----
+export interface MeEvent { id: string; ts: string; type: string; title: string; summary: string; facility: string }
+export interface MeHome {
+  profile: Profile;
+  status_line: string;
+  today: { ts: string | null; dimensions: Record<string, { raw_quote: string; direction: string; value: string | number | null }>; vitals: Record<string, unknown> | null; changed_dimensions: string[] };
+  lifelong: { conditions: number; hospitalizations: number; surgeries: number; falls: number; years_of_records: number; since: number };
+  recent_events: MeEvent[];
+  allowed_tabs: Tab[];
+}
+export interface MeTimeline { years: { year: number; major: MeEvent[]; months: { month: number; count: number; events: MeEvent[] }[] }[] }
+export interface AskAnswer {
+  question: string;
+  found: boolean;
+  sentences: { text: string; sources: { id: string; date: string; kind: string; text: string }[] }[];
+  fallback: string | null;
+  meta: { run_id: string; scripted: boolean; duration_s?: number; tool_counts?: Record<string, number>; model?: string };
+}
+export const askRecord = (pid: string, question: string) => api<AskAnswer>(`/me/${pid}/ask`, { method: "POST", json: { question } });
 export interface TalkDone {
   reply: string;
   kind: ConvMessage["kind"];

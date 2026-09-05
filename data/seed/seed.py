@@ -32,6 +32,7 @@ from record.store import RecordStore  # noqa: E402
 from record_schema import (  # noqa: E402
     ISBAR,
     AllergyIntolerance,
+    LifeEvent,
     Baseline,
     BaselineDelta,
     BaselineEntry,
@@ -170,6 +171,7 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
         )
         store.init_record(profile, baseline)
         _seed_care_circle(store, profile, r, data, identities)
+        _seed_history(store, profile, r.get("history", []), nurses)
 
         # --- last round: Encounter + Order (with follow-up status for RoundPage §③) ------------
         o_prov = Provenance(source="doctor_ordered", author=nurses["doctor"], confirmed_by=nurse, ts=b_ts)
@@ -229,6 +231,23 @@ def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
     care_circle_save = getattr(care_circle, "save_identities")
     care_circle_save(identities)
     return store
+
+
+def _seed_history(store, profile, history: list[dict], nurses: dict) -> None:
+    """Lifelong events (VISION §7): imported from discharge summaries / prior records (demo seed),
+    written as approved entries with the source facility in provenance."""
+    for h in history:
+        ts = _dt(date.fromisoformat(h["date"]), "10:00")
+        store.write_timeline(
+            profile.patient_id,
+            LifeEvent(
+                id=new_id("evt", ts), patient_id=profile.patient_id, ts=ts, status="approved",
+                confirmed_by=nurses["head"],
+                provenance=Provenance(source="doctor_ordered", author=h["facility"], confirmed_by=nurses["head"], ts=ts),
+                event_type=h["type"], title=h["title"], summary=h.get("summary", ""), facility=h["facility"],
+                ended=date.fromisoformat(h["ended"]) if h.get("ended") else None,
+            ),
+        )
 
 
 def _seed_care_circle(store, profile, r, data, identities) -> None:

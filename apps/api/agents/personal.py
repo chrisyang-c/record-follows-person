@@ -202,6 +202,261 @@ def make_tools(patient_id: str) -> list[Any]:
     return [analyze_trends, get_round_context, submit_round_page, package_handoff]
 
 
+# --- 「問我的紀錄」(VISION §11.2 Retrieve): answers come only from the record -----------------
+
+ADVICE_WORDS = (
+    "建議",
+    "應該",
+    "最好",
+    "需要去",
+    "可能是",
+    "代表",
+    "表示",
+    "屬於正常",
+    "屬於異常",
+    "偏高",
+    "偏低",
+    "太高",
+    "太低",
+    "危險",
+    "沒問題",
+)
+NOT_FOUND = "紀錄裡沒有這件事。"
+
+
+def _line_text(e: Any) -> str:
+    if e.kind == "observation":
+        sb = e.minimal_sbar.s if e.minimal_sbar else ""
+        return f"觀察：{e.observation.raw_text}" + (f"（{sb}）" if sb else "")
+    if e.kind == "incident":
+        return f"事故：{e.summary}"
+    if e.kind == "encounter":
+        return f"巡診：{e.summary}"
+    if e.kind == "order":
+        return f"醫囑：{e.raw_text}"
+    if e.kind == "life_event":
+        return f"{e.title}：{e.summary}（{e.facility}）"
+    return ""
+
+
+def _doc_lines(d: Any) -> list[str]:
+    if d.doc_type == "round_page":
+        who = getattr(d, "who", "") or ""
+        return [f"熟悉頁：{who}"] + [
+            f"熟悉頁：{getattr(c, 'text', None) or getattr(c, 'summary', '')}" for c in d.changes
+        ]
+    if d.doc_type == "incident_file":
+        return [f"事件資訊包：{d.caregiver_section.raw_text}"]
+    if d.doc_type == "caregiver_notes":
+        return [f"注意事項：{it}" for it in d.items]
+    return []
+
+
+_STOP = set(
+    "我你他她它們的了嗎呢吧啊有沒是在會不曾以前過做去到跟和與很都還又也就把被讓給對於從"
+    "這那些什麼怎麼哪裡誰請問一下"
+)
+
+
+def _bigrams(text: str) -> set[str]:
+    t = "".join(ch for ch in text if ch.isalnum())
+    return {t[i : i + 2] for i in range(len(t) - 1)}
+
+
+def _query_grams(query: str) -> set[str]:
+    """Bigrams of the content words only: 「我以前有做過心臟手術嗎」→ {心臟, 臟手, 手術}."""
+    t = "".join(ch for ch in query if ch.isalnum() and ch not in _STOP)
+    return {t[i : i + 2] for i in range(len(t) - 1)}
+
+
+def retrieve_lines(patient_id: str, query: str, limit: int = 8) -> list[dict[str, Any]]:
+    """Keyword retrieval over timeline + documents; each hit is a record line with its id."""
+    store = get_store()
+    q = _query_grams(query)
+    if not q:
+        return []
+    hits: list[tuple[int, dict[str, Any]]] = []
+    for e in store.load_timeline(patient_id):
+        text = _line_text(e)
+        score = len(q & _bigrams(text + getattr(e, "title", "")))
+        if score:
+            hits.append(
+                (
+                    score,
+                    {
+                        "id": e.id,
+                        "date": e.ts.date().isoformat(),
+                        "kind": e.kind,
+                        "text": text[:160],
+                    },
+                )
+            )
+    for d in store.load_documents(patient_id):
+        for i, text in enumerate(_doc_lines(d)):
+            score = len(q & _bigrams(text))
+            if score:
+                hits.append(
+                    (
+                        score,
+                        {
+                            "id": f"{d.id}#{i}",
+                            "date": d.generated_at.date().isoformat(),
+                            "kind": d.doc_type,
+                            "text": text[:160],
+                        },
+                    )
+                )
+    hits.sort(key=lambda h: (-h[0], h[1]["date"]))
+    return [h for _s, h in hits[:limit]]
+
+
+def make_ask_tools(patient_id: str) -> list[Any]:
+    @tool
+    def retrieve(query: str) -> dict:
+        """Search this person's own record (timeline + documents) for lines matching the query.
+        Returns {hits:[{id, date, kind, text}]}; only these ids may be cited by submit_answer."""
+        hits = retrieve_lines(patient_id, query)
+        seen = PENDING.setdefault((patient_id, "ask_hits"), {})
+        for h in hits:
+            seen[h["id"]] = h
+        trace(
+            "subagent.tool",
+            subagent="personal_agent",
+            tool="retrieve",
+            patient_id=patient_id,
+            args={"query": query},
+            output={"hits": [h["id"] for h in hits]},
+        )
+        return {"hits": hits}
+
+    @tool
+    def submit_answer(sentences: list[dict[str, Any]], found: bool = True) -> dict:
+        """Submit the answer: sentences=[{text, source_ids}] — every sentence must cite ≥1 id
+        returned by retrieve; found=false with no sentences when the record has nothing.
+        No advice, no interpretation of values. Returns {ok} or {error}."""
+        seen = PENDING.get((patient_id, "ask_hits"), {})
+        out_sentences = []
+        for sdict in sentences or []:
+            text = str(sdict.get("text", "")).strip()
+            ids = [i for i in (sdict.get("source_ids") or []) if i in seen]
+            if not text:
+                continue
+            if not ids:
+                return {
+                    "error": f"「{text[:30]}」沒有引用 retrieve 回來的來源行；"
+                    "每句都要有 source_ids，紀錄裡沒有就 found=false"
+                }
+            if any(w in text for w in ADVICE_WORDS):
+                return {
+                    "error": f"「{text[:30]}」含建議或解讀"
+                    f"（{[w for w in ADVICE_WORDS if w in text]}）；只複述紀錄裡有的事"
+                }
+            from core.llm import scrub_clinical_language
+
+            out_sentences.append(
+                {"text": scrub_clinical_language(text), "sources": [seen[i] for i in ids]}
+            )
+        if not out_sentences:
+            found = False
+        out = {
+            "found": found,
+            "sentences": out_sentences if found else [],
+            "fallback": None if found else NOT_FOUND,
+        }
+        ARTIFACTS[(patient_id, "submit_answer")] = out
+        trace(
+            "subagent.tool",
+            subagent="personal_agent",
+            tool="submit_answer",
+            patient_id=patient_id,
+            output={"found": found, "sentences": len(out_sentences)},
+        )
+        return {"ok": True, **out}
+
+    return [retrieve, submit_answer]
+
+
+ASK_PROMPT = """你是這個人自己的紀錄 agent，替本人回答「我的紀錄裡有什麼」。
+規則：
+1. 先用 retrieve(query) 找紀錄（可以換不同關鍵字多找幾次）。
+2. 只回答紀錄裡有的事：每一句都要在 source_ids 引用 retrieve 回來的 id；
+   紀錄裡沒有就 submit_answer(sentences=[], found=false)，不要猜。
+3. 不給建議、不解讀數值、不下判斷（不寫「建議」「應該」「正常」「偏高」）。
+4. 用本人聽得懂的白話，每句附日期。最後一定要呼叫 submit_answer。"""
+
+
+@lru_cache(maxsize=16)
+def _ask_agent(patient_id: str):
+    root = get_settings().records_root / patient_id
+    backend = FilesystemBackend(root_dir=str(root))
+    return create_deep_agent(
+        model=_model(),
+        tools=make_ask_tools(patient_id),
+        system_prompt=ASK_PROMPT,
+        backend=backend,
+        middleware=[FilesystemMiddleware(backend=backend, tools=READ_ONLY_TOOLS)],
+        name=f"personal_agent_ask_{patient_id}",
+    )
+
+
+def ask_record(
+    patient_id: str, question: str, who: str | None = None
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """「問我的紀錄」：the person's agent retrieves and answers with source lines only."""
+    ARTIFACTS.pop((patient_id, "submit_answer"), None)
+    PENDING[(patient_id, "ask_hits")] = {}
+    s = get_settings()
+    run_id = f"run_{uuid.uuid4().hex[:8]}"
+    meta: dict[str, Any] = {
+        "task": "ask",
+        "patient_id": patient_id,
+        "run_id": run_id,
+        "who": who,
+        "provider": s.effective_provider,
+        "model": s.MODEL_PINNED if s.llm_enabled else "mock",
+        "scripted": False,
+        "ai_turns": 0,
+    }
+    t0 = time.time()
+    with _DEEP_AGENT_LOCK, tagged(run_id=run_id, dialog_id=f"ask:{patient_id}"):
+        if s.MODEL_PROVIDER == "mock":
+            meta["scripted"] = True
+            tools = {t.name: t for t in make_ask_tools(patient_id)}
+            hits = tools["retrieve"].invoke({"query": question})["hits"]
+            tools["submit_answer"].invoke(
+                {
+                    "sentences": [
+                        {"text": f"{h['date']}：{h['text']}", "source_ids": [h["id"]]}
+                        for h in hits[:3]
+                    ],
+                    "found": bool(hits),
+                }
+            )
+        elif not s.llm_enabled:
+            raise LLMUnavailable(f"MODEL_PROVIDER={s.MODEL_PROVIDER} 但沒有 API key")
+        else:
+            result = _ask_agent(patient_id).invoke(
+                {"messages": [HumanMessage(content=question)]}, config={"recursion_limit": 30}
+            )
+            meta["ai_turns"] = sum(
+                1 for m in result.get("messages", []) if isinstance(m, AIMessage)
+            )
+        calls = [e for e in recent(kind="subagent.tool", limit=1000) if e.get("run_id") == run_id]
+        meta["tool_counts"] = dict(Counter(e["tool"] for e in calls))
+        meta["duration_s"] = round(time.time() - t0, 2)
+        artifact = ARTIFACTS.get((patient_id, "submit_answer"))
+        if artifact is None:
+            trace(
+                "deep_agent.run",
+                prompt=question,
+                error="personal_agent did not submit_answer",
+                **meta,
+            )
+            raise AgentDidNotDeliver(f"personal agent 沒有回答（run {run_id}，見 /trace）")
+        trace("deep_agent.run", prompt=question, **meta)
+    return artifact, meta
+
+
 WRITER_PROMPT = """你是 familiarization_writer，替這位住民寫巡診「熟悉頁」（RoundPage）
    給醫師。你要自己寫句子，不是抄結構。
 步驟（工具都要真的呼叫；先讀紀錄，讀到的內容在後面每一步都不會變）：

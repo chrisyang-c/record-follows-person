@@ -1,4 +1,4 @@
-import type { Direction, Document, IncidentKind, RouteDecision, Shift } from "@schema";
+import type { Direction, Document, IncidentKind, LifeEventType, RouteDecision, Shift } from "@schema";
 
 /** interrupt 節點名 → 護理師看得懂的待辦名稱（節點名以 docs/*.mermaid 為準） */
 export const TYPE_LABEL: Record<string, string> = {
@@ -22,6 +22,14 @@ export const INCIDENT_LABEL: Record<IncidentKind | "acute", string> = {
   choking: "嗆咳",
   behavior: "攻擊／遊走",
   acute: "急症",
+};
+
+export const LIFE_EVENT_LABEL: Record<LifeEventType, string> = {
+  condition: "確診",
+  hospitalization: "住院",
+  surgery: "手術",
+  fall: "跌倒",
+  other: "其他",
 };
 
 export const DOC_TYPE_LABEL: Record<Document["doc_type"], string> = {

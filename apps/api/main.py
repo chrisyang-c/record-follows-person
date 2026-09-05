@@ -194,6 +194,164 @@ def home(role: str) -> dict[str, Any]:
     }
 
 
+# --- 本人 App（第四扇門）：/me ----------------------------------------------------------------
+
+MAJOR_KINDS = {"life_event", "incident"}
+
+
+@app.get("/me/{patient_id}/home")
+def me_home(patient_id: str, x_who: str | None = Header(default=None)) -> dict[str, Any]:
+    """Patient homepage (VISION §28.1): status line, today's 8 dimensions, lifelong summary,
+    recent events. No confidence values, no scores."""
+    from datetime import date
+
+    store = get_store()
+    if not store.exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    role, tabs = _authorize(patient_id, x_who, "patient")
+    cc.log_access(patient_id, x_who, role, "me:home")  # type: ignore[arg-type]
+    profile = store.load_profile(patient_id)
+    tl = store.load_timeline(patient_id)
+    obs = [e for e in tl if e.kind == "observation"]
+    latest = obs[-1] if obs else None
+    today_dims = (
+        {
+            k: {"raw_quote": v.raw_quote, "direction": v.direction, "value": v.value}
+            for k, v in latest.observation.domains.items()
+        }
+        if latest
+        else {}
+    )
+    changed = [
+        d.dimension
+        for d in (latest.deltas if latest else [])
+        if getattr(d, "is_change", getattr(d, "changed", False))
+    ]
+    red = bool(latest and latest.red_flags and latest.red_flags.notify_now)
+    status_line = (
+        "護理師正在處理一件事" if red else ("今天有幾項跟平常不一樣" if changed else "跟平常差不多")
+    )
+    life = [e for e in tl if e.kind == "life_event"]
+    first_year = min((e.ts.year for e in tl), default=date.today().year)
+    events = sorted([e for e in tl if e.kind in MAJOR_KINDS], key=lambda e: e.ts, reverse=True)[:5]
+    return {
+        "profile": profile.model_dump(mode="json"),
+        "status_line": status_line,
+        "today": {
+            "ts": latest.ts.isoformat() if latest else None,
+            "dimensions": today_dims,
+            "vitals": latest.vitals.model_dump(mode="json") if latest and latest.vitals else None,
+            "changed_dimensions": changed,
+        },
+        "lifelong": {
+            "conditions": len(profile.conditions),
+            "hospitalizations": sum(1 for e in life if e.event_type == "hospitalization"),
+            "surgeries": sum(1 for e in life if e.event_type == "surgery"),
+            "falls": sum(1 for e in life if e.event_type == "fall")
+            + sum(1 for e in tl if e.kind == "incident" and e.incident_kind == "fall"),
+            "years_of_records": date.today().year - first_year,
+            "since": first_year,
+        },
+        "recent_events": [_event_row(e) for e in events],
+        "allowed_tabs": tabs,
+    }
+
+
+INCIDENT_ZH = {
+    "fall": "跌倒",
+    "medication_issue": "拒藥／吐藥",
+    "choking": "嗆咳",
+    "behavior": "攻擊／遊走",
+    "acute": "急症",
+}
+
+
+def _event_row(e: Any) -> dict[str, Any]:
+    if e.kind == "life_event":
+        return {
+            "id": e.id,
+            "ts": e.ts.isoformat(),
+            "type": e.event_type,
+            "title": e.title,
+            "summary": e.summary,
+            "facility": e.facility,
+        }
+    quote = e.summary.split("「", 1)[1].split("」", 1)[0] if "「" in e.summary else ""
+    return {
+        "id": e.id,
+        "ts": e.ts.isoformat(),
+        "type": e.incident_kind,
+        "title": f"{INCIDENT_ZH.get(e.incident_kind, '事件')}（機構內）"
+        + (f"：「{quote}」" if quote else ""),
+        "summary": e.summary,
+        "facility": "",
+    }
+
+
+@app.get("/me/{patient_id}/timeline")
+def me_timeline(patient_id: str, x_who: str | None = Header(default=None)) -> dict[str, Any]:
+    """Year → month → event. The year layer only carries major events (conditions, hospital
+    stays, surgeries, falls); observations sit inside their month."""
+    store = get_store()
+    if not store.exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    role, tabs = _authorize(patient_id, x_who, "patient")
+    if "timeline" not in tabs:
+        raise HTTPException(403, "未獲授權")
+    cc.log_access(patient_id, x_who, role, "me:timeline")  # type: ignore[arg-type]
+    years: dict[int, dict[str, Any]] = {}
+    for e in store.load_timeline(patient_id):
+        y = years.setdefault(e.ts.year, {"year": e.ts.year, "major": [], "months": {}})
+        if e.kind in MAJOR_KINDS:
+            y["major"].append(_event_row(e))
+        m = y["months"].setdefault(e.ts.month, {"month": e.ts.month, "count": 0, "events": []})
+        m["count"] += 1
+        if e.kind in MAJOR_KINDS or e.kind in ("encounter", "order"):
+            m["events"].append(
+                _event_row(e)
+                if e.kind in MAJOR_KINDS
+                else {
+                    "id": e.id,
+                    "ts": e.ts.isoformat(),
+                    "type": e.kind,
+                    "title": ("巡診：" if e.kind == "encounter" else "醫囑：")
+                    + (e.summary if e.kind == "encounter" else e.raw_text)[:40],
+                    "summary": "",
+                    "facility": "",
+                }
+            )
+    out = []
+    for y in sorted(years.values(), key=lambda x: -x["year"]):
+        y["months"] = sorted(y["months"].values(), key=lambda m: -m["month"])
+        out.append(y)
+    return {"years": out}
+
+
+class AskIn(BaseModel):
+    question: str
+
+
+@app.post("/me/{patient_id}/ask")
+def me_ask(
+    patient_id: str, body: AskIn, x_who: str | None = Header(default=None)
+) -> dict[str, Any]:
+    """「問我的紀錄」：the person's own agent retrieves from timeline + documents and answers
+    only with sentences that cite record lines; nothing found → says so. No advice."""
+    from agents.personal import ask_record
+
+    store = get_store()
+    if not store.exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    role, tabs = _authorize(patient_id, x_who, "patient")
+    if "timeline" not in tabs:
+        raise HTTPException(403, "未獲授權")
+    if not body.question.strip():
+        raise HTTPException(400, "empty question")
+    cc.log_access(patient_id, x_who, role, "me:ask")  # type: ignore[arg-type]
+    answer, meta = ask_record(patient_id, body.question.strip(), who=x_who)
+    return {"question": body.question.strip(), **answer, "meta": meta}
+
+
 @app.get("/records/{patient_id}")
 def record(patient_id: str) -> dict[str, Any]:
     store = get_store()

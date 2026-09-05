@@ -363,6 +363,21 @@ class Incident(TimelineBase):
     incident_file_id: str | None = None
 
 
+LifeEventType = Literal["condition", "hospitalization", "surgery", "fall", "other"]
+
+
+class LifeEvent(TimelineBase):
+    """終身時間軸的大事件（年層只顯示這些＋事故）：疾病確診、住院、手術、跌倒。
+    來自出院摘要／病歷匯入（demo 為 seed），provenance 記來源機構。"""
+
+    kind: Literal["life_event"] = "life_event"
+    event_type: LifeEventType
+    title: str
+    summary: str = ""
+    facility: str = ""
+    ended: date | None = None
+
+
 class Encounter(TimelineBase):
     kind: Literal["encounter"] = "encounter"
     encounter_type: Literal["round", "emergency", "visit"]
@@ -396,7 +411,7 @@ class Order(TimelineBase):
 
 
 TimelineEntry = Annotated[
-    Union[Observation, Incident, Encounter, Order], Field(discriminator="kind")
+    Union[Observation, Incident, Encounter, Order, LifeEvent], Field(discriminator="kind")
 ]
 
 
@@ -598,6 +613,7 @@ __all__ = [
     "MedicationStatement", "Contact", "Facility", "Profile", "HEALTH_ID_PATTERN", "CareRole",
     "Scope", "CareCircleMember", "AccessLogEntry", "BaselineEntry", "Baseline",
     "BaselineProposal", "MinimalSBAR", "TimelineBase", "Observation", "Incident", "Encounter",
+    "LifeEventType", "LifeEvent",
     "OrderItem", "OrderFollowUp", "Order", "TimelineEntry", "ISBAR", "OnsiteAssessment",
     "CaregiverSection", "NurseSection", "Notification", "FollowUp", "DocBase", "IncidentFile",
     "HandoffPage", "VisitPage", "TrendPoint", "TrendSeries", "TrendLine", "TrendReport",
