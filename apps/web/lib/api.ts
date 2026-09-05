@@ -257,6 +257,26 @@ export interface PatientSummary {
   recorded_today: boolean;
   notes_count: number;
 }
+// ---- 01 活體數位孿生 /twin ----
+export interface TwinDimension {
+  label: string;
+  state: "same" | "changed" | "red";
+  quote: string | null;
+  value: string | number | null;
+  direction: "up" | "down" | "same" | "unknown";
+  days: number;
+  note: string;
+  baseline: string;
+  series: { date: string; value: number | null; label: string }[];
+  tip: string;
+}
+export interface TwinData {
+  profile: { code_name: string; health_id: string; birth_year: number };
+  today_ts: string | null;
+  status_line: string;
+  dimensions: Record<string, TwinDimension>;
+}
+
 // ---- 本人 App /me ----
 export interface MeEvent { id: string; ts: string; type: string; title: string; summary: string; facility: string }
 export interface MeHome {

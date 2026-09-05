@@ -13,7 +13,14 @@ def test_home_caregiver_cards(records_root):
     assert out["role"] == "caregiver" and len(out["residents"]) == 3
     for r in out["residents"]:
         assert {"patient_id", "code_name", "room", "timeline_count"} <= set(r)
-        assert {"recorded_today", "notes_count", "session_phase", "status_line", "alerts", "care_team"} <= set(r["card"])
+        assert {
+            "recorded_today",
+            "notes_count",
+            "session_phase",
+            "status_line",
+            "alerts",
+            "care_team",
+        } <= set(r["card"])
 
 
 def test_home_nurse_cards_carry_trends(records_root):

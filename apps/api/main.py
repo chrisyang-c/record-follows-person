@@ -341,6 +341,91 @@ class VerifyIn(BaseModel):
     text: str = ""
 
 
+# --- 01 活體數位孿生（本人 wellness 視角；docs/UIUX_OMNI_TWIN.md §4.1）--------------
+
+# 一句 wellness 建議（只在 01 與 /me 允許；來源標「一般建議」，不是醫療建議）
+WELLNESS_TIP: dict[str, str] = {
+    "intake": "三餐固定時間、少量多餐，白天分次喝水。",
+    "elimination": "每天固定時間如廁，蔬果與水分足夠。",
+    "function": "每天走一走、站一站，動作慢一點但不要不動。",
+    "cognition": "白天多說話、多曬太陽，晚上少刺激。",
+    "sleep": "固定上床時間，睡前少喝水、少看螢幕。",
+    "skin": "翻身、保持乾爽，皮膚乾就擦乳液。",
+    "pain": "痛就說，記下部位與時間，別硬撐。",
+    "vitals": "有喘、咳、發燒的感覺就先休息並讓人知道。",
+}
+
+
+@app.get("/twin/{patient_id}")
+def twin(patient_id: str, x_who: str | None = Header(default=None)) -> dict[str, Any]:
+    """01 activity body map: per dimension — state (same / changed / red), today's words and
+    value, days changed, baseline, 14-day series, latest caregiver quote, a general wellness tip.
+    Wellness voice is allowed here only (CLAUDE.md §1.9)."""
+    from datetime import timedelta
+
+    from agents.subagents import trend_analyzer
+
+    store = get_store()
+    if not store.exists(patient_id):
+        raise HTTPException(404, "unknown patient")
+    role, _tabs = _authorize(patient_id, x_who, "patient")
+    cc.log_access(patient_id, x_who, role, "twin")  # type: ignore[arg-type]
+    profile = store.load_profile(patient_id)
+    baseline = store.load_baseline(patient_id)
+    until = datetime.now(UTC).date()
+    since = until - timedelta(days=14)
+    obs = store.load_timeline(patient_id, since=since, kinds={"observation"})
+    rep = trend_analyzer.analyze(patient_id, obs, [], since, until, baseline=baseline)  # type: ignore[arg-type]
+    series = {s.dimension: [p.model_dump(mode="json") for p in s.points] for s in rep.series}
+    trend_abnormal = {line.dimension: line for line in rep.lines if line.is_abnormal}
+    latest = obs[-1] if obs else None
+    deltas = {d.domain: d for d in (latest.deltas if latest else [])}
+    red_now = bool(latest and latest.red_flags and latest.red_flags.notify_now) or any(
+        row.get("patient_id") == patient_id and row.get("graph") == "path_a"
+        for row in registry.list_threads(status="interrupted")
+    )
+    base = {e.dimension: e for e in baseline.entries if e.valid_to is None}
+    dims: dict[str, Any] = {}
+    for d in DIMENSIONS:
+        dv = latest.observation.domains.get(d) if latest else None
+        if dv is None:  # last mention within 14 days
+            for e in reversed(obs):
+                if d in e.observation.domains:
+                    dv = e.observation.domains[d]
+                    break
+        delta = deltas.get(d)
+        trend = trend_abnormal.get(d)
+        changed = bool(delta and delta.direction in ("up", "down")) or trend is not None
+        state = "red" if (red_now and changed) else ("changed" if changed else "same")
+        dims[d] = {
+            "label": DIMENSION_LABELS[d]["zh-TW"],
+            "state": state,
+            "quote": dv.raw_quote if dv else None,
+            "value": dv.value if dv else None,
+            "direction": delta.direction
+            if delta and delta.direction != "same"
+            else (trend.direction if trend else (dv.direction if dv else "unknown")),
+            "days": delta.days if delta else (trend.window_days if trend else 0),
+            "note": delta.note if delta and delta.note else (trend.summary if trend else ""),
+            "baseline": base[d].description if d in base else "",
+            "series": series.get(d, []),
+            "tip": WELLNESS_TIP[d],
+        }
+    changed_n = sum(1 for v in dims.values() if v["state"] != "same")
+    return {
+        "profile": {
+            "code_name": profile.code_name,
+            "health_id": profile.health_id,
+            "birth_year": profile.birth_year,
+        },
+        "today_ts": latest.ts.isoformat() if latest else None,
+        "status_line": "護理師正在處理一件事"
+        if red_now
+        else (f"今天有 {changed_n} 項跟平常不一樣" if changed_n else "跟平常差不多"),
+        "dimensions": dims,
+    }
+
+
 # --- 本人 App（第四扇門）：/me ----------------------------------------------------------------
 
 MAJOR_KINDS = {"life_event", "incident"}
