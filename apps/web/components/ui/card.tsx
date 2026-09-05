@@ -2,7 +2,7 @@ import * as React from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Variant = "default" | "ai" | "confirmed" | "red";
+type Variant = "default" | "secondary" | "ai" | "confirmed" | "red";
 type HeadingLevel = 2 | 3 | 4;
 
 export function Card({
@@ -22,13 +22,15 @@ export function Card({
         ? "confirmed"
         : variant === "red"
           ? "red-flag"
-          : "rounded-[12px] border border-line bg-bg shadow-[var(--shadow-card)]";
+          : variant === "secondary"
+            ? "rounded-[12px] border border-line bg-surface-2"
+            : "rounded-[12px] border border-line bg-surface";
   return (
-    <section className={cn(base, "p-4", className)} {...props}>
+    <section className={cn(base, "p-5", className)} {...props}>
       {(title || variant === "ai" || variant === "confirmed") && (
         <header className="mb-3 flex flex-wrap items-center gap-2">
           {variant === "ai" && (
-            <span className="rounded-full border border-dashed border-primary bg-bg px-2 py-0.5 text-xs text-primary">
+            <span className="rounded-full border border-dashed border-ai-line bg-surface px-2 py-0.5 text-xs text-ink">
               AI 草稿，請確認
             </span>
           )}

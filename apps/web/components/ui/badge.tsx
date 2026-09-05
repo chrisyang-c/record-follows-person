@@ -28,7 +28,7 @@ export function ProvenanceBadge({ source, author, className }: { source: Provena
 export function Chip({ children, tone = "neutral", className }: { children: React.ReactNode; tone?: "neutral" | "primary" | "ok" | "warn" | "danger"; className?: string }) {
   const tones = {
     neutral: "bg-surface text-ink border-line",
-    primary: "bg-ai-fill text-ink border-primary/30",
+    primary: "bg-ai-fill text-ink border-ai-line",
     ok: "bg-ok-fill text-ok-ink border-ok/30",
     warn: "bg-warn-fill text-warn-ink border-warn/30",
     danger: "bg-danger-fill text-danger-ink border-danger/30",

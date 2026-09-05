@@ -8,16 +8,16 @@ const button = cva(
   {
     variants: {
       variant: {
+        // docs/UIUX_OMNI_TWIN.md §5：主＝--accent 底、--bg 字；次＝透明底 1px --line；危險＝只有外框（退回／撤銷）
         primary: "bg-primary text-on-primary hover:bg-primary-hover",
-        secondary: "bg-surface text-ink border border-line hover:bg-surface-hover",
+        secondary: "bg-transparent text-ink border border-line hover:bg-surface",
         ghost: "bg-transparent text-ink-2 hover:bg-surface hover:text-ink",
-        // 文字用 --ink（§7 的 --ok / --danger 白字對比不足），原色只做邊框
         ok: "bg-ok-fill text-ink border border-ok hover:bg-ok-fill-hover",
-        danger: "bg-danger-fill text-ink border border-danger hover:bg-danger-fill-hover",
-        outline: "bg-bg text-ink border border-line hover:border-ink-2",
+        danger: "bg-transparent text-danger-ink border border-danger hover:bg-danger-fill",
+        outline: "bg-transparent text-ink border border-line hover:border-ink-2",
       },
       size: {
-        md: "min-h-11 px-4 text-base",
+        md: "min-h-12 px-4 text-base",
         lg: "min-h-14 px-6 text-lg",
         xl: "min-h-[72px] min-w-[72px] px-8 text-xl",
       },

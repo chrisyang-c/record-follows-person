@@ -137,6 +137,15 @@ button, a, [role="button"] { touch-action: manipulation; }
 .ai-draft { border: 1px dashed var(--ai-line); background: var(--ai-fill); border-radius: var(--radius-card); }
 .confirmed { border: 1px solid var(--ok); background: var(--surface); border-radius: var(--radius-card); }
 .red-flag { border: 1px solid var(--line); border-left: 4px solid var(--danger); background: var(--danger-fill); border-radius: var(--radius-card); color: var(--ink); }
+/* 四種動畫（docs/UIUX_OMNI_TWIN.md §7）：熱點呼吸、活動列逐步出現、紅燈橫幅滑入、tab 淡入；reduced-motion 全關（見下方） */
+@keyframes breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.18); opacity: 0.75; } }
+@keyframes step-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@keyframes slide-down { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.breathe { animation: breathe 2s ease-in-out infinite; transform-origin: center; }
+.step-in { animation: step-in 160ms ease-out both; }
+.slide-down { animation: slide-down 200ms ease-out both; }
+.fade-in { animation: fade-in 120ms ease-out both; }
 /* 發光只給生命：01 熱點與同步燈 */
 .glow { box-shadow: 0 0 24px color-mix(in srgb, currentColor 35%, transparent); }
 /* 標籤：小型大寫、0.12em 字距 */
