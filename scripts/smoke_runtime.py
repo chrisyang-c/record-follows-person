@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
@@ -89,7 +90,7 @@ def main():
         sys.path[:0] = [str(API), str(ROOT / "data/seed")]
         import seed
 
-        seed.seed(records, quiet=True)
+        seed.seed(records, quiet=True, end_date=datetime.now(UTC).date() - timedelta(days=1))
         subprocess.run([sys.executable, "-m", "graphs.migrate"], cwd=API, env=env, check=True)
         creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         with (

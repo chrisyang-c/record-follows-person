@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -29,7 +30,7 @@ def records_root(tmp_path_factory) -> Path:
     get_store.cache_clear()
     import seed as seed_mod
 
-    seed_mod.seed(root, quiet=True)
+    seed_mod.seed(root, quiet=True, end_date=datetime.now(UTC).date() - timedelta(days=1))
     return root
 
 

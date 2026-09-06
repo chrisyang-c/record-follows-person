@@ -113,8 +113,20 @@ def _dt(d: date, hhmm: str) -> datetime:
     return datetime(d.year, d.month, d.day, h, m, tzinfo=TPE)
 
 
-def seed(root: Path | None = None, quiet: bool = False) -> RecordStore:
+def seed(root: Path | None = None, quiet: bool = False, *, end_date: date | None = None) -> RecordStore:
+    """Create synthetic fixtures. An explicit end_date shifts the 14-day demo window only.
+
+    Omit it to preserve the historical demo dates. Tests and runtime smoke pass a recent
+    date so the fixtures do not expire out of the real API's current-data window.
+    """
     data = json.loads((HERE / "residents.json").read_text(encoding="utf-8"))
+    if end_date is not None:
+        original_start = date.fromisoformat(data["day1"])
+        shift = end_date - timedelta(days=13) - original_start
+        data["day1"] = (original_start + shift).isoformat()
+        data["last_round_date"] = (
+            date.fromisoformat(data["last_round_date"]) + shift
+        ).isoformat()
     root = root or get_settings().records_root
     if root.exists():
         shutil.rmtree(root)
