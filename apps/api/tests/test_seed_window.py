@@ -10,6 +10,7 @@ def test_seed_can_anchor_window_without_rewriting_source(
     tmp_path, records_root, monkeypatch, end_date
 ):
     import seed
+
     from core.settings import get_settings
     from record.store import get_store
 
