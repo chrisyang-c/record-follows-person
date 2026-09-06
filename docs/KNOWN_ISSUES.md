@@ -49,3 +49,5 @@
 | 45 | `0ee23aa` 已補 purpose 欄位與非空檢查，但沒有 per-request purpose 的政策判斷與完整拒絕稽核。 | 只新增 purpose 字串不足以落實政策。 | M2：allowed purposes、request purpose、policy decision、舊資料遷移。 |
 | 46 | Windows mock eval stdout 曾因 cp950 無法印出特殊符號。 | 完整 check 正確以非零退出，未誤報成功。 | **已修 2026-09-06**：check_eval 設 UTF-8；輸出與 records 使用臨時目錄，保留歷史報告。 |
 | 47 | `dev.ps1 init/reset` 的本機建庫目標仍固定 localhost／record_follows_person，而 migrate／seed 使用應用設定。 | 自訂 DATABASE_URL／RECORDS_ROOT 時，顯示目標與實際受影響資料可能不同；本輪未執行這些破壞性指令。 | 不用 init/reset 管自訂或非示範環境；後續統一解析、顯示並驗證精確 DB／records 目標。日常啟動不需 reset。 |
+| 48 | 合成 wearable 原始固定日期會過期，fresh clone 的近 14 天測試因此只回 13 筆。 | 測試成敗隨執行日期變動，不是 API 應把歷史資料永遠當成 current。 | **已修 2026-09-06**：測試與 runtime smoke 明確傳 seed end_date；新增跨年度視窗、原件不變、過期 wearable 不回 current 的 3 個案例。預設 seed 歷史日期保留。 |
+| 49 | `next/font/google` 建置時需連線 Google Fonts；本輪 fresh clone 曾因字型 CDN 連線失敗而 build 退出。 | repo 不依賴旁邊資料夾，但尚不是完全離線建置；安裝套件也需 registry。 | 保留錯誤，不把失敗略過；恢復網路後重跑。若需隔離環境部署，另做附適用授權的本地字型打包，不以假字型掩蓋失敗。 |

@@ -89,3 +89,5 @@
 | 2026-09-06 | 完整 check 不吞工具失敗，API-only 必須明示；codegen --check 唯讀，mock eval 用暫存資料；build 在 typecheck 前。 | 12 個工具回歸案例驗證失敗傳遞與未提交型別不被覆寫；make test 補 format，CI 加 Windows gate 及 Postgres 重啟 smoke。 | Codex |
 | 2026-09-06 | 更正「日常指令不碰資料」：API 會寫紀錄、migrate 會建表；check 不重設資料，codegen 會更新生成檔。init/reset 的自訂目標限制仍列為 KNOWN_ISSUES #47。 | 避免錯誤安全保證；本輪未執行任何主專案資料重設。 | Codex |
 | 2026-09-06 | 推送前同步 `0ee23aa`：保留正常帶 UI／endpoint、purpose schema／grant／audit／UI 與六個整合測試；重做交接及 review 現況核對。 | 不覆蓋遠端並行工作；purpose 基礎欄位完成與用途政策未完成分開記錄。 | Codex |
+| 2026-09-06 | seed 新增可選 end_date；只由測試／隔離 smoke 明確指定近期視窗，預設保留原始歷史日期；新增過期 wearable 不回為 current 的反向測試。 | fresh clone 發現固定示範日期隨日曆推進失效；修測試資料，不改產品時間窗掩蓋過期資料。見 KNOWN_ISSUES #48。 | Codex |
+| 2026-09-06 | 三份新增演講原件留本機，私人精讀筆記 git 排除；公開 repo 只收錄以公開來源支持的 OPTIMIZATION_PLAN。 | 教材含限制散布標示；讀取分析不等於取得公開轉載授權。不移植教材醫療門檻或模型效能宣稱。 | Codex |

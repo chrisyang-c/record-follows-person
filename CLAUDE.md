@@ -44,6 +44,7 @@ docs/UIUX_OMNI_TWIN.md                        # UI/UX 規格：OMNI-TWIN 深色�
 | `docs/KNOWN_ISSUES.md` | 已知問題與繞法 | 未來計畫（→ ROADMAP） |
 | `docs/CONSOLIDATION.md` | 工作區整併、封存與來源去向清單；發現史實錯誤可更正 | 功能待辦 |
 | `docs/PROJECT_REVIEW.md` | 有程式證據的缺陷與缺口快照 | 已完成承諾、另一套 roadmap |
+| `docs/OPTIMIZATION_PLAN.md` | 公開來源支持的候選設計與驗收細節 | 已採納規格、當前工作佇列或另一套排序 |
 | `docs/VALIDATION.md` | 驗證指令、結果與未涵蓋範圍 | 生產可用或臨床有效性的保證 |
 | `docs/proposals/` | **外部提案，未採納**。讀的時候要記得它描述的不是這個 repo | 任何具約束力的規則 |
 

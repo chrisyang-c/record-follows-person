@@ -207,6 +207,7 @@ Schema 單一來源：[packages/schema/record_schema/models.py](packages/schema/
 | [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) | 驗收步驟與指令 |
 | [docs/CONSOLIDATION.md](docs/CONSOLIDATION.md) | 工作區整併的來源去向清單 |
 | [docs/PROJECT_REVIEW.md](docs/PROJECT_REVIEW.md) | 本輪實碼 review、風險與補強優先序 |
+| [docs/OPTIMIZATION_PLAN.md](docs/OPTIMIZATION_PLAN.md) | 有公開來源的優化候選契約；補充 ROADMAP、不代表已實作 |
 | [docs/VALIDATION.md](docs/VALIDATION.md) | 可重現驗證、實際結果與未涵蓋範圍 |
 | [docs/proposals/](docs/proposals/) | 外部提案，**未採納**；描述的不是這個 repo |
 

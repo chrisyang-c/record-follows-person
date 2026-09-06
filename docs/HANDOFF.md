@@ -18,6 +18,8 @@ Repo：https://github.com/chrisyang-c/record-follows-person
 - 整併來源與封存去向見 [CONSOLIDATION](CONSOLIDATION.md)；主專案不依賴工作區旁邊的資料夾。
 - Windows `setup/test/check` 預設 API＋web；缺工具或已執行指令失敗不算通過。只有明確 `-ApiOnly` 才跳過前端。
 - codegen `--check` 唯讀；`check` 的 mock eval 使用暫存輸出，不覆寫已保存的真模型評測。
+- 測試／runtime smoke 可明確指定合成資料的近期 14 天視窗，另測過期 wearable 不被當成 current；預設 seed 原始歷史日期不改。
+- 公開 [OPTIMIZATION_PLAN](OPTIMIZATION_PLAN.md) 補上來源品質、TW Core 切片、規則治理及通知／追蹤驗收；是設計備忘，不代表已實作。
 
 ## 驗證入口
 

@@ -20,7 +20,7 @@ P0：在真實資料或對外部署前必須處理的存取問題。P1：進一�
 
 ## 2. P0 — scope 需要在後端限制實際回傳內容
 
-證據：`apps/api/main.py::summary` 回傳 `allowed_tabs`，同時組裝 profile、baseline、timeline、documents、conversation；部分來源篩選含 `or True`。`/records/{patient_id}` 也能整份載入。
+證據：`apps/api/main.py::patient_summary` 回傳 `allowed_tabs`，同時組裝 profile、baseline、timeline、documents、conversation；部分來源篩選含 `or True`。`/records/{patient_id}` 也能整份載入。
 
 影響：前端隱藏 tab 不會移除 HTTP 回應已傳送的內容，可能超出成員被授權的資料範圍。
 
@@ -58,7 +58,7 @@ P0：在真實資料或對外部署前必須處理的存取問題。P1：進一�
 
 ## 6. P1 — 通知、追蹤與事件生命週期要真正閉環
 
-證據：目前 SensorEvent、`record/events.py` 與 Path A/B 共存；`graphs/path_a.py::schedule_follow_up`、worker 與通知輸出需要逐一核對。通知「顯示」與實際送達的狀態不同，不能都記成成功。
+證據：目前 SensorEvent、`record/events.py` 與 Path A/B 共存。`graphs/path_a.py::schedule_follow_up` 讀護理 review 的 `follow_up_hours`（預設 4），保存 due_at/question/set_by，隨後設 done 並清 deadline；`graphs/worker.py::scan_once` 只掃逾時中斷流程，沒有執行該 FollowUp 的到期派送。已存追蹤時間不等於已排入可執行佇列；通知的 displayed_only／API 接受／實際送達也需區分。
 
 補強：定義 HealthEvent 與 care task 的關係、去重鍵、角色轉換規則、誤報／取消／重開、可執行的追蹤佇列與 outbox。確認護理師能否設定追蹤時間，以及到期後是否真的派送、收回回覆並關閉。
 
@@ -99,3 +99,5 @@ P0：在真實資料或對外部署前必須處理的存取問題。P1：進一�
 ## 建議下一個可交付版本
 
 集中完成第 1–3 項的共同認證／授權與回應投影，保留目前 UI 與臨床圖，補 HTTP 負向矩陣。接著把第 4 項 purpose 和稽核接在可信 actor 上，再做資料契約與第一條外部來源。使用者訪談可並行調整優先序，但不取代上述工程驗收。
+
+來源封包、台灣 FHIR 最小切片、規則治理、家屬溝通、Twin freshness 及效益評測的候選契約，見 [OPTIMIZATION_PLAN](OPTIMIZATION_PLAN.md)。它補充設計細節，不另開一條互相競爭的 roadmap。

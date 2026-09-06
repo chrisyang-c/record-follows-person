@@ -6,7 +6,8 @@
 
 ```text
 D:\Health AI Bridge\
-└── record-follows-person\     唯一需要持續修改、提交及推送的專案
+├── record-follows-person\     唯一需要持續修改、提交及推送的專案
+└── 三份後續加入的演講 PDF     本機閱讀原件，不是程式相依；未上傳
 
 D:\Health AI Bridge Archive\20260906-consolidation\
 ├── README.md                  備份範圍與還原說明
@@ -15,6 +16,8 @@ D:\Health AI Bridge Archive\20260906-consolidation\
 ```
 
 外層兩個資料夾已移出工作區，沒有永久刪除來源檔案。封存不是開發相依，不需上傳本 repo，也不要從封存目錄繼續開發本產品。個人 `.env`、執行期 `records/`、資料庫及工具仍須自行配置／備份，不屬於 Git 可攜性的承諾。
+
+封存之後使用者又放入三份演講 PDF，原件保留原位。因此「唯一正式專案」不表示現在父目錄物理上只剩一個項目。私人閱讀筆記放在本機 repo 的 `local-notes/`，以 `.git/info/exclude` 排除，不隨 clone／push 傳送；公開 repo 只保存有公開來源的優化備忘。若重建 clone，私人筆記及其排除設定須另外備份。
 
 ### 本輪封存驗證
 

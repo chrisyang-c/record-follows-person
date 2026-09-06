@@ -14,7 +14,7 @@
 
 | 階段 | 工作與主要位置 | 完成條件 |
 |---|---|---|
-| M0 整併與可靠驗收 | 唯一 repo；scripts/dev.ps1；唯讀 codegen；來源封存；文件收斂 | 缺工具及執行失敗不誤報全綠；dirty 型別檔不被清除；API/web 檢查與實際啟動證據分開記錄；工作區只留主專案 |
+| M0 整併與可靠驗收 | 唯一 repo；scripts/dev.ps1；唯讀 codegen；來源封存；文件收斂 | 缺工具及執行失敗不誤報全綠；dirty 型別檔不被清除；API/web 檢查與實際啟動證據分開記錄；只有一個正式開發專案，另存的閱讀材料不是執行相依 |
 | M1 可信身分與病人隔離 | API 統一認證入口、web session、每個讀寫端點的病人與動作授權 | 未登入／偽造角色拒絕；病人 A 不得讀寫 B；未授權者不得 resume、修改 baseline、授權他人或讀 trace；撤銷及過期立即生效 |
 | M2 Consent 與用途稽核 | 共用 schema、care_circle、授權決策及 API 回應投影 | 區分 allowed purposes 與本次 purpose；後端驗證用途、資源、時間及代理資格；允許／拒絕都有稽核；舊資料不自動獲得更大權限 |
 | M3 紀錄與儲存契約 | RecordStore 與直接操作檔案的 events/conversation/care_circle/agent backend | 版本／更正／冪等／併發契約；來源與紀錄寫入一致；失敗可恢復；備份還原可驗證；再按相同契約接 Postgres adapter |
@@ -72,3 +72,5 @@ M6 不把所有事件強迫走同一條直線。紅燈可以先通知；誤報�
 - 133 等歷史測試數字不固定作為 Done；以當次完整測試報告及 commit 為準。
 
 ARCHITECTURE §11 的摘要確認、baseline、趨勢圖沿用已存在決策；追蹤次數與由護理師設定時間的行為列入 M6，先檢查目前節點是否真的排入可執行佇列。
+
+候選契約及公開標準查證見 [OPTIMIZATION_PLAN](OPTIMIZATION_PLAN.md)：M4 優先評估固定版本的 TW Core 合成量測 Bundle；M6 已確認 FollowUp 目前只保存時間，尚無對應到期派送 worker。該備忘不改變此處排序或現有臨床門檻。
