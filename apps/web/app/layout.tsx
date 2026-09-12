@@ -6,7 +6,8 @@ import { Breadcrumb } from "@/components/shell/breadcrumb";
 import { Rail } from "@/components/shell/rail";
 import { TopBar } from "@/components/shell/topbar";
 import { RedBannerGlobal } from "@/components/red-banner-global";
-import { identityOf } from "@/lib/role";
+import { AuthSessionProvider } from "@/components/auth/session-provider";
+import { verifiedSession } from "@/lib/server-session";
 import "./globals.css";
 
 const noto = Noto_Sans_TC({ variable: "--font-noto", subsets: ["latin"], weight: ["400", "500", "700"], display: "swap" });
@@ -25,12 +26,16 @@ export const viewport: Viewport = { themeColor: "#0b0f14", width: "device-width"
  * 列印時整個殼隱藏（.no-print），只印 RoundPage。
  */
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const me = (await cookies()).get("me")?.value ?? null;
-  const identity = identityOf(me);
+  const token = (await cookies()).get("rfp_session")?.value;
+  const session = await verifiedSession(token).catch(() => null);
+  const identity = session ? {
+    role: session.role, name: session.name, patient_id: session.patient_id ?? undefined,
+  } : null;
   const role = identity?.role ?? null;
   return (
     <html lang="zh-TW" className={`${noto.variable} ${inter.variable} ${mono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-bg text-ink">
+        <AuthSessionProvider session={session}>
         <a href="#main" className="skip-link">跳到主要內容</a>
         <TopBar identity={identity} />
         {role === "nurse" && <RedBannerGlobal />}
@@ -44,6 +49,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           </main>
         </div>
         <BottomTabs identity={identity} />
+        </AuthSessionProvider>
       </body>
     </html>
   );

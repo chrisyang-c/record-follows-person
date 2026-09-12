@@ -59,6 +59,7 @@ URGENT = ("現在來", "馬上", "趕快", "需要護理師", "快來", "緊急"
 
 class TalkState(TypedDict, total=False):
     patient_id: str
+    actor_id: str | None
     text: str
     role_view: str
     event_id: str | None  # channel 4: the possible-fall event this turn answers
@@ -148,7 +149,8 @@ def record_caregiver_message(state: TalkState) -> dict[str, Any]:
         state["text"].strip(),
         s["session_id"],
         meta=meta,
-        author=Profile.model_validate(state["profile"]).caregiver_code_name,
+        author=state.get("actor_id")
+        or Profile.model_validate(state["profile"]).caregiver_code_name,
     )
     turns = conv.session_turns(pid, s["session_id"])
     ev = step.done(
@@ -274,7 +276,7 @@ def notify_nurse(state: TalkState) -> dict[str, Any]:
                 "raw_input": {
                     "turns": state["turns"],
                     "language": "zh-TW",
-                    "caregiver_id": profile.caregiver_code_name,
+                    "caregiver_id": state.get("actor_id") or profile.caregiver_code_name,
                     "dialog_id": s.dialog_id,
                     "sensor_event": state.get("sensor_event"),
                     "caregiver_unreachable": state.get("event_choice") == "unreachable",
@@ -372,7 +374,7 @@ def decide_next(state: TalkState) -> dict[str, Any]:
                     "raw_input": {
                         "turns": state["turns"][:-1],
                         "language": "zh-TW",
-                        "caregiver_id": profile.caregiver_code_name,
+                        "caregiver_id": state.get("actor_id") or profile.caregiver_code_name,
                         "dialog_id": s.dialog_id,
                         "caregiver_confirmed_meaning": True,
                     },
@@ -576,6 +578,7 @@ def run_turn(
     role_view: str = "caregiver",
     event_id: str | None = None,
     event_choice: str | None = None,
+    actor_id: str | None = None,
 ):
     """Generator: yields ('event', dict) as nodes run, then ('final', state).
 
@@ -583,7 +586,9 @@ def run_turn(
     """
     from core.trace import run_in_thread
 
-    yield from run_in_thread(lambda: _run_turn(patient_id, text, role_view, event_id, event_choice))
+    yield from run_in_thread(
+        lambda: _run_turn(patient_id, text, role_view, event_id, event_choice, actor_id)
+    )
 
 
 def _run_turn(
@@ -592,6 +597,7 @@ def _run_turn(
     role_view: str,
     event_id: str | None = None,
     event_choice: str | None = None,
+    actor_id: str | None = None,
 ):
     from core.trace import tagged
 
@@ -602,6 +608,7 @@ def _run_turn(
             for mode, chunk in compiled().stream(
                 {
                     "patient_id": patient_id,
+                    "actor_id": actor_id,
                     "text": text,
                     "role_view": role_view,
                     "event_id": event_id,

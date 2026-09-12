@@ -1,4 +1,17 @@
-# 整併驗證 — 2026-09-06
+# 驗證紀錄
+
+## 2026-09-12 — 本機身分與病人隔離
+
+本輪只使用 mock 與合成資料，未清空主專案 records、未修改使用者 `.env`、未呼叫付費模型或外部通知。個人 session、用途／scope、後端投影及遷移契約見 [SECURITY](SECURITY.md)。下方 9/6 表格保留歷史，不是這輪結果。
+
+- API 全套：190 個測試通過（含 35 個 HTTP policy、12 個 credential/session 測試）；有一則上游 Starlette/AnyIO deprecation warning，無測試失敗。
+- `.\scripts\dev.ps1 check` 全套 exit 0：API 190、web 11、Windows tooling 12 個測試通過，Ruff／ESLint／codegen 同步、正式 Next.js build（20 頁產生）與 `tsc --noEmit` 通過。mock eval 為 46 句、多抽 2/46、漏抽 0/46、來源子字串 46/46、誘導句 5/5；不代表真模型品質。
+- 隔離 PostgreSQL 17／mock HTTP 驗證通過：session 與待審核 interrupt 跨 API 重啟保留；護理師核准後再次重啟，approved timeline 與 provenance 仍存在；未登入及照護者核准被拒絕。
+- Headless Edge 正式版驗證通過：偽造舊 cookie 無效、個人密碼登入 P003、取得自身 health ID／14 天 wearable、跨病人 P001 回 403、不洩露其 health ID、登出後 protected page 轉登入且 API 回 401。登入後相對跳轉沒有切換 localhost／127.0.0.1。
+- GitHub CI 與 fresh clone：尚未以本輪提交驗收，提交後另記實際結果。
+- UI 程式稽核與未驗項目見 [UI_AUDIT](UI_AUDIT.md)。本輪不包含真模型品質、所有角色完整臨床流程或正式安全評估。
+
+## 歷史：整併驗證 — 2026-09-06
 
 應用程式基準 `512a402`，加上本輪工具／文件修正；精確交付版本以包含本文件的 Git commit 為準。只用合成資料與 mock provider，不呼叫付費模型、不發 LINE、不重設原專案 records 或資料庫。
 

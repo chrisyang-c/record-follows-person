@@ -7,13 +7,15 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from record_schema import DIMENSION_LABELS, DIMENSIONS, FollowupQA
 
 from agents.personal import AgentDidNotDeliver
+from core import policy, security
 from core.llm import LLMUnavailable
 from core.settings import get_settings
 from core.trace import for_ids, tagged
@@ -44,6 +46,21 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="一份能跟著人走的紀錄 API", version="0.1.0", lifespan=lifespan)
 
 
+@app.exception_handler(RequestValidationError)
+async def _invalid_request(_req, exc: RequestValidationError):
+    """Validation responses must not echo passwords or clinical request bodies."""
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {key: error[key] for key in ("loc", "msg", "type")} for error in exc.errors()
+            ]
+        },
+    )
+
+
 @app.exception_handler(LLMUnavailable)
 async def _llm_unavailable(_req, exc: LLMUnavailable):
     """No model / model call failed → visible error, never a rule fallback."""
@@ -59,11 +76,13 @@ async def _agent_failed(_req, exc: AgentDidNotDeliver):
     return JSONResponse(status_code=503, content={"detail": f"agent 沒有產出：{exc}"})
 
 
+app.add_middleware(policy.PolicyMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[o.strip() for o in get_settings().AUTH_ALLOWED_ORIGINS.split(",")],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 
@@ -80,7 +99,6 @@ def health() -> dict[str, Any]:
         "llm_enabled": s.llm_enabled,
         "effective_provider": s.effective_provider,
         "checkpointer": "postgres" if is_postgres() else "memory",
-        "records": get_store().list_patients(),
         "time": datetime.now(UTC).isoformat(),
     }
 
@@ -109,7 +127,14 @@ def red_flags_meta() -> list[dict[str, Any]]:
 @app.get("/residents")
 def residents() -> list[dict[str, Any]]:
     store = get_store()
-    return [_resident_row(store, pid) for pid in store.list_patients()]
+    # Directory permission does not expose timeline counts, assignment details or events.
+    return [
+        {
+            k: getattr(store.load_profile(pid), k)
+            for k in ("patient_id", "health_id", "code_name", "room")
+        }
+        for pid in policy.visible_patients({"who"})
+    ]
 
 
 def _resident_row(store: Any, pid: str) -> dict[str, Any]:
@@ -239,7 +264,9 @@ def home(role: str) -> dict[str, Any]:
         "generated_at": datetime.now(UTC).isoformat(),
         "residents": [
             {**_resident_row(store, pid), "card": _home_card(store, pid, role)}
-            for pid in store.list_patients()
+            for pid in policy.visible_patients(
+                {"who", "timeline", "docs"} if role == "doctor" else policy.ALL
+            )
         ],
     }
 
@@ -698,7 +725,11 @@ def documents(patient_id: str, doc_type: str | None = None) -> list[dict[str, An
     store = get_store()
     if not store.exists(patient_id):
         raise HTTPException(404, "unknown patient")
-    return [d.model_dump(mode="json") for d in store.load_documents(patient_id, doc_type)]
+    return [
+        d.model_dump(mode="json")
+        for d in store.load_documents(patient_id, doc_type)
+        if policy.document_visible(d.doc_type)
+    ]
 
 
 @app.get("/records/{patient_id}/documents/{doc_id}")
@@ -706,6 +737,8 @@ def document(patient_id: str, doc_id: str) -> dict[str, Any]:
     d = get_store().get_document(patient_id, doc_id)
     if d is None:
         raise HTTPException(404, "unknown document")
+    if not policy.document_visible(d.doc_type):
+        raise HTTPException(403, "未獲授權：文件類型")
     return d.model_dump(mode="json")
 
 
@@ -769,47 +802,90 @@ def _pending_for(patient_id: str) -> list[dict[str, Any]]:
 def _authorize(
     patient_id: str, who: str | None, x_role: str | None = None
 ) -> tuple[str, list[str]]:
-    """Who is looking, and which tabs the Care Circle lets them see. No member → 403「未獲授權」.
-    Without X-Who (older clients / tests) fall back to the X-Role header with that role's default
-    scopes so nothing silently widens: the role must still exist in DEFAULT_SCOPES."""
+    """HTTP uses only the verified session; direct domain callers must provide an identity."""
+    if policy.actor.get():
+        it = policy.current()
+        policy.require(patient_id)
+        return it["role"], policy.effective_scopes(patient_id)
     if who:
-        scopes = cc.scopes_for(patient_id, who)
+        identity = cc.whoami(who)
+        scopes = cc.scopes_for(patient_id, who, cc.ROLE_PURPOSE.get((identity or {}).get("role")))
         if not scopes:
             raise HTTPException(403, "未獲授權：你不在這個人的 Care Circle 裡")
         role = cc.role_of(patient_id, who) or "caregiver"
         return role, list(scopes)
-    role = (x_role or "nurse").lower()
-    if role not in cc.DEFAULT_SCOPES:
-        raise HTTPException(403, "未獲授權")
-    return role, list(cc.DEFAULT_SCOPES[role])  # type: ignore[index]
+    raise HTTPException(401, "需要已驗證的個人登入")
 
 
 class LoginIn(BaseModel):
     who: str
     patient_id: str | None = None
-    code: str | None = None
+    password: str = Field(min_length=1, max_length=1024)
+    purpose: str | None = None
 
 
 @app.post("/login")
-def login(body: LoginIn) -> dict[str, Any]:
-    """登入：以病人為核心。本人輸入自己的密碼；家屬／照護者／護理師／醫師要輸入病人的密碼，
-    通過後才在 Care Circle 裡（不在圈內者以角色預設範圍加入一天）。密碼只存 hash。"""
+def login(body: LoginIn, request: Request, response: Response) -> dict[str, Any]:
+    """Authenticate one provisioned person. Login never grants or restores consent."""
+    peer = request.client.host if request.client else "unknown"
     try:
-        return cc.login(body.who, body.patient_id, body.code)
-    except KeyError:
-        raise HTTPException(404, "unknown identity") from None
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from None
-    except PermissionError:
-        raise HTTPException(401, "密碼不對，請向本人或家屬確認") from None
+        identity = security.authenticate(body.who, body.password, peer)
+    except security.AuthenticationRateLimited as exc:
+        raise HTTPException(
+            429, "登入嘗試過多，請稍後再試", headers={"Retry-After": str(exc.retry_after)}
+        ) from None
+    if not identity:
+        raise HTTPException(401, "帳號或密碼不正確")
+    purpose = body.purpose or cc.ROLE_PURPOSE[identity["role"]]
+    if purpose not in cc.PURPOSES:
+        raise HTTPException(400, "invalid purpose")
+    pid = body.patient_id or identity.get("patient_id")
+    if identity["role"] == "patient":
+        pid = pid or body.who
+    candidate = {**identity, "purpose": purpose}
+    if pid and not policy.effective_scopes(pid, candidate):
+        security.audit(
+            pid,
+            body.who,
+            "login",
+            outcome="denied",
+            purpose=purpose,
+            details={"reason": "no_active_grant_for_purpose"},
+        )
+        raise HTTPException(403, "未獲授權：登入不會恢復或新增授權")
+    security.revoke_session(request.cookies.get("rfp_session", ""))
+    session = security.create_session(body.who, purpose, pid)
+    cookie_options = {
+        "secure": get_settings().AUTH_COOKIE_SECURE,
+        "samesite": "lax",
+        "path": "/",
+        "max_age": 8 * 3600,
+    }
+    response.set_cookie("rfp_session", session.pop("token"), httponly=True, **cookie_options)
+    response.set_cookie("rfp_csrf", session["csrf_token"], httponly=False, **cookie_options)
+    security.audit(pid, body.who, "login", outcome="allowed", purpose=purpose)
+    return session
+
+
+@app.get("/auth/session")
+def auth_session() -> dict[str, Any]:
+    return policy.current()
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request, response: Response) -> dict[str, bool]:
+    security.revoke_session(request.cookies.get("rfp_session", ""))
+    response.delete_cookie("rfp_session", path="/")
+    response.delete_cookie("rfp_csrf", path="/")
+    return {"ok": True}
 
 
 @app.get("/whoami")
 def whoami(me: str | None = None) -> dict[str, Any]:
-    """The web stores only「我是誰」(cookie ``me``); role and display name come from here."""
-    it = cc.whoami(me)
-    if not it:
-        raise HTTPException(404, "unknown identity")
+    """Deprecated alias: never look up arbitrary identities from a query parameter."""
+    it = policy.current()
+    if me and me != it["who"]:
+        raise HTTPException(403, "未獲授權")
     return it
 
 
@@ -820,8 +896,7 @@ def patient_summary(
     x_role: str | None = Header(default=None),
     x_who: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    """who / timeline / docs / talk in one call. Caregivers only see what they recorded.
-    Access is a Care Circle lookup (X-Who); every read is logged (「誰看過我的紀錄」)."""
+    """One response, projected on the server by resource scope and verified role."""
     from datetime import date, timedelta
 
     from agents.subagents import trend_analyzer
@@ -830,60 +905,55 @@ def patient_summary(
     if not store.exists(patient_id):
         raise HTTPException(404, "unknown patient")
     role, allowed_tabs = _authorize(patient_id, x_who, x_role)
+    if tab and tab not in allowed_tabs:
+        raise HTTPException(403, "未獲授權：沒有此範圍")
     cc.log_access(patient_id, x_who, role, f"summary:{tab}" if tab else "summary")  # type: ignore[arg-type]
     if role in ("patient", "family"):
         role = "caregiver" if role == "family" else "patient"
-    profile = store.load_profile(patient_id)
-    baseline = store.load_baseline(patient_id)
-    timeline = store.load_timeline(patient_id)
+    profile = store.load_profile(patient_id) if "who" in allowed_tabs else None
+    baseline = store.load_baseline(patient_id) if "who" in allowed_tabs else None
+    timeline = store.load_timeline(patient_id) if "timeline" in allowed_tabs else []
     if role == "caregiver":
-        cg = profile.caregiver_code_name
-        timeline = [
-            e
-            for e in timeline
-            if e.kind == "observation"
-            and (
-                e.observation.domains
-                and any(
-                    dv.provenance.author in (cg, "intake_agent")
-                    for dv in e.observation.domains.values()
-                )
-                or True
-            )
-        ]
+        # Timeline grant covers this person's shared observations, not only one author's.
         timeline = [e for e in timeline if e.kind == "observation"]
-    docs = store.load_documents(patient_id)
-    if role == "caregiver":
-        docs = [d for d in docs if d.doc_type == "caregiver_notes"]
+    docs = store.load_documents(patient_id) if "docs" in allowed_tabs else []
+    docs = [d for d in docs if policy.document_visible(d.doc_type, role)]
     until = datetime.now(UTC).date()
     since = until - timedelta(days=14)
-    obs = store.load_timeline(patient_id, since=since, kinds={"observation"})
-    trend = trend_analyzer.analyze(patient_id, obs, [], since, until, baseline=baseline)  # type: ignore[arg-type]
-    msgs = conv.messages(patient_id)
+    obs = [e for e in timeline if e.kind == "observation" and e.ts.date() >= since]
+    trend = (
+        trend_analyzer.analyze(patient_id, obs, [], since, until, baseline=baseline)
+        if baseline and "timeline" in allowed_tabs
+        else None
+    )  # type: ignore[arg-type]
+    msgs = conv.messages(patient_id) if "talk" in allowed_tabs else []
+    session = conv.session(patient_id) if "talk" in allowed_tabs else None
+    full = policy.ALL.issubset(allowed_tabs)
     today = date.today().isoformat()
     return {
         "role": role,
+        "patient_id": patient_id,
         "who": x_who,
         "allowed_tabs": allowed_tabs,
-        "profile": profile.model_dump(mode="json"),
-        "baseline": baseline.model_dump(mode="json"),
-        "timeline": [e.model_dump(mode="json") for e in timeline],
-        "documents": [d.model_dump(mode="json") for d in docs],
-        "conversation": [m.model_dump(mode="json") for m in msgs],
-        "session": (conv.session(patient_id).model_dump() if conv.session(patient_id) else None),
-        "pending": _pending_for(patient_id) if role != "caregiver" else [],
+        "profile": profile.model_dump(mode="json") if profile else None,
+        "baseline": baseline.model_dump(mode="json") if baseline else None,
+        "timeline": policy.project([e.model_dump(mode="json") for e in timeline], role),
+        "documents": policy.project([d.model_dump(mode="json") for d in docs], role),
+        "conversation": policy.project([m.model_dump(mode="json") for m in msgs], role),
+        "session": session.model_dump() if session else None,
+        "pending": _pending_for(patient_id) if role == "nurse" and full else [],
         "sensor_events": [
             (sensor_events.nurse_view if role == "nurse" else sensor_events.public_view)(e)
-            for e in sensor_events.list_events(patient_id)[-5:]
+            for e in (sensor_events.list_events(patient_id)[-5:] if full else [])
         ],
-        "changed_dimensions": [line.dimension for line in trend.lines if line.is_abnormal],
-        "trend_lines": [line.model_dump(mode="json") for line in trend.lines],
+        "changed_dimensions": [line.dimension for line in trend.lines if line.is_abnormal]
+        if trend
+        else [],
+        "trend_lines": [line.model_dump(mode="json") for line in trend.lines] if trend else [],
         "recorded_today": any(m.role == "caregiver" and m.ts[:10] == today for m in msgs)
         or any(e.kind == "observation" and e.ts.date().isoformat() == today for e in timeline),
         "notes_count": len(
-            next(
-                (d.items for d in reversed(store.load_documents(patient_id, "caregiver_notes"))), []
-            )
+            next((d.items for d in reversed(docs) if d.doc_type == "caregiver_notes"), [])
         ),
     }
 
@@ -893,9 +963,11 @@ class GrantIn(BaseModel):
     name: str = ""
     role: str
     scopes: list[str]
-    valid_days: int | None = None
-    granted_by: str
+    valid_days: int | None = Field(default=None, ge=1, le=3650)
+    granted_by: str | None = None
     purpose: str = ""
+    allowed_purposes: list[str] = Field(default_factory=list)
+    can_manage: bool = False
 
 
 @app.get("/patients/{patient_id}/care-circle")
@@ -903,6 +975,8 @@ def care_circle_list(patient_id: str, x_who: str | None = Header(default=None)) 
     if not get_store().exists(patient_id):
         raise HTTPException(404, "unknown patient")
     _authorize(patient_id, x_who, "nurse")
+    if not policy.is_manager(patient_id, x_who):
+        raise HTTPException(403, "只有本人或此病人的受託管理者可查看授權名單")
     return {
         "health_id": get_store().load_profile(patient_id).health_id,
         "members": [m.model_dump(mode="json") for m in cc.members(patient_id)],
@@ -922,14 +996,36 @@ def care_circle_grant(
     store = get_store()
     if not store.exists(patient_id):
         raise HTTPException(404, "unknown patient")
-    if cc.role_of(patient_id, x_who) not in ("patient", "family"):
-        raise HTTPException(403, "只有本人或家屬能授權")
+    if not policy.is_manager(patient_id, x_who):
+        raise HTTPException(403, "只有本人或此病人的受託管理者能授權")
     bad = [s for s in body.scopes if s not in cc.ALL_SCOPES]
-    if bad or body.role not in cc.DEFAULT_SCOPES:
+    if bad or not body.scopes or body.role not in cc.DEFAULT_SCOPES:
         raise HTTPException(400, f"invalid scopes/role: {bad or body.role}")
     if not body.purpose.strip():
         raise HTTPException(400, "授權必須說明目的（purpose）")
+    if not body.allowed_purposes or not set(body.allowed_purposes).issubset(cc.PURPOSES):
+        raise HTTPException(400, "必須明確選擇有效的 allowed_purposes")
+    member_identity = cc.whoami(body.member_id)
+    if not member_identity or member_identity["role"] != body.role:
+        raise HTTPException(400, "role 必須符合伺服器註冊身分")
     now = datetime.now(UTC)
+    valid_to = now + timedelta(days=body.valid_days) if body.valid_days else None
+    if x_who != patient_id:
+        managers = [
+            m for m in cc.active_members(patient_id) if m.member_id == x_who and m.can_manage
+        ]
+        # A delegate may choose the recipient's purpose, but cannot expand resources, its
+        # own duration, re-delegate management, or change the owner's/self grant.
+        if (
+            body.can_manage
+            or body.member_id in {patient_id, x_who}
+            or not any(
+                set(body.scopes).issubset(m.scopes)
+                and (m.valid_to is None or (valid_to and valid_to <= m.valid_to))
+                for m in managers
+            )
+        ):
+            raise HTTPException(403, "代理授權不得提升或再委任自己的權限")
     m = cc.grant(
         patient_id,
         CareCircleMember(
@@ -939,9 +1035,11 @@ def care_circle_grant(
             role=body.role,  # type: ignore[arg-type]
             scopes=body.scopes,  # type: ignore[arg-type]
             valid_from=now,
-            valid_to=now + timedelta(days=body.valid_days) if body.valid_days else None,
+            valid_to=valid_to,
             granted_by=x_who or body.granted_by,
             purpose=body.purpose.strip(),
+            allowed_purposes=body.allowed_purposes,
+            can_manage=body.can_manage,
         ),
     )
     cc.log_access(patient_id, x_who, cc.role_of(patient_id, x_who), f"grant:{body.member_id}")
@@ -952,8 +1050,10 @@ def care_circle_grant(
 def care_circle_revoke(
     patient_id: str, member_id: str, x_who: str | None = Header(default=None)
 ) -> dict[str, Any]:
-    if cc.role_of(patient_id, x_who) not in ("patient", "family"):
-        raise HTTPException(403, "只有本人或家屬能撤銷")
+    if not policy.is_manager(patient_id, x_who):
+        raise HTTPException(403, "只有本人或此病人的受託管理者能撤銷")
+    if x_who != patient_id and member_id == patient_id:
+        raise HTTPException(403, "代理人不得撤銷本人權限")
     return {"revoked": cc.revoke(patient_id, member_id, x_who or "patient")}
 
 
@@ -961,13 +1061,26 @@ def care_circle_revoke(
 def patient_access_log(
     patient_id: str, limit: int = 50, x_who: str | None = Header(default=None)
 ) -> dict[str, Any]:
-    """「誰看過我的紀錄」：誰、看了什麼、何時。Anyone with `who` scope may read it."""
+    """Patient/explicit delegate only; includes allowed and denied HTTP policy decisions."""
     if not get_store().exists(patient_id):
         raise HTTPException(404, "unknown patient")
     _role, tabs = _authorize(patient_id, x_who, "nurse")
-    if "who" not in tabs:
+    if "who" not in tabs or not policy.is_manager(patient_id, x_who):
         raise HTTPException(403, "未獲授權")
-    return {"items": [e.model_dump(mode="json") for e in cc.access_log(patient_id, limit)]}
+    legacy = [e.model_dump(mode="json") for e in cc.access_log(patient_id, limit)]
+    fresh = security.audit_entries(patient_id, limit=max(1, min(limit, 500)))
+    hid = get_store().load_profile(patient_id).health_id
+    for row in fresh:
+        row["health_id"] = hid
+        row["what"] = row.get("action")
+        row["who"] = row.get("who") or "anonymous"
+        row["reason"] = row["details"].get("reason")
+        row["request_id"] = row["details"].get("request_id")
+    return {
+        "items": sorted(legacy + fresh, key=lambda row: str(row.get("ts", "")), reverse=True)[
+            : max(1, min(limit, 500))
+        ]
+    }
 
 
 @app.get("/patients/{patient_id}/conversation")
@@ -986,6 +1099,7 @@ class TalkIn(BaseModel):
 def _sse(event: str, data: Any) -> str:
     import json as _json
 
+    data = policy.public_activity(data) if event == "event" else policy.project(data)
     return f"event: {event}\ndata: {_json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
@@ -1005,7 +1119,14 @@ def _talk_stream(
 
         final: dict[str, Any] | None = None
         try:
-            for kind, data in run_turn(patient_id, text, role_view, event_id, event_choice):
+            for kind, data in run_turn(
+                patient_id,
+                text,
+                role_view,
+                event_id,
+                event_choice,
+                actor_id=(policy.actor.get() or {}).get("who"),
+            ):
                 if kind == "event":
                     yield _sse("event", data)
                 elif kind == "error":
@@ -1064,7 +1185,8 @@ def patient_talk(
     cc.log_access(patient_id, x_who, cc.role_of(patient_id, x_who), "talk")
     if not body.text.strip():
         raise HTTPException(400, "empty message")
-    return _talk_stream(patient_id, body.text, body.role_view)
+    role = (policy.actor.get() or {}).get("role", body.role_view)
+    return _talk_stream(patient_id, body.text, "caregiver" if role == "family" else role)
 
 
 # 照護者四鍵（唯一允許出現按鈕的地方）：選項 → 一句照護者原話，立即進現有追問流程
@@ -1117,10 +1239,14 @@ def patient_verify_event(
 def round_start_stream(body: RoundStartIn) -> StreamingResponse:
     """Round prep with live agent activity (node / subagent events), then the interrupt snapshot."""
 
+    cohort = get_store().list_patients()
+
     def gen():
         for kind, data in runner.start_stream(
             "round", "ALL", {"round_date": body.round_date or datetime.now(UTC).date().isoformat()}
         ):
+            if isinstance(data, dict) and data.get("thread_id"):
+                policy.save_cohort(data["thread_id"], cohort)
             yield _sse(kind, data)
 
     return StreamingResponse(
@@ -1248,7 +1374,7 @@ def _raw(body: StartIn) -> dict[str, Any]:
         "turns": body.turns,
         "incidents": body.incidents,
         "language": body.language,
-        "caregiver_id": body.caregiver_id,
+        "caregiver_id": (policy.actor.get() or {}).get("who", body.caregiver_id),
         "shift": body.shift,
         "seems_different": body.seems_different,
         "followup_answers": body.followup_answers,
@@ -1261,7 +1387,21 @@ def _raw(body: StartIn) -> dict[str, Any]:
 def path_a_start(body: StartIn) -> dict[str, Any]:
     if not get_store().exists(body.patient_id):
         raise HTTPException(404, "unknown patient")
-    return runner.start("path_a", body.patient_id, {"path": "incident", "raw_input": _raw(body)})
+    return _snapshot_view(
+        runner.start("path_a", body.patient_id, {"path": "incident", "raw_input": _raw(body)})
+    )
+
+
+def _snapshot_view(snap: dict[str, Any]) -> dict[str, Any]:
+    if (policy.actor.get() or {}).get("role", "nurse") == "nurse":
+        return snap
+    return {
+        "thread_id": snap["thread_id"],
+        "graph": snap["graph"],
+        "status": snap["status"],
+        "interrupt": {"type": (snap.get("interrupt") or {}).get("type")},
+        "handoff": {"thread_id": snap["handoff"]["thread_id"]} if snap.get("handoff") else None,
+    }
 
 
 @app.post("/shift/start")
@@ -1273,14 +1413,17 @@ def shift_start(body: StartIn) -> dict[str, Any]:
         # 紅燈：轉入 Path A（同一句話，不經草稿）
         a = runner.start("path_a", body.patient_id, {"path": "incident", "raw_input": _raw(body)})
         snap["handoff"] = {"thread_id": a["thread_id"], "interrupt": a["interrupt"]}
-    return snap
+    return _snapshot_view(snap)
 
 
 @app.post("/round/start")
 def round_start(body: RoundStartIn) -> dict[str, Any]:
-    return runner.start(
+    cohort = get_store().list_patients()
+    snap = runner.start(
         "round", "ALL", {"round_date": body.round_date or datetime.now(UTC).date().isoformat()}
     )
+    policy.save_cohort(snap["thread_id"], cohort)
+    return snap
 
 
 @app.get("/threads")
@@ -1294,6 +1437,7 @@ def threads(status: str | None = None, graph: str | None = None) -> list[dict[st
             "updated_at": r["updated_at"].isoformat() if r.get("updated_at") else None,
         }
         for r in rows
+        if policy.thread_visible(r["thread_id"])
     ]
 
 
@@ -1335,6 +1479,12 @@ def _system_events_after(snap: dict[str, Any], payload: dict[str, Any]) -> None:
 
 @app.post("/threads/{thread_id:path}/resume")
 def thread_resume(thread_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if policy.actor.get():
+        payload = {
+            **payload,
+            "nurse_id": policy.current()["who"],
+            "head_nurse": policy.current()["who"],
+        }
     try:
         snap = runner.resume(thread_id, payload)
         _system_events_after(snap, payload)
@@ -1355,7 +1505,9 @@ class CaregiverReportIn(BaseModel):
 def caregiver_report(thread_id: str, body: CaregiverReportIn) -> dict[str, Any]:
     """紅燈後對話不結束：照護者的每個回答即時寫進 caregiver_section，護理師端同步更新。"""
     try:
-        return runner.update_caregiver(thread_id, body.turns, body.incidents, body.seems_different)
+        return _snapshot_view(
+            runner.update_caregiver(thread_id, body.turns, body.incidents, body.seems_different)
+        )
     except ValueError as e:
         raise HTTPException(409, str(e)) from e
 
@@ -1427,7 +1579,16 @@ def get_trace(
     """Agent / LLM call trace (also written to records/_trace/*.jsonl)."""
     from core.trace import recent
 
-    return recent(kind=kind, limit=min(limit, 500), contains=contains)
+    rows = recent(kind=kind, limit=min(limit, 500), contains=contains)
+    if policy.actor.get() is None:
+        return rows
+    return [
+        r
+        for r in rows
+        if (r.get("patient_id") or r.get("thread_id"))
+        and (not r.get("patient_id") or policy.visible(r["patient_id"]))
+        and (not r.get("thread_id") or policy.thread_visible(r["thread_id"]))
+    ]
 
 
 def _code_name(pid: str | None) -> str | None:
@@ -1442,6 +1603,8 @@ def nurse_inbox() -> dict[str, Any]:
     """一屏看完：紅燈置頂，然後待審核（Path A）、待 10 秒確認（Path B）、巡診待辦。"""
     items: list[dict[str, Any]] = []
     for row in registry.list_threads(status="interrupted"):
+        if not policy.thread_visible(row["thread_id"]):
+            continue
         snap = runner.snapshot(row["thread_id"])
         itype = (snap["interrupt"] or {}).get("type")
         vals = snap["values"]
@@ -1474,8 +1637,7 @@ def nurse_inbox() -> dict[str, Any]:
         key=lambda i: (not i["red_flag"], order.get(i["interrupt_type"], 9), i["updated_at"] or "")
     )
     events = []
-    store = get_store()
-    for pid in store.list_patients():
+    for pid in policy.visible_patients():
         for e in sensor_events.list_events(pid):
             if e.status == "closed":
                 continue

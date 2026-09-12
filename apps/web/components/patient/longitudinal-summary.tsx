@@ -12,6 +12,7 @@ const SOON = ["檢驗", "影像", "臨床紀錄", "AI 助理"];
 /** 醫師的縱向摘要（VISION §28.4）：慢病、用藥、住院與手術年表、近期事件；其餘項目標第二階段。 */
 export function LongitudinalSummary({ summary }: { summary: PatientSummary }) {
   const p = summary.profile;
+  if (!p) return <p className="text-sm text-ink-2">基本資料未在本次授權範圍內。</p>;
   const tl = summary.timeline as TimelineEntry[];
   const life = tl.filter((e): e is LifeEvent => e.kind === "life_event").sort((a, b) => (a.ts < b.ts ? -1 : 1));
   const stays = life.filter((e) => e.event_type === "hospitalization" || e.event_type === "surgery");
@@ -30,7 +31,7 @@ export function LongitudinalSummary({ summary }: { summary: PatientSummary }) {
           <div><dt className="text-ink-2">用藥</dt><dd>{p.medications.map((m) => `${m.name} ${m.dose} ${m.schedule}${m.is_anticoagulant ? "（抗凝血）" : ""}`).join("；") || "—"}</dd></div>
           <div><dt className="text-ink-2">過敏 · DNR</dt><dd>{p.allergies.map((a) => a.substance).join("、") || "無"} · {p.dnr ? "DNR" : "非 DNR"}</dd></div>
         </dl>
-        <div className="text-sm">
+        {summary.allowed_tabs.includes("timeline") ? <div className="text-sm">
           <p className="text-ink-2">住院與手術年表</p>
           <ol className="mt-1 border-l border-line pl-3">
             {stays.length === 0 && <li className="text-ink-2">—</li>}
@@ -52,7 +53,7 @@ export function LongitudinalSummary({ summary }: { summary: PatientSummary }) {
               </li>
             ))}
           </ul>
-        </div>
+        </div> : <p className="text-sm text-ink-2">時間軸未在本次授權範圍內。</p>}
       </div>
       <p className="mt-3 flex flex-wrap gap-2 text-xs text-ink-2">
         {SOON.map((s) => (

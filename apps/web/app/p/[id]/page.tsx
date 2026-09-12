@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { DocsTab } from "@/components/patient/docs-tab";
 import { TalkTab } from "@/components/patient/talk-tab";
 import { TimelineTab } from "@/components/patient/timeline-tab";
@@ -11,7 +11,8 @@ import { Chip } from "@/components/ui/badge";
 import { useApi, type PatientSummary } from "@/lib/api";
 import { setPatientTitle } from "@/lib/patient-title";
 import { AccessDenied } from "@/components/patient/access-denied";
-import { isTab, readMe, readRole, ROLE_TABS, TAB_LABEL, type Role, type Tab } from "@/lib/role";
+import { isTab, ROLE_TABS, TAB_LABEL, type Role, type Tab } from "@/lib/role";
+import { useAuthSession } from "@/components/auth/session-provider";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,18 +23,16 @@ function PatientInner() {
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
   const router = useRouter();
-  // cookie 只在瀏覽器讀得到：伺服器先給 null，hydrate 後換成真正角色（避免 SSR/CSR 不一致）
-  const roleCookie = useSyncExternalStore(() => () => {}, () => readRole(), () => null);
-  const me = useSyncExternalStore(() => () => {}, () => readMe(), () => null);
-  const role: Role = roleCookie ?? "nurse";
+  const session = useAuthSession();
+  const role: Role = session?.role ?? "patient";
   const tabParam = params.get("tab");
   const requested: Tab = isTab(tabParam) ? tabParam : ROLE_TABS[role][0];
   const onlyIds = useMemo(() => (params.get("ids") ?? "").split(",").filter(Boolean), [params]);
   // ?tab= 也送給 API：access log 記「看了哪個 tab」
-  const { data, error, status, reload } = useApi<PatientSummary>(`/patients/${id}/summary?tab=${requested}`, [me]);
-  const allowed: Tab[] = data?.allowed_tabs ?? ROLE_TABS[role];
+  const { data, error, status, reload } = useApi<PatientSummary>(session ? `/patients/${id}/summary?tab=${requested}` : null, [session?.who]);
+  const allowed: Tab[] = data?.allowed_tabs ?? [];
   const tab: Tab = requested;
-  const name = data?.profile.code_name ?? "";
+  const name = data?.profile?.code_name ?? "";
   useEffect(() => {
     setPatientTitle(name);
     return () => setPatientTitle("");
@@ -43,7 +42,7 @@ function PatientInner() {
     if (role === "nurse" && data && !isTab(tabParam) && data.pending.length === 0) router.replace(`/p/${id}?tab=timeline`);
   }, [role, data, tabParam, id, router]);
 
-  if (roleCookie === null) return <p className="text-ink-2">Loading…</p>;
+  if (!session || status === 401) return <p className="text-ink-2">登入已過期，請<Link href="/login" className="text-primary underline">重新登入</Link>。</p>;
   if (error && status === 404) return <p role="alert" className="text-danger-ink">找不到這位住民。</p>;
   if (error && status === 403) return <AccessDenied what="這份紀錄" />;
   if (error) return <p role="alert" className="text-danger-ink">無法連線到 API，請確認 make api 已啟動。<span className="block text-xs text-ink-2" translate="no">{error}</span></p>;
@@ -53,9 +52,11 @@ function PatientInner() {
   return (
     <div className="space-y-4">
       <header className="no-print flex flex-wrap items-baseline gap-2">
-        <h1 className="text-2xl font-medium">{data.profile.code_name}</h1>
-        <span className="text-sm text-ink-2">{data.profile.room}</span>
-        <span className="num w-full text-xs text-ink-2 sm:w-auto" translate="no">Health ID {data.profile.health_id}</span>
+        <h1 className="text-2xl font-medium">{data.profile?.code_name ?? "健康紀錄"}</h1>
+        {data.profile && <>
+          <span className="text-sm text-ink-2">{data.profile.room}</span>
+          <span className="num w-full text-xs text-ink-2 sm:w-auto" translate="no">Health ID {data.profile.health_id}</span>
+        </>}
         {red && <Chip tone="danger">紅燈</Chip>}
         {!red && drafts > 0 && role !== "caregiver" && <Chip tone="primary">待確認 {drafts}</Chip>}
         {data.session?.phase === "red" && role === "caregiver" && <Chip tone="danger">護理師已收到通知</Chip>}

@@ -54,8 +54,8 @@ def test_sim_fall_creates_possible_fall_and_asks_caregiver(records_root):
     cg = patient_summary("P002", x_who="cg_ahua")["sensor_events"][-1]
     assert cg["id"] == ev["id"] and "still_seconds" not in cg and "hr_after" not in cg
     assert "confidence" not in cg and "%" not in str(cg)
-    doc = patient_summary("P002", x_who="dr_wu")["sensor_events"][-1]
-    assert "accel_peak_g" not in doc
+    # Sensor/session aggregate requires talk as well; document scope is not enough.
+    assert patient_summary("P002", x_who="dr_wu")["sensor_events"] == []
     nurse = patient_summary("P002", x_who="nurse_lin")["sensor_events"][-1]
     assert "accel_peak_g" in nurse
 

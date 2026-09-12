@@ -294,3 +294,16 @@ Scope: apps/web only (+ docs/design.md §1 note, docs/DECISIONS.md row). API pay
 | components/nurse/ten-second-confirm.tsx | 三鍵不互鎖；就地輸入有 `<label htmlFor>`；`autoFocus` 只在展開時 | ✓（autoFocus 有理由：就地展開） |
 | 列印 | `@media print` 強制白色 tokens、殼 `.no-print`；`docs/img/print-1280-white.png` | ✓ |
 | 動畫 | 只有 breathe／step-in／slide-down／fade-in 四種；`prefers-reduced-motion` 全關 | ✓ |
+
+## 2026-09-12 · 個人登入、授權與確認人
+
+依 repo vendor `web-design-guidelines` skill，讀取 [當前 Web Interface Guidelines](https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md) 並稽核本輪變更。此處為程式檢查；實際瀏覽器流程結果另記 VALIDATION，不宣稱完成全站無障礙或視覺驗收。
+
+- `apps/web/app/login/page.tsx:68` — 標題補 text-balance；欄位有 label/name/autocomplete，密碼允許貼上；錯誤有 alert 並聚焦密碼，按鈕與角色選項 ≥56px。
+- `apps/web/app/me/circle/page.tsx:36` — 撤銷有確認；措辭改為阻止新請求，不承諾遠端刪除已讀資料。用途與說明分開，失敗就地顯示；標題補 text-balance。
+- `apps/web/components/nurse/review-panel.tsx:145` — 確認人由已驗證 session 顯示為唯讀；仍有 label，後端不信任輸入 actor。
+- `apps/web/app/nurse/round/page.tsx:170` — 護理長／確認護理師同上；醫囑來源作者仍與實際確認人分開。
+- `apps/web/app/role/route.ts:8` — 改相對 Location，避免 host-only session cookie 因 localhost／127.0.0.1 跳轉失效。
+- `apps/web/components/patient/*` — profile/baseline 等未授權區塊可為 null，介面改為安全空狀態，不靠隱藏 tab 掩蓋已回傳資料。
+
+尚待補：Care Circle 自訂驗證的首錯欄位聚焦、未儲存表單離頁提示、完整螢幕閱讀器／鍵盤與手機視覺檢查。登入選單仍是合成帳號清單，不是正式帳號管理 UI。上述未完成事項不標示通過。

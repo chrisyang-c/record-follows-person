@@ -1,5 +1,7 @@
 # KNOWN_ISSUES
 
+> 2026-09-10：舊「共享病人密碼／cookie 選角色／可宣告 X-Who」描述是歷史問題，現在已由個人 session 與集中式 HTTP 授權取代；purpose 不再只是文字欄位。新限制：舊帳號需個別設定密碼，舊 grant 缺用途時拒絕存取；不可重跑 seed 當遷移。原始 graph／事故原件及巡診採保守授權限制。完整現況見 [SECURITY](SECURITY.md)，測試證據見 [VALIDATION](VALIDATION.md)。本機 registry、JSON 交易、不可竄改稽核及正式部署安全仍未完成。
+
 | # | 問題 | 影響 | 狀態／繞法 |
 |---|---|---|---|
 | 1 | 沒有模型 key 或使用 `MODEL_PROVIDER=mock` 時部分流程用確定性抽取；需要真模型的對話另有停止／錯誤邊界。 | mock 通過不證明真模型品質。 | 不記錄本機是否有 key；`check` 固定 mock，歷史真模型評測與本輪回歸分開報告。 |

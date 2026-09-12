@@ -135,7 +135,7 @@ export function TimelineTab({ summary, role, onlyIds }: { summary: PatientSummar
       {onlyIds.length > 0 && (
         <p className="rounded-[8px] bg-ai-fill px-3 py-2 text-sm">
           只顯示 RoundPage 引用的 <span className="num">{rows.length}</span> 筆紀錄。{" "}
-          <a href={`/p/${summary.profile.patient_id}?tab=timeline`} className="text-primary hover:underline">顯示全部</a>
+          <a href={`/p/${summary.patient_id}?tab=timeline`} className="text-primary hover:underline">顯示全部</a>
         </p>
       )}
       <p className="text-sm text-ink-2">只增不改，<span className="num">{rows.length}</span> 筆</p>

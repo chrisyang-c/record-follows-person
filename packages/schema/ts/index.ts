@@ -25,6 +25,8 @@ export type VerifyChoice = "with_patient" | "fine" | "maybe_injured" | "unreacha
 
 export type Scope = "who" | "timeline" | "docs" | "talk";
 
+export type Purpose = "self-care" | "caregiving" | "treatment" | "care-management";
+
 export type TimelineEntry = Observation | Incident | Encounter | Order | LifeEvent | WearableDaily;
 
 export type Document = IncidentFile | HandoffPage | VisitPage | RoundPage | CaregiverNotes;
@@ -567,6 +569,7 @@ export interface WearableDaily {
 }
 
 export interface CareCircleMember {
+  /** 授權版本識別碼；舊資料空值不自動取得新政策權限 */ grant_id: string;
   health_id: string;
   /** 身份代號（cg_xiaofang、nurse_lin、fam_P001、P001…） */ member_id: string;
   name: string;
@@ -576,6 +579,8 @@ export interface CareCircleMember {
   valid_to: string | null;
   /** 誰授權（本人或代理） */ granted_by: string;
   /** WHY：為了什麼看（VISION §16；授權時必填） */ purpose: string;
+  allowed_purposes: ("self-care" | "caregiving" | "treatment" | "care-management")[];
+  /** 此病人明確委任的授權管理者；不由全域角色推定 */ can_manage: boolean;
   revoked_at: string | null;
 }
 
@@ -586,6 +591,9 @@ export interface AccessLogEntry {
   /** 看了什麼（who|timeline|docs|talk|summary|ask…） */ what: string;
   /** WHY：為了什麼看（依授權的 purpose 帶入） */ purpose: string;
   ts: string;
+  outcome: string | null;
+  reason: string | null;
+  request_id: string | null;
 }
 
 export interface BaselineProposal {

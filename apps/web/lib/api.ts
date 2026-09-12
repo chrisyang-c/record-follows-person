@@ -2,9 +2,9 @@
 
 import type { Baseline, Document, PersonRecord, Profile, StructuredObservation, TimelineEntry, RedFlagResult, SensorEvent, TrendLine, TrendReport, VerifyChoice } from "@schema";
 import { useCallback, useEffect, useState } from "react";
-import { readMe, readRole, type Tab } from "@/lib/role";
+import type { Role, Tab } from "@/lib/role";
 
-export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API = (process.env.NEXT_PUBLIC_API_URL || "/api").replace(/\/$/, "");
 
 export class ApiError extends Error {
   status: number;
@@ -14,20 +14,29 @@ export class ApiError extends Error {
   }
 }
 
-/** 每個請求帶「我是誰」（X-Who）；API 查 Care Circle 決定能看什麼並寫 access log。X-Role 只是舊相容。 */
-function roleHeader(): Record<string, string> {
-  const me = readMe();
-  const r = readRole();
-  return { ...(me ? { "X-Who": me } : {}), ...(r ? { "X-Role": r } : {}) };
+/** Identity comes from the HttpOnly session. Unsafe requests also prove same-origin intent. */
+function sessionHeaders(method: string, initial?: HeadersInit, json = false): Headers {
+  const headers = new Headers(initial);
+  headers.delete("X-Who");
+  headers.delete("X-Role");
+  if (json) headers.set("content-type", "application/json");
+  if (!["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())) {
+    const token = typeof document === "undefined" ? undefined
+      : document.cookie.match(/(?:^|;\s*)rfp_csrf=([^;]*)/)?.[1];
+    headers.delete("X-CSRF-Token");
+    if (token) headers.set("X-CSRF-Token", decodeURIComponent(token));
+  }
+  return headers;
 }
 
 export async function api<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
   const { json, ...rest } = init ?? {};
   const res = await fetch(`${API}${path}`, {
     ...rest,
-    headers: { "content-type": "application/json", ...roleHeader(), ...(rest.headers ?? {}) },
+    headers: sessionHeaders(rest.method ?? "GET", rest.headers, json !== undefined),
     body: json !== undefined ? JSON.stringify(json) : rest.body,
     cache: "no-store",
+    credentials: "include",
   });
   if (!res.ok) {
     let detail = res.statusText;
@@ -39,7 +48,7 @@ export async function api<T>(path: string, init?: RequestInit & { json?: unknown
     }
     throw new ApiError(res.status, detail);
   }
-  return (await res.json()) as T;
+  return res.status === 204 ? undefined as T : (await res.json()) as T;
 }
 
 /**
@@ -92,6 +101,7 @@ export function useApi<T>(path: string | null, deps: unknown[] = []) {
       })
       .catch((e: Error) => {
         if (!alive) return;
+        setData(null);
         setError(e.message);
         setStatus(e instanceof ApiError ? e.status : null);
       });
@@ -242,12 +252,13 @@ export interface PendingThread {
   updated_at: string | null;
 }
 export interface PatientSummary {
-  role: "patient" | "caregiver" | "nurse" | "doctor";
+  patient_id: string;
+  role: Role;
   who: string | null;
   /** Care Circle 允許這個身份看的 tab；不在裡面的 tab 顯示「未獲授權」 */
   allowed_tabs: Tab[];
-  profile: Profile;
-  baseline: Baseline;
+  profile: Profile | null;
+  baseline: Baseline | null;
   timeline: TimelineEntry[];
   documents: Document[];
   conversation: ConvMessage[];
@@ -324,10 +335,11 @@ export interface TalkDone {
 export async function streamSSE(path: string, body: unknown, onEvent: (name: string, data: Record<string, unknown>) => void, signal?: AbortSignal) {
   const res = await fetch(`${API}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...roleHeader() },
+    headers: sessionHeaders("POST", undefined, true),
     body: JSON.stringify(body),
     signal,
     cache: "no-store",
+    credentials: "include",
   });
   if (!res.ok || !res.body) {
     let detail = res.statusText;

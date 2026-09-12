@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # Taiwan-local date has changed since it started (KNOWN_ISSUES #18)
     SESSION_EXPIRY_H: int = 4
     WORKER_SCAN_INTERVAL_S: int = 30
+    AUTH_COOKIE_SECURE: bool = False  # local HTTP only; HTTPS deployments must set True
+    AUTH_ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    ENABLE_DEMO_SIMULATION: bool = False
 
     @property
     def records_root(self) -> Path:

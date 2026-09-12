@@ -295,3 +295,9 @@ provenance 每行有來源。AI 的行永遠標 `ai_extracted`，只有護理師
 - baseline：已採納不自動漂移。醫囑提案經護理師確認後更新；統計正常帶只比較，不提供從量測自動回寫基線的入口。保留其回歸測試。
 - 熟悉頁趨勢圖：已採納呈現有變化的維度，限制兩個；實作／列印可用性仍需個案驗收。
 - Path A 追蹤：次數、護理師可設定的時間、無回覆後如何升級仍待決策。不可擅自把建議「一次」寫成正式臨床政策。
+
+## 12. 已採納的 HTTP 身分與用途邊界（2026-09-10）
+
+個人帳號 → SQLite opaque session → 每次核對 registry → 病人關係＋scope＋固定用途＋期限 → 操作與資料投影 → audit。具體契約、資料遷移與限制以 [SECURITY](SECURITY.md) 為準，取代 §9.1 的 cookie 選角色敘述。病歷仍由 PersonRecord 管理，SQLite 只新增 credential/session/audit 與可信巡診 cohort；不是全面資料庫遷移。
+
+HTTP body 的確認人由 session 綁定，人工確認節點與 provenance 規則不變。原始 workflow/trace 限具有完整病人授權的護理師，巡診必須涵蓋原名單；未登記 cohort 的舊巡診不允許 HTTP resume。內部 timeout worker 保留，HTTP 全域掃描入口關閉。新端點必須明列 policy 與 HTTP 授權測試，未分類預設拒絕。

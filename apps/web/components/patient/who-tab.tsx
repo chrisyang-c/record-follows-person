@@ -8,14 +8,19 @@ import { useApi, type AccessLogEntry, type PatientSummary } from "@/lib/api";
 import { fmtDateTime, fmtDay } from "@/lib/format";
 import { IDENTITIES, ROLE_LABEL } from "@/lib/role";
 import type { TrendReport } from "@schema";
+import { AccessDenied } from "@/components/patient/access-denied";
+import { useAuthSession } from "@/components/auth/session-provider";
 
 /** 這是誰：profile、八維度基線（誰設、何時）、有變化的維度小圖。 */
 export function WhoTab({ summary }: { summary: PatientSummary }) {
   const p = summary.profile;
+  const session = useAuthSession();
+  const canReadLog = session?.who === summary.patient_id;
   const changed = new Set(summary.changed_dimensions);
-  const { data: trend } = useApi<TrendReport>(changed.size ? `/trends/${p.patient_id}` : null);
+  const { data: trend } = useApi<TrendReport>(session?.role === "nurse" && p && changed.size ? `/trends/${summary.patient_id}` : null);
   const series = trend?.series.filter((s) => changed.has(s.dimension)) ?? [];
-  const { data: log } = useApi<{ items: AccessLogEntry[] }>(`/patients/${p.patient_id}/access-log?limit=20`);
+  const { data: log } = useApi<{ items: AccessLogEntry[] }>(canReadLog ? `/patients/${summary.patient_id}/access-log?limit=20` : null);
+  if (!p || !summary.baseline) return <AccessDenied what="基本資料與基線" />;
   return (
     <div className="space-y-4">
       <p className="text-ink-2">{p.one_liner}</p>
@@ -49,7 +54,7 @@ export function WhoTab({ summary }: { summary: PatientSummary }) {
           </table>
         </Card>
       </div>
-      <Card title="誰看過我的紀錄" headingLevel={2} meta={<span className="num" translate="no">Health ID {p.health_id}</span>}>
+      {canReadLog && <Card title="誰看過我的紀錄" headingLevel={2} meta={<span className="num" translate="no">Health ID {p.health_id}</span>}>
         {log && log.items.length === 0 && <p className="text-sm text-ink-2">還沒有人看過。</p>}
         <ul className="divide-y divide-line text-sm">
           {(log?.items ?? []).map((e, i) => (
@@ -62,7 +67,7 @@ export function WhoTab({ summary }: { summary: PatientSummary }) {
             </li>
           ))}
         </ul>
-      </Card>
+      </Card>}
       {series.length > 0 && (
         <Card title="近 14 天有變化的維度" headingLevel={2}>
           <div className="grid gap-4 sm:grid-cols-2">

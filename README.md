@@ -8,7 +8,7 @@ BUILDMODE 2026 × SITCON ・ Healthcare AI 賽道。紀錄屬於本人，誰能�
 
 ![ci](https://github.com/chrisyang-c/record-follows-person/actions/workflows/ci.yml/badge.svg)
 
-目前是可獨立開發／驗證的 **synthetic-data demo**，不是可上線的醫療資料平台。登入 cookie、部分 API 授權與資料隔離仍有缺口；不要接真實病人資料或公開暴露服務。2026-09-06 的實碼 [review](docs/PROJECT_REVIEW.md)、[驗證範圍](docs/VALIDATION.md) 與 [分期 roadmap](docs/ROADMAP.md) 分開維護；只需修改這個 repo，舊來源已可還原封存。
+目前是可獨立開發／驗證的 **synthetic-data demo**，不是可上線的醫療資料平台。已加入個人帳號、伺服器 session、病人／用途授權與拒絕稽核；仍不要接真實病人資料或公開暴露服務。請先看 [安全契約與既有資料升級](docs/SECURITY.md)、[review](docs/PROJECT_REVIEW.md)、[驗證範圍](docs/VALIDATION.md) 與 [分期 roadmap](docs/ROADMAP.md)；只需修改這個 repo，舊來源已可還原封存。沒有模型 API 也可使用 `MODEL_PROVIDER=mock` 開發與驗證，不能把 mock 當真模型能力。
 
 ---
 

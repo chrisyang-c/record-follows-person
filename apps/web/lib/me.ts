@@ -1,11 +1,9 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { identityOf, readMe } from "@/lib/role";
+import { useAuthSession } from "@/components/auth/session-provider";
 
-/** 本人／家屬身份對應的住民 id（cookie me → identity.patient_id）；伺服器端為 null。 */
-export function useMyPatientId(): string | null | undefined {
-  const me = useSyncExternalStore(() => () => {}, () => readMe(), () => undefined);
-  if (me === undefined) return undefined;
-  return identityOf(me)?.patient_id ?? null;
+/** Patient/family context comes from the API-verified session, never a writable display cookie. */
+export function useMyPatientId(): string | null {
+  const session = useAuthSession();
+  return session && (session.role === "patient" || session.role === "family") ? session.patient_id : null;
 }

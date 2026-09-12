@@ -9,8 +9,6 @@ import { resumeThread, threadState, type InboxItem, type Snapshot } from "@/lib/
 import { fmtDateTime } from "@/lib/format";
 import { typeLabel } from "@/lib/labels";
 
-const NURSE = "nurse_lin";
-
 /**
  * 每班 10 秒確認（◇nurse_10s_confirm）：住民、S 一行、A 一行，三鍵「確認／改一句／退回」。
  * 改一句與退回都就地展開輸入，不鎖其他鍵（docs/UIUX_OMNI_TWIN.md §4.4；KNOWN_ISSUES #21）。
@@ -33,7 +31,7 @@ export function TenSecondConfirm({ item, onDone, title }: { item: Pick<InboxItem
     setBusy(kind);
     setErr(null);
     try {
-      await resumeThread(item.thread_id, { nurse_id: NURSE, ...payload });
+      await resumeThread(item.thread_id, payload);
       onDone();
     } catch (e) {
       setErr((e as Error).message);

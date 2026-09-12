@@ -115,9 +115,9 @@ apps/api/                 FastAPI + LangGraph + deepagents
   ingest/                 通道 Ingest：caregiver_speech.py, doctor_order.py, discharge_pdf.py(mock), vitals.py(hardcoded)
   eval/                   抽取評測腳本與合成語句集
 apps/web/                 Next.js App Router + Tailwind + shadcn/ui
-  app/page.tsx            登入入口；/login、/role、/me、/twin 的 demo cookie 不是正式身分驗證
+  app/page.tsx            個人登入入口；/role 只接受 API 驗證的 server-side session
   app/caregiver, nurse, doctor   角色首頁（照護者：住民卡；護理師：紅燈→等我確認→今日總覽；醫師：巡診名單）
-  app/p/[id]              病人頁 = 單一入口，?tab=who|timeline|docs|talk；proxy.ts 依 cookie 角色限制 tab
+  app/p/[id]              病人頁 = 單一入口，?tab=who|timeline|docs|talk；後端依 session／病人／用途／scope 限制回應
   app/nurse/round         巡診準備（串流顯示 roster_agent → trend_analyzer → familiarization_writer）
   components/patient/     四個 tab + activity-bar（Agent 活動列，資料來自 LangGraph 串流事件）
 packages/schema/          共用 Pydantic + TypeScript 型別（單一來源，兩邊 codegen）
@@ -288,6 +288,7 @@ agent = create_deep_agent(
 ---
 
 ## 10. 安全
+- 本機個人登入與用途政策以 `docs/SECURITY.md` 為準；舊共用病人密碼及 cookie 選角色不再建立權限。不得為遷移登入而重跑 seed 清資料。
 - 不 commit secrets；`.env.example` 列所有變數；pre-commit 掃 secrets。
 - 只用合成資料；`data/seed/` 的姓名為代號。
 - 呼叫 LLM 前經 `deidentify()` 去識別化；provenance 保留原文在本地。

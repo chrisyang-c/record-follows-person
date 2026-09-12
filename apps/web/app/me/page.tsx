@@ -101,7 +101,7 @@ function SelfNote({ pid, name }: { pid: string; name: string }) {
     setReply(null);
     let out = "";
     try {
-      await streamSSE(`/patients/${pid}/talk`, { text: text.trim(), role_view: "caregiver" }, (n, d) => {
+      await streamSSE(`/patients/${pid}/talk`, { text: text.trim() }, (n, d) => {
         if (n === "token") out += String(d.text ?? "");
         if (n === "error") throw new Error(String(d.text ?? d.detail ?? "error"));
       });

@@ -2,14 +2,15 @@
 
 import { AlertTriangle, Check, ChevronRight, Phone } from "lucide-react";
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
 import { DIMENSION_LABELS, type Dimension } from "@schema";
 import { Chip } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { useApi, usePolling, type HomeData, type HomeResident } from "@/lib/api";
 import { fmtDateTime, fmtDay } from "@/lib/format";
 import { LIFE_EVENT_LABEL } from "@/lib/labels";
-import { IDENTITIES, identityOf, readMe } from "@/lib/role";
+import { IDENTITIES } from "@/lib/role";
+import { useAuthSession } from "@/components/auth/session-provider";
+import { LogoutButton } from "@/components/auth/logout-button";
 
 /** 我照顧的人（一張卡）：今天狀態一行、有變的維度、警示、事件，點進去就是對話（四鍵在對話裡）。 */
 function PersonCard({ r }: { r: HomeResident }) {
@@ -77,22 +78,21 @@ function PersonCard({ r }: { r: HomeResident }) {
  * 家屬只看自己那一位；照服員看全部。每 5 秒更新（分頁隱藏時暫停），可能跌倒的四鍵在對話裡。
  */
 export default function CaregiverHome() {
-  const me = useSyncExternalStore(() => () => {}, () => readMe(), () => null);
-  const identity = identityOf(me);
-  const { data: home, error, reload } = useApi<HomeData>("/home/caregiver", [me]);
+  const identity = useAuthSession();
+  const { data: home, error, reload } = useApi<HomeData>("/home/caregiver", [identity?.who]);
   usePolling(reload, 5000);
-  const residents = (home?.residents ?? []).filter((r) => !identity?.patient_id || r.patient_id === identity.patient_id);
+  const residents = (home?.residents ?? []).filter((r) => identity?.role !== "family" || r.patient_id === identity.patient_id);
   return (
     <div className="mx-auto max-w-[390px] space-y-4">
       <h1 className="text-balance text-2xl font-medium">{identity?.role === "family" ? "我的家人" : "我照顧的人"}</h1>
-      {error && <p role="alert" className="text-danger-ink">無法連線到 API，請確認 make api 已啟動。</p>}
-      {home && residents.length === 0 && <p className="text-ink-2">還沒有住民資料，先跑 <code>make seed</code>。</p>}
+      {error && <p role="alert" className="text-danger-ink">{error}。請重新登入或向本人確認授權。</p>}
+      {home && residents.length === 0 && <p className="text-ink-2">目前沒有可查看的住民，請向本人確認授權範圍與用途。</p>}
       <ul className="grid gap-3">
         {residents.map((r) => (
           <li key={r.patient_id}><PersonCard r={r} /></li>
         ))}
       </ul>
-      <p className="pt-4 text-center text-sm"><Link href="/" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink">切換身份</Link></p>
+      <div className="flex justify-center pt-4"><LogoutButton /></div>
     </div>
   );
 }

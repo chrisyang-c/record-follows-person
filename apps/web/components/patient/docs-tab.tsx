@@ -21,7 +21,7 @@ import type { Role } from "@/lib/role";
  * 照護者：本月注意事項
  */
 export function DocsTab({ summary, role, onChanged }: { summary: PatientSummary; role: Role; onChanged: () => void }) {
-  const name = summary.profile.code_name;
+  const name = summary.profile?.code_name ?? "這位住民";
   const docs = [...summary.documents].sort((a, b) => (a.generated_at < b.generated_at ? 1 : -1));
   const round = docs.find((d) => d.doc_type === "round_page") as RoundPage | undefined;
   const incidents = docs.filter((d) => d.doc_type === "incident_file") as IncidentFile[];
@@ -38,7 +38,7 @@ export function DocsTab({ summary, role, onChanged }: { summary: PatientSummary;
             <ReviewPanel key={p.thread_id} tid={p.thread_id} codeName={name} onChanged={onChanged} />
           ))}
           {shifts.map((p) => (
-            <TenSecondConfirm key={p.thread_id} item={{ ...p, patient_id: summary.profile.patient_id, code_name: name }} onDone={onChanged} />
+            <TenSecondConfirm key={p.thread_id} item={{ ...p, patient_id: summary.patient_id, code_name: name }} onDone={onChanged} />
           ))}
         </section>
       )}

@@ -132,6 +132,17 @@ def main():
                 api_process = start_api()
                 report["postgres"] = True
                 with httpx.Client(base_url="http://127.0.0.1:8000", timeout=60) as client:
+                    assert client.get("/records/P003").status_code == 401
+                    caregiver = client.post(
+                        "/login",
+                        json={
+                            "who": "cg_xiaofang",
+                            "patient_id": "P003",
+                            "password": "demo-cg_xiaofang-2026!",
+                        },
+                    )
+                    caregiver.raise_for_status()
+                    client.headers["X-CSRF-Token"] = caregiver.json()["csrf_token"]
                     started = client.post(
                         "/shift/start",
                         json={
@@ -146,8 +157,22 @@ def main():
                     snap = started.json()
                     assert snap["interrupt"]["type"] == "nurse_10s_confirm"
                     thread = quote(snap["thread_id"], safe="")
+                    assert "values" not in snap
+                    assert (
+                        client.post(
+                            f"/threads/{thread}/resume", json={"action": "accept"}
+                        ).status_code
+                        == 403
+                    )
+                    nurse = client.post(
+                        "/login", json={"who": "nurse_lin", "password": "demo-nurse_lin-2026!"}
+                    )
+                    nurse.raise_for_status()
+                    client.headers["X-CSRF-Token"] = nurse.json()["csrf_token"]
                     stop(api_process)
                     api_process = start_api()
+                    assert client.get("/auth/session").json()["who"] == "nurse_lin"
+                    report["authenticated_session_survives_restart"] = True
                     restored = client.get(f"/threads/{thread}/state")
                     restored.raise_for_status()
                     assert restored.json()["interrupt"]["type"] == "nurse_10s_confirm"
@@ -177,6 +202,9 @@ def main():
                     assert row["status"] == "approved" and row["confirmed_by"] == "nurse_lin"
                     assert row["provenance"]
                     report["approved_record_survives_restart"] = True
+                    assert client.post("/auth/logout", json={}).status_code == 200
+                    assert client.get("/records/P003").status_code == 401
+                    report["anonymous_and_caregiver_approval_denied"] = True
                 if args.web:
                     node = shutil.which("node")
                     if not node:

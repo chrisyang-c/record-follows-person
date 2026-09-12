@@ -18,6 +18,7 @@ def test_grant_requires_purpose(records_root):
         care_circle_grant("P001", body, x_who="P001")
     assert e.value.status_code == 400 and "purpose" in e.value.detail
     body.purpose = "夜班交接"
+    body.allowed_purposes = ["treatment"]
     out = care_circle_grant("P001", body, x_who="P001")
     assert out["purpose"] == "夜班交接"
 

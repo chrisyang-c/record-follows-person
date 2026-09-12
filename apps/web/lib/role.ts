@@ -1,6 +1,6 @@
 /**
- * 身份與角色。cookie 只存「我是誰」（me=cg_xiaofang | nurse_lin | dr_wu | P001 | fam_P001…），
- * 由 /role?set= 寫入；角色由身份推得（demo 身份表與 data/seed/residents.json 的 identities 一致）。
+ * 身份顯示與角色導覽。me cookie 只供畫面相容；/role 查證 API session 後才寫入。
+ * 這張 demo 名單與 me 都不能證明身份，API 只認 HttpOnly rfp_session。
  * 能看哪些 tab 由 API 依 Care Circle 決定（summary.allowed_tabs），這裡的 ROLE_TABS 只是預設順序。
  */
 export type Role = "patient" | "family" | "caregiver" | "nurse" | "doctor";
@@ -13,7 +13,7 @@ export interface Identity {
   patient_id?: string;
 }
 
-/** Demo 身份（與 seed 一致；新身份由本人在 Care Circle 授權後也能用） */
+/** Demo 帳號顯示名單（與 seed 一致）；建立帳號與 Care Circle 授權是不同操作。 */
 export const IDENTITIES: Record<string, Identity> = {
   P001: { role: "patient", name: "王伯", patient_id: "P001" },
   P002: { role: "patient", name: "陳奶奶", patient_id: "P002" },
@@ -50,7 +50,7 @@ export const isTab = (v: unknown): v is Tab => v === "who" || v === "timeline" |
 export const identityOf = (me: string | null | undefined): Identity | null => (me && IDENTITIES[me]) || null;
 export const roleOfMe = (me: string | null | undefined): Role | null => identityOf(me)?.role ?? null;
 
-/** 瀏覽器端讀 cookie me；伺服器端回 null。 */
+/** 僅供瀏覽器顯示；不可用來授權或建立 API 身份。伺服器端回 null。 */
 export function readMe(): string | null {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(/(?:^|;\s*)me=([A-Za-z0-9_]+)/);

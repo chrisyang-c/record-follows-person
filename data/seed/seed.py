@@ -247,6 +247,11 @@ def seed(root: Path | None = None, quiet: bool = False, *, end_date: date | None
             print(f"seeded {pid} {profile.code_name}: {n} timeline entries, {len(store.load_documents(pid))} documents")
     care_circle_save = getattr(care_circle, "save_identities")
     care_circle_save(identities)
+    # Public synthetic fixtures only. Existing installations provision individual passwords
+    # with manage_credentials.py; application startup never installs demo credentials.
+    from core.security import set_password
+    for who in identities:
+        set_password(who, f"demo-{who}-2026!")
     return store
 
 
@@ -313,6 +318,8 @@ def _seed_care_circle(store, profile, r, data, identities) -> None:
                 valid_to=None if role != "doctor" else _dt(date.fromisoformat(data["last_round_date"]) + timedelta(days=365), "09:00"),
                 granted_by=pid if role == "patient" else fam_id if role == "family" else pid,
                 purpose=care_circle.DEFAULT_PURPOSE[role],
+                allowed_purposes=[care_circle.ROLE_PURPOSE[role]],
+                can_manage=role in ("patient", "family"),
             ),
         )
 

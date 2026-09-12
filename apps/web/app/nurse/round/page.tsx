@@ -13,6 +13,7 @@ import { Input, Label, Textarea } from "@/components/ui/field";
 import { ActivityBar } from "@/components/patient/activity-bar";
 import { resumeThread, streamSSE, threadState, type ActivityEvent, type Snapshot } from "@/lib/api";
 import { typeLabel } from "@/lib/labels";
+import { useAuthSession } from "@/components/auth/session-provider";
 
 type Roster = { patient_id: string; code_name: string; room: string; abnormal_count: number; abnormal_dimensions: string[]; incident_count: number; reason: string }[];
 
@@ -38,8 +39,8 @@ function RoundInner() {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [head, setHead] = useState("head_nurse_chen");
-  const [nurse, setNurse] = useState("nurse_lin");
+  const nurse = useAuthSession()?.who ?? "";
+  const head = nurse;
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [orders, setOrders] = useState<Record<string, string>>({});
   const [orderHint, setOrderHint] = useState<string | null>(null);
@@ -110,7 +111,7 @@ function RoundInner() {
       return;
     }
     setOrderHint(null);
-    resume({ nurse_id: nurse, orders: list.map(([patient_id, text]) => ({ patient_id, doctor, text })) });
+    resume({ orders: list.map(([patient_id, text]) => ({ patient_id, doctor, text })) });
   };
 
   return (
@@ -166,9 +167,9 @@ function RoundInner() {
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <Label htmlFor="head">護理長</Label>
-              <Input id="head" name="head_nurse" value={head} onChange={(e) => setHead(e.target.value)} className="w-44" autoComplete="off" />
+              <Input id="head" name="head_nurse" value={head} readOnly className="w-44" autoComplete="off" />
             </div>
-            <Button variant="ok" size="lg" className="min-w-48" disabled={busy} onClick={() => resume({ head_nurse: head, patient_ids: roster.filter((r) => isSel(r.patient_id)).map((r) => r.patient_id) })}>
+            <Button variant="ok" size="lg" className="min-w-48" disabled={busy} onClick={() => resume({ patient_ids: roster.filter((r) => isSel(r.patient_id)).map((r) => r.patient_id) })}>
               {busy ? "發布中…" : "確認名單，發布 RoundPage 給醫師"}
             </Button>
           </div>
@@ -189,7 +190,7 @@ function RoundInner() {
           <Card title="巡診當天：護理師輸入醫囑（醫師看頁、看人、開醫囑，系統不介入）" headingLevel={2}>
             <div className="mb-3 flex flex-wrap gap-3">
               <div><Label htmlFor="doctor">醫師</Label><Input id="doctor" name="doctor" value={doctor} onChange={(e) => setDoctor(e.target.value)} className="w-36" autoComplete="off" /></div>
-              <div><Label htmlFor="nurse2">輸入護理師</Label><Input id="nurse2" name="nurse_id" value={nurse} onChange={(e) => setNurse(e.target.value)} className="w-36" autoComplete="off" /></div>
+              <div><Label htmlFor="nurse2">輸入護理師（已登入）</Label><Input id="nurse2" name="nurse_id" value={nurse} readOnly className="w-36" autoComplete="off" /></div>
             </div>
             <div className="space-y-3">
               {roster.map((r) => (
@@ -258,9 +259,9 @@ function RoundInner() {
               <Button variant="ok" size="lg" className="min-w-48" disabled={busy} onClick={() => {
                 const acc: Record<string, string[]> = {};
                 proposals.forEach((p) => { acc[p.patient_id] = p.proposals.filter((e) => accepted[`${p.patient_id}:${e.dimension}`] ?? true).map((e) => e.dimension); });
-                resume({ action: "approve", nurse_id: nurse, accepted: acc });
+                resume({ action: "approve", accepted: acc });
               }}>{busy ? "確認中…" : "確認更新基線"}</Button>
-              <Button variant="ghost" size="lg" disabled={busy} onClick={() => resume({ action: "reject", nurse_id: nurse })}>{busy ? "確認中…" : "不更新"}</Button>
+              <Button variant="ghost" size="lg" disabled={busy} onClick={() => resume({ action: "reject" })}>{busy ? "確認中…" : "不更新"}</Button>
             </div>
           </Card>
         </>

@@ -1,37 +1,47 @@
-"""登入以病人為核心：本人用自己的密碼；其他人要病人的密碼才進 Care Circle。"""
+"""Personal authentication never restores revoked consent."""
 
 from __future__ import annotations
 
-import pytest
-from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
-from main import LoginIn, login
+from main import app
 from record import care_circle as cc
 
 
-def test_patient_logs_in_with_own_code(records_root):
-    out = login(LoginIn(who="P001", code="1940"))
+def test_patient_logs_in_with_own_password(records_root):
+    client = TestClient(app)
+    response = client.post("/login", json={"who": "P001", "password": "demo-P001-2026!"})
+    assert response.status_code == 200
+    out = response.json()
     assert out["role"] == "patient" and out["patient_id"] == "P001"
+    assert "HttpOnly" in response.headers.get_list("set-cookie")[0]
+    client.close()
 
 
-def test_wrong_code_is_401(records_root):
-    with pytest.raises(HTTPException) as e:
-        login(LoginIn(who="P001", code="0000"))
-    assert e.value.status_code == 401
+def test_wrong_password_is_401(records_root):
+    client = TestClient(app)
+    assert client.post("/login", json={"who": "P001", "password": "0000"}).status_code == 401
+    client.close()
 
 
-def test_other_role_needs_patient_code_and_gets_scoped_access(records_root):
+def test_login_does_not_restore_revoked_grant(records_root):
+    original = next(m for m in cc.active_members("P002") if m.member_id == "dr_wu")
     cc.revoke("P002", "dr_wu", by="P002")
     assert cc.scopes_for("P002", "dr_wu") == []
-    with pytest.raises(HTTPException):
-        login(LoginIn(who="dr_wu", patient_id="P002", code="wrong"))
-    out = login(LoginIn(who="dr_wu", patient_id="P002", code="1936"))
-    assert out["role"] == "doctor"
-    assert cc.scopes_for("P002", "dr_wu") == cc.DEFAULT_SCOPES["doctor"]
-    assert any(e.what == "login:granted" for e in cc.access_log("P002"))
+    client = TestClient(app)
+    response = client.post(
+        "/login", json={"who": "dr_wu", "patient_id": "P002", "password": "demo-dr_wu-2026!"}
+    )
+    assert response.status_code == 403
+    assert cc.scopes_for("P002", "dr_wu") == []
+    client.close()
+    cc.grant("P002", original)  # restore this shared domain fixture, not via authentication
 
 
-def test_other_role_must_pick_a_patient(records_root):
-    with pytest.raises(HTTPException) as e:
-        login(LoginIn(who="nurse_lin", code="1940"))
-    assert e.value.status_code == 400
+def test_staff_can_login_without_patient_context(records_root):
+    client = TestClient(app)
+    response = client.post("/login", json={"who": "nurse_lin", "password": "demo-nurse_lin-2026!"})
+    assert response.status_code == 200
+    assert response.json()["patient_id"] is None
+    assert client.get("/residents").status_code == 200
+    client.close()

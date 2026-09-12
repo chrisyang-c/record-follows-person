@@ -4,7 +4,7 @@ import { ScanLine, UserRound } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState, useSyncExternalStore } from "react";
+import { Suspense, useState } from "react";
 import { DIMENSIONS, type Dimension } from "@schema";
 import { AskBox } from "@/components/twin/ask-box";
 import { BodyHologram, ORGANS } from "@/components/twin/body-hologram";
@@ -15,7 +15,7 @@ import { useApi, type Mood, type TwinData } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { DIRECTION_LABEL } from "@/lib/labels";
 import { useMyPatientId } from "@/lib/me";
-import { identityOf, readMe } from "@/lib/role";
+import { useAuthSession } from "@/components/auth/session-provider";
 import { cn } from "@/lib/utils";
 
 const AvatarView = dynamic(() => import("@/components/twin/avatar-view").then((m) => m.AvatarView), { ssr: false, loading: () => <div className="grid h-[420px] place-items-center rounded-[12px] border border-line bg-surface-2 text-sm text-ink-2 lg:h-[520px]">載入分身…</div> });
@@ -38,8 +38,7 @@ function sandboxMood(sleep: number, weight: number, base: number): Mood {
 function TwinInner() {
   const mine = useMyPatientId();
   const sp = useSearchParams();
-  const me = useSyncExternalStore(() => () => {}, () => readMe(), () => null);
-  const identity = identityOf(me);
+  const identity = useAuthSession();
   const pid = mine ?? sp.get("pid") ?? null;
   const { data, error } = useApi<TwinData>(pid ? `/twin/${pid}` : null, [pid]);
   const { data: residents } = useApi<{ patient_id: string; code_name: string; room: string }[]>(!pid ? "/residents" : null);

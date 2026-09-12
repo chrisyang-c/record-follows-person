@@ -91,3 +91,7 @@
 | 2026-09-06 | 推送前同步 `0ee23aa`：保留正常帶 UI／endpoint、purpose schema／grant／audit／UI 與六個整合測試；重做交接及 review 現況核對。 | 不覆蓋遠端並行工作；purpose 基礎欄位完成與用途政策未完成分開記錄。 | Codex |
 | 2026-09-06 | seed 新增可選 end_date；只由測試／隔離 smoke 明確指定近期視窗，預設保留原始歷史日期；新增過期 wearable 不回為 current 的反向測試。 | fresh clone 發現固定示範日期隨日曆推進失效；修測試資料，不改產品時間窗掩蓋過期資料。見 KNOWN_ISSUES #48。 | Codex |
 | 2026-09-06 | 三份新增演講原件留本機，私人精讀筆記 git 排除；公開 repo 只收錄以公開來源支持的 OPTIMIZATION_PLAN。 | 教材含限制散布標示；讀取分析不等於取得公開轉載授權。不移植教材醫療門檻或模型效能宣稱。 | Codex |
+| 2026-09-07 | 已讀 §0.2 六份架構／願景／UI 文件與 HANDOFF。 | 延續前輪整併後的安全平台工作。 | Codex |
+| 2026-09-07 | M1/M2 採個人密碼、server-side opaque session、HttpOnly cookie、CSRF、集中式 HTTP deny-by-default；不信任 X-Who/X-Role 或病人共用密碼，不因登入恢復已撤銷授權。 | 使用者授權接手開發，先做不依賴模型 API 的平台安全。此決策取代 9/5 共用密碼自動入圈；不是 OIDC/MFA 或生產安全認證。 | Codex |
+| 2026-09-07 | 授權增加 allowed_purposes、grant_id 與 can_manage；未遷移用途的舊 grant 拒絕 HTTP 存取，需明確重新授權。委任僅限該病人，不可再委任、提升 scope 或延長超過自己的授權。 | 自由文字 purpose 保留理由，另用固定用途 enum 做 allow/deny；不推定全域 family 身分能管理所有病人。 | Codex |
+| 2026-09-07 | 個人 credential/session/security audit 暫存 records root 下 SQLite；病歷保持原儲存。原始 graph/trace 只允許護理師完整授權，巡診須具全名單授權；HTTP worker 手動全域掃描停用。 | 先封住跨患者讀取／寫入與 scope 洩漏；不一次引入所有資料庫、不改臨床節點或 baseline／紅燈規則。SQLite append audit 不宣稱不可竄改。 | Codex |

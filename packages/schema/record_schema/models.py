@@ -247,9 +247,11 @@ class Profile(BaseModel):
 
 CareRole = Literal["patient", "family", "caregiver", "nurse", "doctor"]
 Scope = Literal["who", "timeline", "docs", "talk"]
+Purpose = Literal["self-care", "caregiving", "treatment", "care-management"]
 
 
 class CareCircleMember(BaseModel):
+    grant_id: str = Field(default="", description="授權版本識別碼；舊資料空值不自動取得新政策權限")
     health_id: str
     member_id: str = Field(description="身份代號（cg_xiaofang、nurse_lin、fam_P001、P001…）")
     name: str = ""
@@ -259,6 +261,8 @@ class CareCircleMember(BaseModel):
     valid_to: datetime | None = None
     granted_by: str = Field(description="誰授權（本人或代理）")
     purpose: str = Field(default="", description="WHY：為了什麼看（VISION §16；授權時必填）")
+    allowed_purposes: list[Purpose] = Field(default_factory=list)
+    can_manage: bool = Field(default=False, description="此病人明確委任的授權管理者；不由全域角色推定")
     revoked_at: datetime | None = None
 
     def active(self, now: datetime | None = None) -> bool:
@@ -280,6 +284,9 @@ class AccessLogEntry(BaseModel):
     what: str = Field(description="看了什麼（who|timeline|docs|talk|summary|ask…）")
     purpose: str = Field(default="", description="WHY：為了什麼看（依授權的 purpose 帶入）")
     ts: datetime
+    outcome: str | None = None
+    reason: str | None = None
+    request_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -734,7 +741,7 @@ __all__ = [
     "Direction", "Status", "Shift", "RouteDecision", "Provenance", "ProvenanceLine",
     "DimensionValue", "ObservationFlags", "Vitals", "FollowupQA", "StructuredObservation",
     "BaselineDelta", "RedFlagHit", "RedFlagResult", "Condition", "AllergyIntolerance",
-    "MedicationStatement", "Contact", "Facility", "Profile", "HEALTH_ID_PATTERN", "CareRole",
+    "MedicationStatement", "Contact", "Facility", "Profile", "HEALTH_ID_PATTERN", "CareRole", "Purpose",
     "Scope", "CareCircleMember", "AccessLogEntry", "VerifyChoice", "VERIFY_LABELS",
     "SensorVerification", "SensorEvent", "BaselineEntry", "Baseline",
     "BaselineProposal", "VitalMetric", "VITAL_LABELS", "VITAL_UNITS", "VitalsBand", "VitalsBands",

@@ -4,6 +4,7 @@ import { Activity, CloudSun, Droplets, Thermometer } from "lucide-react";
 import Link from "next/link";
 import { ROLE_HOME, ROLE_LABEL, type Identity } from "@/lib/role";
 import { usePatientTitle } from "@/lib/patient-title";
+import { LogoutButton } from "@/components/auth/logout-button";
 
 /** 假資料：地點·天氣（規格 §3.1 允許假資料；不放任何健康數字） */
 const WEATHER = { place: "台北 · 大安區", sky: "多雲短暫雨", temp: "24°C", humidity: "78%" };
@@ -46,7 +47,7 @@ export function TopBar({ identity }: { identity: Identity | null }) {
           </Link>
         )}
         {identity && (
-          <Link href="/login" className="hidden min-h-11 items-center rounded-lg px-2 text-xs text-ink-2 hover:text-ink sm:inline-flex">切換</Link>
+          <LogoutButton />
         )}
         {!identity && (
           <Link href="/login" className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm text-ink hover:bg-surface">登入</Link>

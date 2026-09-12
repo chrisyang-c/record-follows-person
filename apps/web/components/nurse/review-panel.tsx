@@ -14,8 +14,8 @@ import { Input, Label, Textarea } from "@/components/ui/field";
 import { api, resumeThread, threadState, usePolling, type Snapshot } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { DIRECTION_LABEL, ROUTE_LABEL, typeLabel } from "@/lib/labels";
+import { useAuthSession } from "@/components/auth/session-provider";
 
-const NURSE = "nurse_lin";
 const ROUTES: { key: RouteDecision; hint: string }[] = [
   { key: "contact_contract_hospital", hint: "產通話版 ISBAR" },
   { key: "home_acute_mode_b", hint: "產通話版 ISBAR" },
@@ -33,7 +33,7 @@ export function ReviewPanel({ tid, codeName, onChanged }: { tid: string; codeNam
   const [b, setB] = useState("");
   const [a, setA] = useState("");
   const [r, setR] = useState("");
-  const [nurse, setNurse] = useState(NURSE);
+  const nurse = useAuthSession()?.who ?? "";
   const [returnReason, setReturnReason] = useState("");
   const [famText, setFamText] = useState("");
   const [returning, setReturning] = useState(false);
@@ -87,7 +87,7 @@ export function ReviewPanel({ tid, codeName, onChanged }: { tid: string; codeNam
     setBusy(true);
     setErr(null);
     try {
-      await resumeThread(tid, { nurse_id: nurse, ...payload });
+      await resumeThread(tid, payload);
       await load();
       onChanged?.();
       setReturning(false);
@@ -142,7 +142,7 @@ export function ReviewPanel({ tid, codeName, onChanged }: { tid: string; codeNam
         {!!v.deadline && <span className="text-sm text-ink-2">期限 {fmtDateTime(v.deadline as string)}</span>}
         <span className="ml-auto flex items-center gap-2 text-sm">
           <Label htmlFor="nurse" className="mb-0">護理師</Label>
-          <Input id="nurse" name="nurse_id" value={nurse} onChange={(e) => setNurse(e.target.value)} className="w-36" autoComplete="off" />
+          <Input id="nurse" name="nurse_id" value={nurse} readOnly className="w-36" autoComplete="off" />
         </span>
       </div>
 

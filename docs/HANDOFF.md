@@ -1,6 +1,6 @@
 # HANDOFF — 目前狀態與下一步
 
-更新：2026-09-06。唯一正式工作目錄：`D:\Health AI Bridge\record-follows-person`。
+更新：2026-09-10。唯一正式工作目錄：`D:\Health AI Bridge\record-follows-person`。
 Repo：https://github.com/chrisyang-c/record-follows-person
 
 ## 接手順序
@@ -14,7 +14,9 @@ Repo：https://github.com/chrisyang-c/record-follows-person
 - 原有 Path A/B、Care Circle、病人本人／照護者／護理師／醫師介面、來源與人工確認流程。
 - 個人生理值統計正常帶與 RF13；臨床 baseline 不因統計更新而自動漂移。
 - `512a402` 的 3D 分身、沙盤示意、合成穿戴每日指標、朗讀回答及本人自記已同步保留。
-- `0ee23aa` 的正常帶 UI／API、Care Circle 與 access log purpose（授權必填、登入預設、UI 顯示）及六個整合測試已保留；用途政策尚未完成。
+- `0ee23aa` 的正常帶 UI／API、Care Circle 與 access log purpose（授權必填、登入預設、UI 顯示）及六個整合測試已保留；本輪接續實作用途政策。
+- M1/M2 本機版本：個人 credential、可撤銷 server-side session、CSRF／登入限流、病人／用途／scope HTTP 授權、後端資料投影、每病人代理管理與拒絕稽核。原始 clinical record/provenance 不因回應投影而被改寫。
+- 舊紀錄升級使用個別設定密碼／明確重新授權工具，不重跑 seed、不替舊 grant 自動補用途；步驟與保守功能限制見 [SECURITY](SECURITY.md)。
 - 整併來源與封存去向見 [CONSOLIDATION](CONSOLIDATION.md)；主專案不依賴工作區旁邊的資料夾。
 - Windows `setup/test/check` 預設 API＋web；缺工具或已執行指令失敗不算通過。只有明確 `-ApiOnly` 才跳過前端。
 - codegen `--check` 唯讀；`check` 的 mock eval 使用暫存輸出，不覆寫已保存的真模型評測。
@@ -36,14 +38,9 @@ Repo：https://github.com/chrisyang-c/record-follows-person
 
 ## 下一個工程里程碑
 
-先做 ROADMAP M1，範圍為可信身分、病人隔離及所有讀寫入口的後端授權：
-- 移除未提供身分時退回 nurse／預設角色的通路。
-- 完整覆蓋 records、summary、conversation、threads/resume、授權／撤銷及 debug/trace。
-- API 回應在後端依允許欄位投影，不能只回 allowed_tabs 再由 UI 隱藏。
-- 病人或家屬的角色不等於可以管理任意病人的 Care Circle。
-- 以跨病人、撤銷、過期、偽造角色與未授權寫入回歸測試驗收。
+接續 ROADMAP M3：列出所有直接檔案存取點，定義來源、有效／收到時間、單位、版本、更正與冪等寫入契約；建立途中失敗／重送／還原測試，再接一條合成匯入切片。
 
-然後做 M2 purpose／政策與稽核；M3 存取契約與可回復性；其餘依 ROADMAP。
+追蹤任務的到期派送仍未完成；不要把 Path A 保存 due_at 說成已執行。後續工程要保留護理師設定與確認邊界，不擅自決定臨床追蹤次數。M1/M2 的 OIDC／MFA、組織身分、不可竄改稽核及多程序授權／寫入交易仍是部署前缺口，不因本輪通過而消失。
 護理使用者的合成案例回饋並行，不作所有工程的前置。
 
 ## 已知限制與來源

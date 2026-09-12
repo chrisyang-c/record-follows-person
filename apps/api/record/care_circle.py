@@ -4,8 +4,8 @@ records/{patient_id}/care_circle.json   — members (append; revoke sets revoked
 records/{patient_id}/access_log.jsonl   — who looked at what, when (「誰看過我的紀錄」)
 records/_identities.json                 — demo identities (member_id → role, display name)
 
-Authorization is a lookup here, never a cookie: the web only stores「我是誰」(``me``) and every
-record read passes it as ``X-Who``. A tab outside the member's scopes renders「未獲授權」.
+HTTP identity comes from a server session, never X-Who/X-Role or the display cookie.
+core.policy enforces the grant's scopes and allowed_purposes before accessing a record.
 """
 
 from __future__ import annotations
@@ -13,14 +13,22 @@ from __future__ import annotations
 import hashlib as _hashlib
 import json
 from datetime import UTC, datetime
-from datetime import timedelta as _timedelta
 from typing import Any
+from uuid import uuid4
 
 from record_schema import AccessLogEntry, CareCircleMember, CareRole, Scope
 
 from record.store import get_store
 
 ALL_SCOPES: tuple[Scope, ...] = ("who", "timeline", "docs", "talk")
+PURPOSES = ("self-care", "caregiving", "treatment", "care-management")
+ROLE_PURPOSE = {
+    "patient": "self-care",
+    "family": "caregiving",
+    "caregiver": "caregiving",
+    "nurse": "treatment",
+    "doctor": "treatment",
+}
 DEFAULT_PURPOSE: dict[CareRole, str] = {
     "patient": "本人查看自己的紀錄",
     "family": "家屬照護與陪同",
@@ -93,7 +101,12 @@ def grant(patient_id: str, member: CareCircleMember) -> CareCircleMember:
     """授權必須說明目的（VISION §16 的 WHY）。"""
     if not member.purpose.strip():
         raise ValueError("授權必須說明目的（purpose）")
-    items = [m for m in members(patient_id) if not (m.member_id == member.member_id and m.active())]
+    items = members(patient_id)
+    now = datetime.now(UTC)
+    for old in items:
+        if old.member_id == member.member_id and old.revoked_at is None:
+            old.revoked_at = now
+    member.grant_id = uuid4().hex  # every reissue is a distinct version, including copied grants
     items.append(member)
     _save(patient_id, items)
     return member
@@ -119,13 +132,13 @@ def active_members(patient_id: str, now: datetime | None = None) -> list[CareCir
     return [m for m in members(patient_id) if m.active(now)]
 
 
-def scopes_for(patient_id: str, who: str | None) -> list[Scope]:
+def scopes_for(patient_id: str, who: str | None, purpose: str | None = None) -> list[Scope]:
     """Scopes ``who`` currently holds on this record (empty = 未獲授權)."""
     if not who:
         return []
     out: list[Scope] = []
     for m in active_members(patient_id):
-        if m.member_id == who:
+        if m.member_id == who and (purpose is None or purpose in m.allowed_purposes):
             for s in m.scopes:
                 if s not in out:
                     out.append(s)
@@ -151,6 +164,10 @@ def role_of(patient_id: str, who: str | None) -> CareRole | None:
 
 
 def log_access(patient_id: str, who: str | None, role: CareRole | None, what: str) -> None:
+    from core.policy import actor
+
+    if actor.get() is not None:
+        return  # HTTP policy audits the actual request purpose and outcome centrally.
     if not who:
         return
     store = get_store()
@@ -207,35 +224,5 @@ def check_access_code(patient_id: str, code: str | None) -> bool:
 
 
 def login(who: str, patient_id: str | None, code: str | None, days: int = 1) -> dict[str, Any]:
-    """本人：自己的密碼。其他身份：輸入病人密碼 → 若不在 Care Circle 就以該角色預設範圍加入
-    （有效 ``days`` 天，granted_by＝病人）；已在圈內則只記一筆 access log。
-    回 {who, role, name, patient_id}。"""
-    it = whoami(who)
-    if not it:
-        raise KeyError("unknown identity")
-    role: CareRole = it["role"]
-    pid = who if role == "patient" else (it.get("patient_id") or patient_id)
-    if not pid or not get_store().exists(pid):
-        raise ValueError("要先選一位住民")
-    if not check_access_code(pid, code):
-        raise PermissionError("密碼不對")
-    if not scopes_for(pid, who):
-        now = datetime.now(UTC)
-        grant(
-            pid,
-            CareCircleMember(
-                health_id=get_store().load_profile(pid).health_id,
-                member_id=who,
-                name=it.get("name", who),
-                role=role,
-                scopes=DEFAULT_SCOPES[role],
-                valid_from=now,
-                valid_to=None if role == "patient" else now + _timedelta(days=days),
-                granted_by=pid,
-                purpose=DEFAULT_PURPOSE[role],
-            ),
-        )
-        log_access(pid, who, role, "login:granted")
-    else:
-        log_access(pid, who, role, "login")
-    return {"who": who, "role": role, "name": it.get("name", who), "patient_id": pid}
+    """Legacy entry point retained to fail explicitly rather than silently auto-grant."""
+    raise PermissionError("共用病人密碼登入已停用；請使用個人帳號密碼")

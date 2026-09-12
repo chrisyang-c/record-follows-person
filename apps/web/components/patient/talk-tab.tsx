@@ -54,8 +54,8 @@ function Bubble({ m, role }: { m: ConvMessage; role: Role }) {
  * 送出 → SSE：活動事件（活動列）→ 逐字回覆 → done。紅燈不打斷對話。
  */
 export function TalkTab({ summary, role, onChanged }: { summary: PatientSummary; role: Role; onChanged: () => void }) {
-  const pid = summary.profile.patient_id;
-  const name = summary.profile.code_name;
+  const pid = summary.patient_id;
+  const name = summary.profile?.code_name ?? "這位住民";
   const [messages, setMessages] = useState<ConvMessage[]>(summary.conversation);
   // 通道 4：等照護者驗證的「可能跌倒」事件（唯一允許出現按鈕的地方）
   const [pendingEvent, setPendingEvent] = useState<string | null>(summary.session?.pending_event_id ?? null);
