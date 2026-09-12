@@ -8,7 +8,8 @@
 - `.\scripts\dev.ps1 check` 全套 exit 0：API 190、web 11、Windows tooling 12 個測試通過，Ruff／ESLint／codegen 同步、正式 Next.js build（20 頁產生）與 `tsc --noEmit` 通過。mock eval 為 46 句、多抽 2/46、漏抽 0/46、來源子字串 46/46、誘導句 5/5；不代表真模型品質。
 - 隔離 PostgreSQL 17／mock HTTP 驗證通過：session 與待審核 interrupt 跨 API 重啟保留；護理師核准後再次重啟，approved timeline 與 provenance 仍存在；未登入及照護者核准被拒絕。
 - Headless Edge 正式版驗證通過：偽造舊 cookie 無效、個人密碼登入 P003、取得自身 health ID／14 天 wearable、跨病人 P001 回 403、不洩露其 health ID、登出後 protected page 轉登入且 API 回 401。登入後相對跳轉沒有切換 localhost／127.0.0.1。
-- GitHub CI 與 fresh clone：尚未以本輪提交驗收，提交後另記實際結果。
+- `dc8033d` 全新 clone 到工作區外的暫存目錄，只執行 repo 的 `setup`＋`check`：兩者 exit 0，API 190／web 11／tooling 12、mock eval、codegen、正式建置及型別檢查再次通過，clone 的工作樹仍乾淨。未複製原工作區 `.env`、records 或 node_modules。
+- 同一實作提交的 [GitHub CI run 34692436898](https://github.com/chrisyang-c/record-follows-person/actions/runs/34692436898) 已完成：api、web、windows-tooling 全部 success，包含遠端隔離 PostgreSQL 重啟驗證。後續純文件交付不代表另一次功能修改；最終 HEAD 的 CI 狀態另於交付回報。
 - UI 程式稽核與未驗項目見 [UI_AUDIT](UI_AUDIT.md)。本輪不包含真模型品質、所有角色完整臨床流程或正式安全評估。
 
 ## 歷史：整併驗證 — 2026-09-06
@@ -69,7 +70,7 @@ try {
 
 ## 全新 clone 與遠端 CI
 
-上表是合流前 `512a402` 的實測。提交前又收到夥伴 `0ee23aa`，已保留其正常帶 UI、purpose 與新增測試；交付前以合流版本在工作區外 fresh clone 重跑，結果會補記於此。GitHub CI 分 API、web、Windows tooling；本機通過不代表遠端通過，需核對相同 commit 的 workflow run。
+上表是合流前 `512a402` 的歷史實測。後續已保留夥伴 `0ee23aa` 的正常帶 UI、purpose 與新增測試，再接續本機身分／授權修正；最新合流版本的 fresh clone 與 GitHub CI 結果見本文件最上方 2026-09-12 紀錄。本機通過不代表遠端通過，需核對相同 commit 的 workflow run。
 
 ## 未驗證／尚未完成
 

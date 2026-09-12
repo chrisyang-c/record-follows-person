@@ -1,6 +1,6 @@
 # HANDOFF — 目前狀態與下一步
 
-更新：2026-09-10。唯一正式工作目錄：`D:\Health AI Bridge\record-follows-person`。
+更新：2026-09-12。唯一正式工作目錄：`D:\Health AI Bridge\record-follows-person`。
 Repo：https://github.com/chrisyang-c/record-follows-person
 
 ## 接手順序
@@ -24,6 +24,8 @@ Repo：https://github.com/chrisyang-c/record-follows-person
 - 公開 [OPTIMIZATION_PLAN](OPTIMIZATION_PLAN.md) 補上來源品質、TW Core 切片、規則治理及通知／追蹤驗收；是設計備忘，不代表已實作。
 
 ## 驗證入口
+
+`dc8033d` 已推送並通過本機全套、全新 clone 全套、PostgreSQL／Edge 登入隔離驗收及 GitHub 三個 CI job；詳細數據與限制見 [VALIDATION](VALIDATION.md)。舊帳號不會自動新增密碼或用途授權，使用前依 SECURITY 做明確設定，不使用 seed 當升級。
 
 ```powershell
 .\scripts\dev.ps1 setup
