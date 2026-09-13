@@ -83,7 +83,7 @@ make api                                     # 另一個終端 make web
 > 沒有 pnpm 時完整 setup/check 必須失敗；只有明確使用 `-ApiOnly` 才略過 web，不能稱全綠。
 
 ### 0.5 外部參考
-- 參考專案已封存到工作區外；位置與搬移驗證見 `docs/CONSOLIDATION.md`。不得把封存當執行相依或平行開發目錄。
+- 參考專案封存在正式 repo 外的父目錄 `_archive/`；位置與搬移驗證見 `docs/CONSOLIDATION.md`。不得把封存當執行相依或平行開發目錄，也不得整包加入正式 repo。
 - 只有使用者明確要求參考時才讀相應部分；程式碼需要適用授權或明確許可，否則只借想法並獨立實作。借用資產註明專案、路徑及許可範圍。
 - `my_avatar.glb` 的特定許可已記於 `apps/web/public/models/LICENSE.txt`，不代表整個 `health-ref` 取得 blanket 授權。新來源逐項檢查，不自動延伸。
 
