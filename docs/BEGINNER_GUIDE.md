@@ -79,6 +79,8 @@ AI 整理原話（不做診斷）
 
 完整的逐資料夾說明在 [`docs/DIRECTORY_GUIDE.md`](DIRECTORY_GUIDE.md)。
 
+如果你是從 GitHub 重新 clone，本機可能只有 `record-follows-person/` 這個 repo；`references/` 和 `_archive/` 是這台電腦保留的閱讀材料與歷史備份，不是執行相依，也不需要為了啟動程式特別下載。下面的 `D:/Health AI Bridge/record-follows-person` 請換成你實際 clone 的路徑。
+
 ## 正式 repo 裡的資料夾怎麼看
 
 | 資料夾 | 白話用途 |
