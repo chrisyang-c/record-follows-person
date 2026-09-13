@@ -201,6 +201,7 @@ Schema 單一來源：[packages/schema/record_schema/models.py](packages/schema/
 
 | 文件 | 管什麼 |
 |---|---|
+| [docs/DIRECTORY_GUIDE.md](docs/DIRECTORY_GUIDE.md) | 每個資料夾、文件用途、文件權威順序與接手檢查清單 |
 | [docs/OVERVIEW.md](docs/OVERVIEW.md) | 全貌，給第一次接觸的人 |
 | [CLAUDE.md](CLAUDE.md) | 開發規則、紅線、不可做的事 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | **已採納**的架構：層級、通道、節點、demo 範圍、未決事項 |

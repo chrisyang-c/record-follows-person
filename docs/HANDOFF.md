@@ -31,7 +31,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person
 
 ## 驗證入口
 
-`dc8033d` 已推送並通過本機全套、全新 clone 全套、PostgreSQL／Edge 登入隔離驗收及 GitHub 三個 CI job；詳細數據與限制見 [VALIDATION](VALIDATION.md)。舊帳號不會自動新增密碼或用途授權，使用前依 SECURITY 做明確設定，不使用 seed 當升級。
+目前 HEAD `ef18b1cabb9208a70cf212d88567e5c5838db1b2` 已推送並通過本機全套、全新 clone 全套、PostgreSQL／Edge 登入隔離驗收及 GitHub 三個 CI job；詳細數據與限制見 [VALIDATION](VALIDATION.md)。舊帳號不會自動新增密碼或用途授權，使用前依 SECURITY 做明確設定，不使用 seed 當升級。
 
 ```powershell
 .\scripts\dev.ps1 setup
@@ -53,7 +53,7 @@ Repo：https://github.com/chrisyang-c/record-follows-person
 
 ## 已知限制與來源
 
-目前仍是合成資料原型。登入與 API 權限尚未達到正式部署條件；詳細證據見 PROJECT_REVIEW，
+目前仍是合成資料原型。本機 session／API 授權第一版已完成，但尚未達到正式部署條件；詳細證據見 PROJECT_REVIEW，
 較早的限制與修正歷史在 KNOWN_ISSUES。不要把 API 單元測試全綠當成正式安全或臨床驗證。
 
 環境變數只以 `.env.example` 為範本；本頁不宣稱任何人的 key、資料庫或 Docker 已設定。

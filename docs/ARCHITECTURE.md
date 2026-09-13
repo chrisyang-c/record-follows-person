@@ -4,7 +4,7 @@
 
 本文件是唯一的系統設計稿。維度定義以 `CLAUDE.md §3` 為準；LangGraph 節點名稱以 `docs/langgraph_path_a_incident.mermaid`、`docs/langgraph_path_b_routine_round.mermaid` 為準。
 
-2026-09-06 現況補記：本文保留最初的層級與節點設計，不能把所有示例 state 或 demo 範圍當成最新程式快照。現在已有 `/login`、`/me`、`/twin`、Care Circle、模擬 sensor／wearable 與 3D 分身；型別以 `packages/schema/record_schema/models.py`、節點以 Mermaid 與同步測試為準。當前進度見 HANDOFF，分期見 ROADMAP，授權與儲存的實作缺口見 PROJECT_REVIEW。長照是第一個場景，不是縮減 Personal Health Twin 願景。
+2026-09-13 現況補記：本文保留最初的層級與節點設計，不能把所有示例 state 或 demo 範圍當成最新程式快照。現在已有 `/login`、`/me`、`/twin`、Care Circle、模擬 sensor／wearable、3D 分身，以及 M1/M2 本機 session／HTTP policy、M3–M7 第一版資料切片；型別以 `packages/schema/record_schema/models.py`、節點以 Mermaid 與同步測試為準。當前進度見 HANDOFF，驗證見 VALIDATION，分期見 ROADMAP，正式部署缺口見 SECURITY／PROJECT_REVIEW。長照是第一個場景，不是縮減 Personal Health Twin 願景。
 
 ---
 

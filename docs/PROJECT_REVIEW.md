@@ -16,7 +16,9 @@
 
 以下 9/6 的證據保留為歷史快照，不代表目前程式仍有相同通路。§1–4 已加入本機個人 session、集中式 HTTP 授權、實際資料投影、每病人管理資格、固定用途及拒絕稽核；程式與回歸測試見 `core/security.py`、`core/policy.py`、`test_security.py`、`test_http_policy.py`。限制與不清資料的升級步驟見 [SECURITY](SECURITY.md)，實測狀態見 [VALIDATION](VALIDATION.md)。這不是 P0 全部解除或正式部署核准。
 
-接下來優先 §5 的資料／來源／更正／交易契約，並補 §6 的持久化追蹤派送，再用 §7 的證據測試驗收問答；§8 外部匯入以一條合成資料切片開始。不要因已有登入就直接接真實病人。
+接下來進入 M3–M7 的第二階段：跨程序／Postgres 儲存與備份、真正通知 provider／retry、HealthEvent 泛化、完整 claim-level contradiction evaluation，以及 OIDC／MFA／KMS／staging E2E。不要因已有本機登入、FHIR slice 或 preflight 就直接接真實病人。
+
+> **本節以下的讀法（2026-09-13）**：第 1–4 節保留 9/6 的 P0／P1 問題證據，方便理解修復前後差異；其中「補強」與「驗收」描述的是當時待辦。現在已完成的是本機 M1/M2 第一版，並非正式身分治理。最新已完成切片與剩餘缺口以本頁開頭、[HANDOFF](HANDOFF.md) 和 [VALIDATION](VALIDATION.md) 為準。
 
 ## 9/6 歷史檢查基準
 
@@ -28,7 +30,7 @@
 
 P0：在真實資料或對外部署前必須處理的存取問題。P1：進一步開發平台時的可靠性與核心能力。P2：需要合作方或產品證據再擴充。以下是 review 與待辦，不是安全認證或臨床驗證。
 
-## 1. P0 — 身分未驗證，讀寫與人工審核入口未一致保護
+## 1. P0 歷史基線（本機 M1 第一版已修，正式 IdP 尚未完成）— 身分未驗證，讀寫與人工審核入口未一致保護
 
 證據：`apps/api/main.py::_authorize` 在沒有 `X-Who` 時使用角色預設 scope，沒角色則回 nurse；`/records/{patient_id}`、`/patients/{id}/conversation`、`/threads/{thread_id}/resume` 等路徑沒有一致的認證檢查。web 傳入 `X-Who`／`X-Role` 的方式見 `apps/web/lib/api.ts::roleHeader`。
 
@@ -38,7 +40,7 @@ P0：在真實資料或對外部署前必須處理的存取問題。P1：進一�
 
 驗收：未登入、偽造 header、過期 session、跨病人、無護理角色 resume 全部拒絕；合法流程仍通過。以 HTTP 層測試，不只直接呼叫 Python 函式。
 
-## 2. P0 — scope 需要在後端限制實際回傳內容
+## 2. P0 歷史基線（本機 M1/M2 第一版已修，細粒度政策仍待完成）— scope 需要在後端限制實際回傳內容
 
 證據：`apps/api/main.py::patient_summary` 回傳 `allowed_tabs`，同時組裝 profile、baseline、timeline、documents、conversation；部分來源篩選含 `or True`。`/records/{patient_id}` 也能整份載入。
 
@@ -48,7 +50,7 @@ P0：在真實資料或對外部署前必須處理的存取問題。P1：進一�
 
 驗收：僅有 talk 的成員拿不到 timeline/docs；限制影響回應 JSON 本身。拒絕結果及存取決策也需記錄，且日誌不能洩漏被拒絕的內容。
 
-## 3. P0 — 病人的代理資格不能只看全域角色
+## 3. P0 歷史基線（本機 M2 第一版已修，正式代理治理仍待完成）— 病人的代理資格不能只看全域角色
 
 證據：`apps/api/record/care_circle.py::role_of` 找不到該病人的圈內關係時會退回 identity 的全域角色；`main.py` 的 grant/revoke 以 patient/family 角色判斷。
 
@@ -58,7 +60,7 @@ P0：在真實資料或對外部署前必須處理的存取問題。P1：進一�
 
 驗收：A 的本人或家屬不能授權讀 B；已撤銷／到期的代理不能再建立授權；所有授權變更保留 actor、目標、原因及版本。
 
-## 4. P1 — purpose 要有政策語意與舊資料遷移
+## 4. P1 歷史基線（本機 M2 第一版已修，完整同意生命週期仍待完成）— purpose 要有政策語意與舊資料遷移
 
 證據：`0ee23aa` 已在 CareCircleMember、AccessLogEntry 補 purpose，grant 要求非空、登入依角色預設、UI 顯示用途。`record/care_circle.py::log_access` 取既有 grant 的 purpose 或角色預設；沒有 per-request purpose 的比對／拒絕。沒有 who 時直接返回，並非每次請求都有稽核。這是已完成基礎欄位、尚未完成用途政策，不再列為「缺欄位」。
 
@@ -118,6 +120,6 @@ P0：在真實資料或對外部署前必須處理的存取問題。P1：進一�
 
 ## 建議下一個可交付版本
 
-集中完成第 1–3 項的共同認證／授權與回應投影，保留目前 UI 與臨床圖，補 HTTP 負向矩陣。接著把第 4 項 purpose 和稽核接在可信 actor 上，再做資料契約與第一條外部來源。使用者訪談可並行調整優先序，但不取代上述工程驗收。
+在保留現有 UI 與臨床人工閘門的前提下，優先完成 M3–M7 第二階段：跨程序儲存／備份還原、真正通知與 retry、通用 HealthEvent、claim-level contradiction evaluation，以及 OIDC／MFA／KMS／staging E2E。使用者訪談可並行調整優先序，但不取代上述工程驗收。
 
 來源封包、台灣 FHIR 最小切片、規則治理、家屬溝通、Twin freshness 及效益評測的候選契約，見 [OPTIMIZATION_PLAN](OPTIMIZATION_PLAN.md)。它補充設計細節，不另開一條互相競爭的 roadmap。

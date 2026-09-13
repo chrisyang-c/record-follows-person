@@ -1,6 +1,6 @@
 # ROADMAP — Personal Health Twin 的分期實作
 
-更新：2026-09-06。長期方向以 [VISION](VISION_personal_health_twin.md) 為準；已採納的介面、資料規則與流程見 [ARCHITECTURE](ARCHITECTURE.md)。當前工作只在 [HANDOFF](HANDOFF.md) 維護；實碼 review 見 [PROJECT_REVIEW](PROJECT_REVIEW.md)。
+更新：2026-09-13。長期方向以 [VISION](VISION_personal_health_twin.md) 為準；已採納的介面、資料規則與流程見 [ARCHITECTURE](ARCHITECTURE.md)。當前工作只在 [HANDOFF](HANDOFF.md) 維護；實碼 review 見 [PROJECT_REVIEW](PROJECT_REVIEW.md)。M3–M7 第一版完成狀態與剩餘缺口以 HANDOFF／VALIDATION 為準。
 
 ## 1. 目標與排序
 

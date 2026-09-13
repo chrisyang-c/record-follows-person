@@ -1,6 +1,6 @@
 # 優化設計備忘：可信資料與可驗收的照護協作
 
-日期：2026-09-06。本文件是待採納的設計細節，補充 [PROJECT_REVIEW](PROJECT_REVIEW.md) 與 [ROADMAP](ROADMAP.md)，不取代 ARCHITECTURE 或當前工作佇列 HANDOFF。本文的欄位、路徑與 API 是候選契約，不代表已存在；實作時先記 DECISIONS，再改 schema／codegen／測試。
+日期：2026-09-13。本文件仍是待採納的設計細節，補充 [PROJECT_REVIEW](PROJECT_REVIEW.md) 與 [ROADMAP](ROADMAP.md)，不取代 ARCHITECTURE 或當前工作佇列 HANDOFF。M1/M2 本機版本與 M3–M7 第一版切片已有實作；本文後續欄位、路徑與 API 仍是候選契約，不代表已存在；實作時先記 DECISIONS，再改 schema／codegen／測試。
 
 本文只引用公開標準、研究與 repo 程式。不收錄非公開教材、內部案例數字、圖像或逐字稿。
 

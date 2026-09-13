@@ -1,3 +1,5 @@
+> **歷史 trace snapshot**：以下是 2026-09-04 一次紅燈對話執行的證據，用來說明追問與事件分岔；不代表每次執行的固定輸出或最新安全狀態。最新驗證請看 [VALIDATION](VALIDATION.md)。
+
 ### thread `P003:path_a:2026-09-04:2`（path_a，interrupted）
 
 LLM 呼叫 5 次、deep agent 派工 0 次、subagent 工具呼叫 0 次；dialog `dlg_20260904T184506_51638e`
@@ -12,4 +14,3 @@ LLM 呼叫 5 次、deep agent 派工 0 次、subagent 工具呼叫 0 次；dialo
 |---|---|---|---|---|
 | 18:45:07 | `llm.extract` | 李阿公在走廊滑倒，撞到頭 | {"domains": {}, "flags": ["fall_head_strike"], "incident_flags": ["fall"], "seems_different": false, "vitals_reported": {}, "followups": []} | 977 ms |
 | 18:45:10 | `llm.extract` | 清醒，講話正常 | {"domains": {"cognition": [null, "same", "清醒，講話正常"]}, "flags": [], "incident_flags": [], "seems_different": false, "vitals_reported": {}, "followups": []} | 1040 ms |
-

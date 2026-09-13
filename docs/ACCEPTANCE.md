@@ -1,5 +1,7 @@
 # ACCEPTANCE — §12「Demo 完成定義」驗收
 
+> **文件定位**：這是 2026-09-05 的歷史 demo 驗收紀錄，保留當時的模型、截圖、環境與操作證據。它不是目前的安全契約，也不是最新測試報告。現在的程式 gate、重啟驗證與未涵蓋範圍請看 [VALIDATION](VALIDATION.md)；目前交接狀態請看 [HANDOFF](HANDOFF.md)。本頁後段部分指令會 `reset`／`seed`，只能在可丟棄的 synthetic data 環境執行。
+
 日期：2026-09-05 ・ 執行者：Claude（自主）・ Repo：https://github.com/chrisyang-c/record-follows-person ・ 本輪 PR：#9
 環境：macOS（Darwin 25.3）、Python 3.12（uv）、Node 24（pnpm 10.12.1）、Homebrew postgresql@17（本機無 Docker）。
 模型：`MODEL_PROVIDER=openai`、**`MODEL_PINNED=gpt-5.6-luna`**（2026-09-05 換模型）；`settings.get_model()` 是唯一模型工廠：`ChatOpenAI(model="gpt-5.6-luna", temperature=0, reasoning_effort="none")`，intake、personal agent、trend_analyzer／familiarization_writer／handoff_packager 都經它。intake 的兩個呼叫（`llm.extract`、`llm.next_question`）另用 `get_model(reasoning_effort=INTAKE_REASONING_EFFORT)`（預設 `low`，走 Responses API；`none` 則與其他呼叫相同）。`.env` 已填 `OPENAI_API_KEY`。**沒有模型就停**：追問、RoundPage、對話都不會退回規則版（503／畫面錯誤）。

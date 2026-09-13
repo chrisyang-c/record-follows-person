@@ -1,5 +1,7 @@
 # Extraction eval — openai:gpt-5.6-luna(intake reasoning=low) mode
 
+> **歷史真模型評測**：本檔保存 2026-09-05 的 46 句 zh-TW 合成語句結果，不是每次 `check` 的即時結果，也不是臨床有效性證據。`check` 使用 mock gate 並寫暫存輸出，不覆蓋本檔。
+
 Sentences: 46 (zh-TW 46, id 0, vi 0); gold labels 79, predicted labels 80.
 
 | Metric | Value |

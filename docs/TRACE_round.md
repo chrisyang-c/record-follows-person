@@ -1,3 +1,5 @@
+> **歷史 trace snapshot**：以下是 2026-09-04 一次巡診執行的證據，用來說明 agent／subagent 曾如何工作；不代表每次執行的固定耗時或最新流程狀態。最新驗證請看 [VALIDATION](VALIDATION.md)。
+
 ### thread `ALL:round:2026-09-04:7`（round，interrupted）
 
 LLM 呼叫 0 次、deep agent 派工 6 次、subagent 工具呼叫 16 次
@@ -29,4 +31,3 @@ LLM 呼叫 0 次、deep agent 派工 6 次、subagent 工具呼叫 16 次
 | 19:08:30 | trend_analyzer → `analyze_trends` | {"since": "2026-08-20", "until": "2026-09-04"} | {"lines": ["進食與飲水：與平常相同", "排泄：資料不足", "活動與日常功能：與平常相同", "睡眠：與平常相同", "生命徵象與呼吸症狀：與平常相同"], "cross": null} |
 | 19:08:30 | familiarization_writer → `get_round_context` | {"since": "2026-08-20"} | {"changed_dimensions": [], "orders": 1, "incidents": 0, "observations": 28} |
 | 19:08:58 | familiarization_writer → `submit_round_page` | {"who": "李阿公，83 歲，帕金森氏症、慢性阻塞性肺病、退化性膝關節炎，平時話少但喜歡下象棋，太太每天都會來陪伴。這個月請特別留意膝蓋疼痛是否影響活動。", "chang… | {"page_id": "round_20260904T190858_1dd331", "changes": 0, "questions": 4} |
-

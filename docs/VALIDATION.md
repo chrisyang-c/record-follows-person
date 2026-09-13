@@ -92,5 +92,5 @@ try {
 - 沒有連接醫院、真裝置、真通知或真實病人；沒有臨床有效性／安全性驗證。
 - 不是完整 Path A、巡診、護理追蹤、列印與每個角色的瀏覽器端到端套件。
 - PostgreSQL 可用時的流程持久化通過，不代表資料庫故障降級、多程序併發或正式備份還原已完成。
-- 認證、跨病人授權、用途政策、claim-level evidence 等仍未修；見 [PROJECT_REVIEW](PROJECT_REVIEW.md)。
+- OIDC／MFA／機構身分、KMS、不可竄改稽核與完整 claim-level contradiction engine 仍未完成；本機 session、跨病人／scope／purpose HTTP policy 與 evidence status 的第一版已通過，細節見 [SECURITY](SECURITY.md) 與 [PROJECT_REVIEW](PROJECT_REVIEW.md)。
 - 沒有執行 `init/reset/seed/clean-records` 去清理主專案資料；自訂 DB／RECORDS_ROOT 的破壞性指令限制見 KNOWN_ISSUES #47。
