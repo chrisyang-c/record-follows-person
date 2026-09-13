@@ -171,6 +171,8 @@ def test_anonymous_and_forged_headers_cannot_read_protected_routes(
         "/records/P001/documents",
         "/records/P001/documents/unknown",
         "/records/P001/provenance",
+        "/records/P001/follow-ups",
+        "/records/P001/follow-ups/task_fake/ack",
         "/round-pages/P001",
         "/caregiver-notes/P001",
         "/patients/P001/summary",
@@ -185,6 +187,7 @@ def test_anonymous_and_forged_headers_cannot_read_protected_routes(
         "/nurse/inbox",
         "/ingest/vitals/P001",
         "/ingest/discharge/P001",
+        "/ingest/fhir/P001",
     ]
     for path in paths:
         response = client.get(path, headers=forged_headers)

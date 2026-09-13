@@ -21,12 +21,13 @@ from core.settings import get_settings
 from core.trace import for_ids, tagged
 from graphs import registry, runner, worker
 from graphs.checkpointer import is_postgres
-from ingest import discharge_pdf, doctor_order
+from ingest import discharge_pdf, doctor_order, fhir_bundle
 from ingest import vitals as vitals_ingest
 from ingest.caregiver_speech import ingest as ingest_speech
 from record import care_circle as cc
 from record import conversation as conv
 from record import events as sensor_events
+from record import followups
 from record.store import get_store
 from red_flags.rules import RULES, render_lines
 
@@ -745,6 +746,24 @@ def document(patient_id: str, doc_id: str) -> dict[str, Any]:
 @app.get("/records/{patient_id}/provenance")
 def provenance(patient_id: str) -> list[dict[str, Any]]:
     return [line.model_dump(mode="json") for line in get_store().read_provenance(patient_id)]
+
+
+@app.get("/records/{patient_id}/follow-ups")
+def follow_up_tasks(patient_id: str, status: str | None = None) -> list[dict[str, Any]]:
+    return [task.model_dump(mode="json") for task in followups.list_tasks(patient_id, status)]
+
+
+class FollowUpAnswerIn(BaseModel):
+    answer: str | None = Field(default=None, max_length=2000)
+
+
+@app.post("/records/{patient_id}/follow-ups/{task_id}/ack")
+def acknowledge_follow_up(patient_id: str, task_id: str, body: FollowUpAnswerIn) -> dict[str, Any]:
+    try:
+        task = followups.acknowledge(task_id, patient_id=patient_id, answer=body.answer)
+    except KeyError as exc:
+        raise HTTPException(404, "unknown follow-up task") from exc
+    return task.model_dump(mode="json")
 
 
 @app.get("/round-pages/{patient_id}")
@@ -1689,3 +1708,14 @@ def discharge(patient_id: str) -> dict[str, Any]:
         ),
         "mock": True,
     }
+
+
+@app.post("/ingest/fhir/{patient_id}")
+def fhir_import(patient_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Import a synthetic FHIR Bundle; normalized data remains pending nurse review."""
+    return fhir_bundle.import_bundle(patient_id, body).model_dump(mode="json")
+
+
+@app.get("/ingest/fhir/{patient_id}")
+def fhir_export(patient_id: str, import_id: str | None = None) -> dict[str, Any]:
+    return fhir_bundle.export_bundle(patient_id, import_id)

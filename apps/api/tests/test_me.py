@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from agents.personal import ARTIFACTS, PENDING, ask_record, make_ask_tools, retrieve_lines
+from agents.personal import (
+    ARTIFACTS,
+    PENDING,
+    ask_record,
+    make_ask_tools,
+    retrieve_evidence,
+    retrieve_lines,
+)
 from main import me_ask, me_home, me_timeline
 
 
@@ -57,7 +64,16 @@ def test_submit_answer_only_accepts_retrieved_sources(records_root):
 def test_ask_says_not_found_when_record_has_nothing(records_root):
     answer, meta = ask_record("P001", "我有沒有去過火星")
     assert answer["found"] is False and answer["fallback"] == "紀錄裡沒有這件事。"
+    assert answer["evidence_status"] == "not_found"
     assert meta["scripted"] is True
+
+
+def test_evidence_retrieval_expands_synonyms_and_time_window(records_root):
+    evidence = retrieve_evidence("P001", "最近 30 天血壓")
+    assert evidence["status"] == "found"
+    assert evidence["window"]["since"] is not None
+    all_hits = retrieve_lines("P001", "血壓")
+    assert all_hits
 
 
 def test_me_ask_endpoint_cites_sources(records_root):

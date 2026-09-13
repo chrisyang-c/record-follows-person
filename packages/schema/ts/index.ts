@@ -655,6 +655,23 @@ export interface PersonRecord {
   provenance: ProvenanceLine[];
 }
 
+/** Durable, idempotent work item derived from an approved follow-up. */
+export interface FollowUpTask {
+  id: string;
+  patient_id: string;
+  source_thread: string;
+  question: string;
+  due_at: string;
+  set_by: string;
+  status: "pending" | "queued" | "acknowledged" | "closed" | "failed";
+  attempts: number;
+  idempotency_key: string;
+  queued_at: string | null;
+  last_error: string | null;
+  answer: string | null;
+  answered_at: string | null;
+}
+
 export const VERIFY_LABELS: Record<VerifyChoice, string> = {"with_patient": "我在他身邊", "fine": "他沒事", "maybe_injured": "他可能受傷", "unreachable": "聯絡不上"};
 
 export const DIMENSIONS = ["intake", "elimination", "function", "cognition", "sleep", "skin", "pain", "vitals"] as const;

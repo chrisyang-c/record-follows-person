@@ -13,12 +13,16 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from core.settings import get_settings
 from graphs import registry, runner
+from record.followups import dispatch_due
 
 log = logging.getLogger(__name__)
 
 
 def scan_once(now: datetime | None = None) -> list[str]:
     now = now or datetime.now(UTC)
+    due = dispatch_due(now)
+    if due:
+        log.info("queued %d follow-up task(s)", len(due))
     escalated: list[str] = []
     for row in registry.overdue(now):
         tid = row["thread_id"]

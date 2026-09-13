@@ -17,11 +17,11 @@
 | M0 整併與可靠驗收 | 唯一 repo；scripts/dev.ps1；唯讀 codegen；來源封存；文件收斂 | 缺工具及執行失敗不誤報全綠；dirty 型別檔不被清除；API/web 檢查與實際啟動證據分開記錄；只有一個正式開發專案，另存的閱讀材料不是執行相依 |
 | M1 可信身分與病人隔離 | API 統一認證入口、web session、每個讀寫端點的病人與動作授權 | 未登入／偽造角色拒絕；病人 A 不得讀寫 B；未授權者不得 resume、修改 baseline、授權他人或讀 trace；撤銷及過期立即生效 |
 | M2 Consent 與用途稽核 | 共用 schema、care_circle、授權決策及 API 回應投影 | 區分 allowed purposes 與本次 purpose；後端驗證用途、資源、時間及代理資格；允許／拒絕都有稽核；舊資料不自動獲得更大權限 |
-| M3 紀錄與儲存契約 | RecordStore 與直接操作檔案的 events/conversation/care_circle/agent backend | 版本／更正／冪等／併發契約；來源與紀錄寫入一致；失敗可恢復；備份還原可驗證；再按相同契約接 Postgres adapter |
-| M4 第一條外部資料接入 | ingest adapters、來源識別、共用模型及原件索引 | 一種合成 FHIR Bundle 能驗證、正規化、匯入及匯出；重複匯入不重複建紀錄；不確定身分待確認；來源可回溯 |
-| M5 有證據的個人查詢 | retrieval、structured queries、source anchors、逐句回答驗證 | 病人／權限預過濾；時間、同義詞、否定、矛盾與缺資料案例；每項事實主張對應支持它的來源，找不到時表明未找到相關證據 |
-| M6 通用事件與照護任務 | HealthEvent、workflow、通知 outbox、追蹤工作佇列 | 跌倒以外再走通一種合成事件；重複訊號可去重；狀態轉換有角色限制；誤報／取消／重開有分支；通知與到期追蹤可重試並留痕 |
-| M7 正式部署與營運 | migrations、環境隔離、secrets、監控、備份還原、資產清單 | staging 完成端到端驗收；重啟、連線故障與恢復有證據；正式環境禁止 demo 身分與靜默記憶體降級 |
+| M3 紀錄與儲存契約 | RecordStore timeline journal、原子替換、fsync、程序內鎖、恢復測試與 manifest backup | **第一版完成**：來源與紀錄途中失敗可恢復、重送不重複、同程序併發有契約、備份可驗證／隔離還原；仍需跨程序／Postgres adapter、加密異地 DR |
+| M4 第一條外部資料接入 | `ingest/fhir_bundle.py` 合成 FHIR Bundle adapter、來源識別及原件索引 | **第一版完成**：Patient + Observation 驗證／正規化／去重／pending review／可解析匯出；不確定身份不自動合併 |
+| M5 有證據的個人查詢 | retrieval 時間窗、中文同義詞、evidence status、逐句 source refs | **第一版完成**：問答標明 found/not_found/outside window 並帶查詢窗；仍需 embeddings、structured graph、否定／矛盾引擎 |
+| M6 通用事件與照護任務 | FollowUp task、idempotency、到期 worker、JSON outbox、nurse read API | **第一版完成**：Path A 追蹤會持久化並由 worker queue，保留 attempts／ack；仍需 HealthEvent 泛化、真通知 provider／retry |
+| M7 正式部署與營運 | production preflight、fail-closed Postgres fallback 設定與環境旗標 | **第一版完成**：可用 `scripts/preflight_security.py --production` 阻擋 demo／不安全設定；仍需 OIDC/MFA、KMS、DR、監控與 staging E2E |
 
 `0ee23aa` 已完成 purpose 的 schema、grant 必填與 UI 顯示；2026-09-10 已接續 M1/M2 的本機 session、用途政策、可信 actor、拒絕稽核及明確遷移工具。當前狀態見 HANDOFF、安全剩餘缺口見 SECURITY；本表保留里程碑驗收標準，不把本機版本等同正式部署完成。
 
@@ -73,4 +73,4 @@ M6 不把所有事件強迫走同一條直線。紅燈可以先通知；誤報�
 
 ARCHITECTURE §11 的摘要確認、baseline、趨勢圖沿用已存在決策；追蹤次數與由護理師設定時間的行為列入 M6，先檢查目前節點是否真的排入可執行佇列。
 
-候選契約及公開標準查證見 [OPTIMIZATION_PLAN](OPTIMIZATION_PLAN.md)：M4 優先評估固定版本的 TW Core 合成量測 Bundle；M6 已確認 FollowUp 目前只保存時間，尚無對應到期派送 worker。該備忘不改變此處排序或現有臨床門檻。
+候選契約及公開標準查證見 [OPTIMIZATION_PLAN](OPTIMIZATION_PLAN.md)：M4 已先完成不依賴外部服務的合成 FHIR Bundle slice，下一步才評估固定版本的 TW Core 合成量測 Bundle；M6 已有 FollowUp 到期派送 worker 與 outbox，仍待真通知 provider。該備忘不改變此處排序或現有臨床門檻。

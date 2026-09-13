@@ -614,6 +614,24 @@ class FollowUp(BaseModel):
     set_by: str
 
 
+class FollowUpTask(BaseModel):
+    """Durable, idempotent work item derived from an approved follow-up."""
+
+    id: str
+    patient_id: str
+    source_thread: str
+    question: str
+    due_at: datetime
+    set_by: str
+    status: Literal["pending", "queued", "acknowledged", "closed", "failed"] = "pending"
+    attempts: int = 0
+    idempotency_key: str
+    queued_at: datetime | None = None
+    last_error: str | None = None
+    answer: str | None = None
+    answered_at: datetime | None = None
+
+
 class DocBase(BaseModel):
     id: str
     patient_id: str
@@ -751,4 +769,5 @@ __all__ = [
     "CaregiverSection", "NurseSection", "Notification", "FollowUp", "DocBase", "IncidentFile",
     "HandoffPage", "VisitPage", "TrendPoint", "TrendSeries", "TrendLine", "TrendReport",
     "OrderFollowUpLine", "RoundPage", "CaregiverNotes", "Document", "PersonRecord",
+    "FollowUpTask",
 ]

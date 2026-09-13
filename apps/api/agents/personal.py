@@ -13,6 +13,7 @@ calls the same tools in order and the trace says `scripted: true`.
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 import uuid
@@ -257,6 +258,20 @@ _STOP = set(
     "這那些什麼怎麼哪裡誰請問一下"
 )
 
+_QUERY_SYNONYMS = {
+    "血壓": "血壓 sbp dbp",
+    "血氧": "血氧 spo2",
+    "心跳": "心跳 hr",
+    "脈搏": "脈搏 hr",
+    "體溫": "體溫 temp",
+    "跌倒": "跌倒 fall",
+    "摔倒": "跌倒 fall",
+    "吃飯": "進食 intake",
+    "喝水": "飲水 intake",
+    "住院": "住院 encounter hospitalization",
+    "手術": "手術 surgery procedure",
+}
+
 
 def _bigrams(text: str) -> set[str]:
     t = "".join(ch for ch in text if ch.isalnum())
@@ -265,18 +280,49 @@ def _bigrams(text: str) -> set[str]:
 
 def _query_grams(query: str) -> set[str]:
     """Bigrams of the content words only: 「我以前有做過心臟手術嗎」→ {心臟, 臟手, 手術}."""
+    for source, replacement in _QUERY_SYNONYMS.items():
+        query = query.replace(source, replacement)
     t = "".join(ch for ch in query if ch.isalnum() and ch not in _STOP)
     return {t[i : i + 2] for i in range(len(t) - 1)}
 
 
-def retrieve_lines(patient_id: str, query: str, limit: int = 8) -> list[dict[str, Any]]:
+def _query_window(query: str, today: date | None = None) -> tuple[date | None, date | None]:
+    today = today or datetime.now(UTC).date()
+    match = re.search(r"(?:近|最近)\s*(\d{1,3})\s*[天日]", query)
+    if match:
+        return today - timedelta(days=int(match.group(1)) - 1), today
+    if "本週" in query or "這週" in query:
+        return today - timedelta(days=today.weekday()), today
+    if "上週" in query:
+        start = today - timedelta(days=today.weekday() + 7)
+        return start, start + timedelta(days=6)
+    if "本月" in query or "這個月" in query:
+        return today.replace(day=1), today
+    return None, None
+
+
+def retrieve_lines(
+    patient_id: str,
+    query: str,
+    limit: int = 8,
+    *,
+    since: date | None = None,
+    until: date | None = None,
+) -> list[dict[str, Any]]:
     """Keyword retrieval over timeline + documents; each hit is a record line with its id."""
     store = get_store()
+    inferred_since, inferred_until = _query_window(query)
+    since = since or inferred_since
+    until = until or inferred_until
     q = _query_grams(query)
     if not q:
         return []
     hits: list[tuple[int, dict[str, Any]]] = []
     for e in store.load_timeline(patient_id):
+        if since and e.ts.date() < since:
+            continue
+        if until and e.ts.date() > until:
+            continue
         text = _line_text(e)
         score = len(q & _bigrams(text + getattr(e, "title", "")))
         if score:
@@ -292,6 +338,10 @@ def retrieve_lines(patient_id: str, query: str, limit: int = 8) -> list[dict[str
                 )
             )
     for d in store.load_documents(patient_id):
+        if since and d.generated_at.date() < since:
+            continue
+        if until and d.generated_at.date() > until:
+            continue
         for i, text in enumerate(_doc_lines(d)):
             score = len(q & _bigrams(text))
             if score:
@@ -310,12 +360,41 @@ def retrieve_lines(patient_id: str, query: str, limit: int = 8) -> list[dict[str
     return [h for _s, h in hits[:limit]]
 
 
+def retrieve_evidence(patient_id: str, query: str, limit: int = 8) -> dict[str, Any]:
+    """Return hits with an explicit evidence state, never turning absence into a clinical claim."""
+    since, until = _query_window(query)
+    hits = retrieve_lines(patient_id, query, limit, since=since, until=until)
+    status = "found" if hits else "not_found"
+    if (
+        not hits
+        and (since or until)
+        and retrieve_lines(patient_id, query, limit, since=None, until=None)
+    ):
+        status = "outside_requested_window"
+    if hits:
+        markers = ("沒有", "未曾", "否認", "停用")
+        negated = any(any(marker in hit["text"] for marker in markers) for hit in hits)
+        affirmed = any(not any(marker in hit["text"] for marker in markers) for hit in hits)
+        if negated and affirmed:
+            status = "conflicting"
+    return {
+        "status": status,
+        "hits": hits,
+        "window": {
+            "since": since.isoformat() if since else None,
+            "until": until.isoformat() if until else None,
+        },
+    }
+
+
 def make_ask_tools(patient_id: str) -> list[Any]:
     @tool
     def retrieve(query: str) -> dict:
         """Search this person's own record (timeline + documents) for lines matching the query.
         Returns {hits:[{id, date, kind, text}]}; only these ids may be cited by submit_answer."""
-        hits = retrieve_lines(patient_id, query)
+        evidence = retrieve_evidence(patient_id, query)
+        hits = evidence["hits"]
+        PENDING[(patient_id, "ask_evidence")] = evidence
         seen = PENDING.setdefault((patient_id, "ask_hits"), {})
         for h in hits:
             seen[h["id"]] = h
@@ -327,7 +406,7 @@ def make_ask_tools(patient_id: str) -> list[Any]:
             args={"query": query},
             output={"hits": [h["id"] for h in hits]},
         )
-        return {"hits": hits}
+        return evidence
 
     @tool
     def submit_answer(sentences: list[dict[str, Any]], found: bool = True) -> dict:
@@ -336,6 +415,7 @@ def make_ask_tools(patient_id: str) -> list[Any]:
         No advice, no interpretation of values. Returns {ok} or {error}."""
         seen = PENDING.get((patient_id, "ask_hits"), {})
         out_sentences = []
+        evidence = PENDING.get((patient_id, "ask_evidence"), {"status": "not_found"})
         for sdict in sentences or []:
             text = str(sdict.get("text", "")).strip()
             ids = [i for i in (sdict.get("source_ids") or []) if i in seen]
@@ -351,6 +431,12 @@ def make_ask_tools(patient_id: str) -> list[Any]:
                     "error": f"「{text[:30]}」含建議或解讀"
                     f"（{[w for w in ADVICE_WORDS if w in text]}）；只複述紀錄裡有的事"
                 }
+            source_text = " ".join(seen[i]["text"] for i in ids)
+            if not (_bigrams(text) & _bigrams(source_text)):
+                return {
+                    "error": f"「{text[:30]}」與引用來源沒有可核對的原文片段；"
+                    "請改寫為來源支持的事實"
+                }
             from core.llm import scrub_clinical_language
 
             out_sentences.append(
@@ -358,10 +444,16 @@ def make_ask_tools(patient_id: str) -> list[Any]:
             )
         if not out_sentences:
             found = False
+        fallback = {
+            "outside_requested_window": "指定期間找不到相關紀錄。",
+            "conflicting": "找到的紀錄彼此不一致，請交由照護團隊確認。",
+        }.get(evidence.get("status"), NOT_FOUND)
         out = {
             "found": found,
             "sentences": out_sentences if found else [],
-            "fallback": None if found else NOT_FOUND,
+            "fallback": None if found else fallback,
+            "evidence_status": evidence.get("status", "not_found"),
+            "query_window": evidence.get("window"),
         }
         ARTIFACTS[(patient_id, "submit_answer")] = out
         trace(

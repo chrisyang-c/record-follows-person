@@ -99,6 +99,11 @@ docker compose up -d postgres     # 或自行啟動 PostgreSQL 17，確認 .env 
 .\scripts\dev.ps1 api              # 另開一個終端跑 .\scripts\dev.ps1 web
 .\scripts\dev.ps1 check            # 完整 API + web gate；不使用真模型、不發 LINE
 .\scripts\dev.ps1 help             # 看所有指令；status 看目前環境與資料狀態
+# 部署前（只在明確 production 環境執行）
+uv run --directory apps/api python ../../scripts/preflight_security.py --production
+# records 備份先驗證，再還原到隔離目錄
+uv run --directory apps/api python ../../scripts/backup_records.py create --root ../../records --output records.zip
+uv run --directory apps/api python ../../scripts/backup_records.py verify --archive records.zip
 ```
 
 > `check` 不重設既有紀錄；API 正常使用會寫資料，`migrate` 會建立資料表，`codegen` 會更新產生檔。
@@ -182,8 +187,8 @@ Schema 單一來源：[packages/schema/record_schema/models.py](packages/schema/
 | Incident Compiler → 兩區塊事故檔 + 後送頁 | 出院摘要 PDF（`ingest/discharge_pdf.py` mock）|
 | Familiarization Writer subagent 寫 RoundPage（①②③④ 由模型依 timeline／baseline 生成，程式驗證規則，可列印） | 生命徵象量測（`ingest/vitals.py` 寫死）|
 | Order Ingest → 照護者三件事（中文）＋ baseline 提案＋確認 | Roster 排序（3 位住民）|
-| Health ID + Care Circle（本人授權／撤銷、access log）；本人 App（終身時間軸、問我的紀錄只引用既有行）| Health Graph：第二階段（不做）|
-| 通道 4 模擬跌倒訊號 → 「可能跌倒」→ 照護者四鍵 → 事件資訊包 | 真實穿戴裝置、醫院 EHR／FHIR 對接：第二階段（不做）|
+| Health ID + Care Circle（本人授權／撤銷、access log）；本人 App（終身時間軸、問我的紀錄只引用既有行）；FollowUp task/outbox 與 manifest backup | Health Graph：第二階段（尚未做）|
+| 通道 4 模擬跌倒訊號 → 「可能跌倒」→ 照護者四鍵 → 事件資訊包；合成 FHIR Patient + Observation Bundle adapter（pending review、可匯出） | 真實穿戴裝置、醫院 EHR／完整 FHIR server 對接：仍是第二階段|
 | 01 活體數位孿生：向量解剖圖（EMBL-EBI Expression Atlas anatomogram，Apache-2.0，`apps/web/public/anatomy/`）＋八維度熱點；3D 分身（模型來自團隊 health-ref，`apps/web/public/models/LICENSE.txt`）、沙盤模擬、穿戴每日指標（模擬） | 真實穿戴資料、分身動畫：第二階段 |
 
 其他限制見 [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)。本機沒有 `OPENAI_API_KEY` 時所有流程以 mock（確定性抽取）跑完；`deepagents / langgraph / langchain` 鎖精確版本（alpha）。**只用合成資料**：`data/seed/` 的姓名為代號，repo 內沒有任何真實個資。

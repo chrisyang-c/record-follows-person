@@ -33,6 +33,11 @@ def get_checkpointer() -> BaseCheckpointSaver:
             log.info("checkpointer: PostgresSaver")
             return saver
         except Exception as e:  # noqa: BLE001
+            if not get_settings().ALLOW_MEMORY_CHECKPOINT_FALLBACK:
+                raise RuntimeError(
+                    "DATABASE_URL is configured but PostgresSaver is unavailable; "
+                    "set ALLOW_MEMORY_CHECKPOINT_FALLBACK=true only for a local demo"
+                ) from e
             log.warning("PostgresSaver unavailable (%s); falling back to InMemorySaver", e)
     log.info("checkpointer: InMemorySaver")
     return InMemorySaver()

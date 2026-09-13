@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
 
     DATABASE_URL: str = ""
+    # A configured database is a deployment requirement.  Set this only for local demos;
+    # production must fail closed instead of silently losing graph state in memory.
+    ALLOW_MEMORY_CHECKPOINT_FALLBACK: bool = False
     LINE_CHANNEL_TOKEN: str = ""
     LINE_FAMILY_TO: str = ""
     RECORDS_ROOT: str = "../../records"
@@ -52,6 +55,7 @@ class Settings(BaseSettings):
     AUTH_COOKIE_SECURE: bool = False  # local HTTP only; HTTPS deployments must set True
     AUTH_ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     ENABLE_DEMO_SIMULATION: bool = False
+    ENVIRONMENT: Literal["development", "test", "staging", "production"] = "development"
 
     @property
     def records_root(self) -> Path:

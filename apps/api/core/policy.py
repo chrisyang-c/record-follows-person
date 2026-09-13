@@ -297,7 +297,7 @@ def route_policy(request: Request, body: Any) -> list[str]:
                 return [pid]
         deny("record_not_authorized")
     match = re.fullmatch(
-        r"/(patients|records|me|twin|round-pages|caregiver-notes|trends|ingest/vitals|ingest/discharge)/([^/]+)(.*)",
+        r"/(patients|records|me|twin|round-pages|caregiver-notes|trends|ingest/vitals|ingest/discharge|ingest/fhir)/([^/]+)(.*)",
         path,
     )
     if not match:
@@ -339,6 +339,10 @@ def route_policy(request: Request, body: Any) -> list[str]:
             scopes = {"timeline"}
         elif suffix == "/documents" or re.fullmatch(r"/documents/[A-Za-z0-9_-]+", suffix):
             scopes = {"docs"}
+        elif suffix == "/follow-ups":
+            scopes, roles = {"timeline"}, {"nurse"}
+        elif re.fullmatch(r"/follow-ups/[A-Za-z0-9_-]+/ack", suffix) and method == "POST":
+            scopes, roles = {"timeline"}, {"nurse"}
         else:
             deny("route_not_allowed")
     elif group == "me":
@@ -355,6 +359,9 @@ def route_policy(request: Request, body: Any) -> list[str]:
                 roles = {"nurse", "doctor", "patient"}
         elif group in {"trends", "ingest/vitals", "ingest/discharge"}:
             scopes = {"who", "docs" if group == "ingest/discharge" else "timeline"}
+            roles = {"nurse"}
+        elif group == "ingest/fhir" and method in {"GET", "POST"} and not suffix:
+            scopes = {"who"}
             roles = {"nurse"}
         elif group != "twin":
             deny("route_not_allowed")

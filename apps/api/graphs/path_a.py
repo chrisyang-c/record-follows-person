@@ -47,6 +47,7 @@ from graphs.common import (
     red_flag_hit,
     red_flag_rules,
 )
+from record import followups
 from record.store import get_store
 from red_flags.rules import RedFlagInput, evaluate
 
@@ -625,8 +626,15 @@ def schedule_follow_up(state: PathAState) -> dict[str, Any]:
     if doc is not None and doc.doc_type == "incident_file":
         doc.follow_up = fu
         store.update_document(pid, doc)
+    task = followups.schedule(
+        pid,
+        fu,
+        source_thread=state.get("thread_id")
+        or f"path-a:{state.get('documents', {}).get('incident_file', 'unknown')}",
+    )
     return {
         "follow_up": fu.model_dump(mode="json"),
+        "follow_up_task": task.model_dump(mode="json"),
         "status": "done",
         "deadline": None,
         "updated_at": now_iso(),

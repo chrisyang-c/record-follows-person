@@ -20,6 +20,30 @@
 
 `.env.example` 的 `AUTH_COOKIE_SECURE=false` 只供本機 HTTP。部署 HTTPS 時必須開啟 Secure cookie、限制 `AUTH_ALLOWED_ORIGINS`，並先完成下列尚缺的部署安全工作。不要把 demo 的公開密碼用於任何真資料。
 
+### 部署前自動檢查
+
+在 staging／production 的 API 虛擬環境執行：
+
+```powershell
+Set-Location 'D:\Health AI Bridge\record-follows-person\apps\api'
+uv run python ../../scripts/preflight_security.py --production
+```
+
+這個檢查會 fail closed：要求 `ENVIRONMENT=production`、真實模型與 API key、`DATABASE_URL`、
+`ALLOW_MEMORY_CHECKPOINT_FALLBACK=false`、Secure cookie、明確 HTTPS origins，並確認 demo 模擬器關閉。
+它是部署門檻，不是 OIDC／MFA 或滲透測試的替代品。若只是本機 mock，使用不帶 `--production` 的模式
+或直接執行既有 `scripts/dev.ps1 check`。
+
+紀錄檔的最低限度備份／還原工具會產生 SHA-256 manifest；先在隔離目錄驗證，再由操作者決定還原：
+
+```powershell
+uv run python ../../scripts/backup_records.py create --root ../../records --output backup.zip
+uv run python ../../scripts/backup_records.py verify --archive backup.zip
+uv run python ../../scripts/backup_records.py restore --archive backup.zip --target ../../records-restore
+```
+
+`restore` 預設拒絕非空目標，避免誤覆蓋；這是可重現的檔案備份工具，不取代加密異地備份、保留政策或災難復原演練。
+
 ## 既有資料升級：不需要重跑 seed
 
 舊的病人共用密碼不再可登入，也不會因登入自動入圈。舊 grant 若沒有 `allowed_purposes` 會拒絕存取，**不自動推定用途或管理權**。
@@ -44,7 +68,8 @@ uv run python ../../scripts/manage_consent.py --patient P001 --member nurse_lin 
 
 - 身分 registry 仍由本機可信操作者維護；沒有機構資格驗證、OIDC／MFA、帳號復原、完整管理員治理或網路層濫用防護。
 - SQLite 與 JSON 檔依賴檔案權限，未加密、未接 KMS。audit 是 append 介面，不是不可竄改 ledger；整體備份／還原與保留政策仍待完成。
-- 病歷／consent JSON 仍缺跨檔案與多程序交易。授權撤銷會影響下一次請求，但不是對正在執行的長任務提供原子中止保證；SQLite session 不解決臨床寫入一致性。
+- timeline 的 journal／fsync／程序內鎖已能在單程序途中失敗後恢復；跨檔案與多程序交易仍待完成。`backup_records.py` 已提供 manifest 驗證及隔離目錄還原，但加密異地備份、保留政策與 DR 演練仍待完成。授權撤銷會影響下一次請求，但不是對正在執行的長任務提供原子中止保證；SQLite session 不解決臨床寫入一致性。
+- Path A 的 FollowUp 已建立持久化 task 與 outbox，worker 會將到期項目去重後排入 `queued`；目前 delivery 明確標為 `displayed_only`，尚未接真正 LINE／push／SMS 或分散式 retry。
 - 回應的結構化欄位移除不代表能證明任意自由文字完全不含敏感資訊。尚需逐端點安全 DTO、文字輸出評測、提示注入與完整端到端角色測試。
 - 目前限流是本機帳號／peer 層，不是完整分散式流量防護；反向代理信任、請求大小／工作量限制與部署 hardening 仍需設計。
 - Purpose 驗證代表宣告用途符合授權，不是驗證人的真正使用意圖，也不代表符合所有法規。緊急存取、法定代理、組織政策與完整同意生命週期尚未建立。

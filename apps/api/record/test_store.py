@@ -140,6 +140,43 @@ def test_write_timeline_appends_and_is_immutable(store):
     assert ("baseline", "intake") in refs
 
 
+def test_timeline_transaction_recovers_after_provenance_failure(store, monkeypatch):
+    original = store._append_provenance_record
+    calls = 0
+
+    def fail_once(patient_id, record):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("simulated ledger interruption")
+        return original(patient_id, record)
+
+    monkeypatch.setattr(store, "_append_provenance_record", fail_once)
+    with pytest.raises(OSError):
+        store.write_timeline("P001", observation(oid="recover_me"))
+    assert store.load_timeline("P001")[0].id == "recover_me"
+    refs = {(line.ref, line.field) for line in store.read_provenance("P001")}
+    assert ("recover_me", "") in refs and ("recover_me", "intake") in refs
+    assert not list((store.dir("P001") / ".transactions").glob("*.json"))
+
+
+def test_timeline_transaction_is_idempotent_under_threads(store):
+    from concurrent.futures import ThreadPoolExecutor
+
+    entry = observation(oid="same_concurrent_entry")
+
+    def write():
+        try:
+            return store.write_timeline("P001", entry)
+        except ImmutableTimelineError:
+            return "duplicate"
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda _x: write(), range(4)))
+    assert results.count("same_concurrent_entry") == 1
+    assert len(store.load_timeline("P001")) == 1
+
+
 def test_provenance_is_frozen():
     p = prov()
     with pytest.raises(ValidationError):

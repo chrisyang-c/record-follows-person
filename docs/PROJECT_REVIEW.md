@@ -2,13 +2,13 @@
 
 ## 2026-09-13 複核：接下來最值得補的內容
 
-本次只複核並整理目錄，沒有實作下列功能，也不新增另一套 roadmap。`9177341` 的身分／隔離交付已完成；正式部署缺口仍見 SECURITY。
+本次複核後已完成下列第一版切片：`RecordStore` timeline 交易 journal／恢復與程序內併發鎖、可持久化 follow-up task/outbox、帶時間窗與同義詞的 evidence retrieval、合成 FHIR Bundle 匯入／匯出，以及 production preflight。這些是可驗收的骨架，不代表已完成機構 IdP、真正通知或完整 FHIR server；正式部署缺口仍見 SECURITY。
 
-1. **先做 M3 的寫入一致性與可還原備份。** `record/store.py:167` 仍先寫 timeline，再逐筆寫 provenance；應以途中失敗、重送與同時寫入測試建立契約，避免只有紀錄沒有完整來源。`graphs/checkpointer.py:29` 仍可在 DB 失敗時降級到記憶體，應區分明確允許的 demo 模式與必須持久化的模式。
-2. **把已保存的追蹤變成真正可執行任務。** `graphs/path_a.py:611` 保存 due_at 後結束，`graphs/worker.py:20` 只掃逾時中斷；需要持久化任務、到期派送、失敗重試／去重、回覆與關閉。沿用護理師設定，不擅自新增臨床追蹤次數政策。
-3. **先提升查詢的證據與時間正確性。** `agents/personal.py:272` 仍以 bigram 交集排序，缺少明確時間範圍／衝突處理；補「未找到不等於不存在」、過期／否定／矛盾案例，逐句驗證來源真的支持回答，再評估混合檢索。
-4. **接一條可重播的合成外部資料切片。** 依 ROADMAP M4，選一種資料完成驗證、來源／時間／單位保存、去重、人工身份確認及匯出，不一次增加多套資料庫或所有裝置。
-5. **接真資料前另做部署安全驗收。** 個人本機 session 不等於機構身分或完整權限治理；OIDC／MFA、檔案與 secrets 保護、備份還原、授權併發、完整角色端到端與輸出洩漏測試仍待完成。
+1. **M3 第一版已完成，下一步是跨程序備份／還原。** `record/store.py` 以 journal、原子替換、fsync 與程序內鎖保護 timeline＋provenance；仍不是多程序資料庫交易，也尚未提供排程備份。
+2. **M6 第一版已完成，下一步是真通知與通用 HealthEvent。** `record/followups.py` 會去重、到期 queue、寫 outbox、保留 attempts，並提供 nurse-only follow-up read API；目前 delivery 是 `displayed_only`，尚未接 LINE／push retry。
+3. **M5 已補時間窗、常見中文同義詞與 evidence status。** Ask 回答現在帶 `evidence_status`／`query_window`；仍是 deterministic lexical retrieval，尚未做 embeddings、claim-level contradiction engine。
+4. **M4 已完成合成 FHIR collection/batch/transaction Bundle slice。** `ingest/fhir_bundle.py` 保存 raw bundle、代碼／單位／時間正規化、bundle 去重與可解析匯出；身份不確定或 observation subject 不符時停在 review，不自動寫 timeline。
+5. **M7 已加入 fail-closed preflight。** `scripts/preflight_security.py --production` 會檢查真模型、資料庫、Secure cookie、HTTPS origins、停用 demo 與 memory fallback；OIDC／MFA、KMS、DR、完整 proxy hardening 仍待完成。
 
 近期建議先交付第 1 項的小範圍資料契約與故障恢復測試，再補第 2 項追蹤派送。若要對外部署或接真資料，第 5 項是前置條件，不可因排在此清單最後而延後。
 
@@ -68,35 +68,35 @@ P0：在真實資料或對外部署前必須處理的存取問題。P1：進一�
 
 ## 5. P1 — PersonRecord 存取層還不是完整的交易與儲存抽象
 
-證據：`record/store.py::write_timeline` 先寫 timeline 再 append provenance；事件、對話、Care Circle 直接組合目錄路徑；`agents/personal.py` 使用 FilesystemBackend。`graphs/checkpointer.py` 在 DB 連線失敗時降級成記憶體。
+證據：`record/store.py::write_timeline` 現在先寫 transaction journal，再以原子替換＋fsync 寫 timeline，最後逐筆寫 provenance；讀／寫會恢復未完成 journal，並以 per-patient 程序內鎖防止同程序競爭。`scripts/backup_records.py` 可產生 manifest 並還原到隔離目錄。事件、對話、Care Circle 仍直接組合目錄路徑；跨程序資料庫交易尚未完成。`graphs/checkpointer.py` 只有明確設定 `ALLOW_MEMORY_CHECKPOINT_FALLBACK=true` 才允許 DB 失敗降級。
 
-影響：單一寫入函式不等於多檔案原子交易；併發、途中失敗及重送仍需契約。只替換 store.py 不能完成全系統資料庫遷移。
+影響：第一版已涵蓋 timeline＋provenance 的單程序故障／重送／併發契約，但不等於全系統多檔案原子交易，也不等於加密異地 DR。只替換 store.py 不能完成全系統資料庫遷移。
 
-補強：列出所有檔案直接存取點，建立 repository 介面、版本／更正／冪等鍵、恢復策略；逐步接 Postgres 權威儲存及原件儲存。正式模式對 DB 不可用應明確失敗或降級，不能仍宣稱已持久化。
+補強：下一步列出所有檔案直接存取點，建立 repository 介面、版本／更正／冪等鍵；把目前 manifest backup 擴充為加密異地備份與還原演練，逐步接 Postgres 權威儲存及原件儲存。正式模式對 DB 不可用會明確失敗，不能仍宣稱已持久化。
 
 驗收：寫入途中失敗可恢復、重送不重複、併發不遺失；紀錄與來源一致；備份還原可核對。workflow checkpoint 與病歷儲存分開驗證。
 
 ## 6. P1 — 通知、追蹤與事件生命週期要真正閉環
 
-證據：目前 SensorEvent、`record/events.py` 與 Path A/B 共存。`graphs/path_a.py::schedule_follow_up` 讀護理 review 的 `follow_up_hours`（預設 4），保存 due_at/question/set_by，隨後設 done 並清 deadline；`graphs/worker.py::scan_once` 只掃逾時中斷流程，沒有執行該 FollowUp 的到期派送。已存追蹤時間不等於已排入可執行佇列；通知的 displayed_only／API 接受／實際送達也需區分。
+證據：目前 SensorEvent、`record/events.py` 與 Path A/B 共存。`schedule_follow_up` 讀護理 review 的 `follow_up_hours`（預設 4），保存 due_at/question/set_by 並建立去重的 `FollowUpTask`；`graphs/worker.py::scan_once` 現在會將到期 pending task 轉為 queued 並寫 JSON outbox，`/records/{patient_id}/follow-ups` 與 ack endpoint 供護理師查看／回覆。delivery 仍明確是 `displayed_only`，不是實際送達。
 
-補強：定義 HealthEvent 與 care task 的關係、去重鍵、角色轉換規則、誤報／取消／重開、可執行的追蹤佇列與 outbox。確認護理師能否設定追蹤時間，以及到期後是否真的派送、收回回覆並關閉。
+補強：把目前 FollowUp outbox 泛化成 HealthEvent 與 care task 的關係、角色轉換、誤報／取消／重開；接真正 provider 時加入 retry／DLQ／delivery receipt。護理師設定時間、到期 queue、收回回覆與關閉的第一版已完成。
 
 驗收：除跌倒外至少一種合成事件走完；通知失敗重試不重複送；追蹤跨重啟仍到期執行；非授權角色不能推進人工節點。不得用單一路徑強迫所有事件先驗證再通知。
 
 ## 7. P1 — 長期查詢需要時間、矛盾與逐句證據檢查
 
-證據：Ask My Record 的 bigram 檢索及 46 句抽取評測，只覆蓋部分語句抽取與原話來源；不等於檢索召回、生成主張或跨來源衝突已驗證。
+證據：Ask My Record 仍是 lexical bigram，但已加入常見中文同義詞、近 N 天／週／月時間窗、`evidence_status` 與來源片段重疊核對；這不等於 embeddings、structured graph 或完整跨來源衝突評測。
 
-補強：先加結構化與時間查詢，再加同義詞／混合檢索；每個 claim 指向原件 anchor。分開處理無資料、沒找到、過期資料、否定及互相矛盾的用藥／病史。找不到證據的措辭不能暗示事件確定沒發生。
+補強：接著加入結構化 query、原件 anchor 與真正 hybrid retrieval；目前已分開標記無資料／未找到／指定期間外／簡單矛盾，仍需 medication state、否定與跨來源 contradiction engine。找不到證據的措辭不能暗示事件確定沒發生。
 
 驗收：病人／scope 預過濾、時間範圍、停藥與現用藥、矛盾、提示注入與跨病人案例；來源不只存在，還必須支持該句。評測應分開報 mock、真模型與人工裁決。
 
 ## 8. P1 — 缺少一條真正可驗收的外部資料匯入／匯出
 
-證據：`ingest/discharge_pdf.py` 是固定合成摘要；`ingest/vitals.py` 與 seed 穿戴指標為模擬；FHIR-like 命名不是已實作 interoperability。
+證據：`ingest/discharge_pdf.py` 仍是固定合成摘要；新增 `ingest/fhir_bundle.py` 支援合成 Patient + Observation collection/batch/transaction Bundle，保存 raw bundle、來源、時間、單位與 normalized observations，FHIR-like 命名以外的第一條 adapter 已可執行。
 
-補強：選一種合成 FHIR Bundle 或一種文件做完整 adapter，保留原件、來源 identifiers、時間、單位、代碼與處理版本。重點是查到來源與可重播，而不是一次建立所有資料庫。
+補強：把目前 adapter 的 import version、錯誤報告與更正流程補齊，再評估 TW Core 資源與真正來源。重點仍是查到來源與可重播，不一次建立所有資料庫。
 
 驗收：支援範圍明確；重複匯入冪等；未知代碼與不確定同人不自動合併；更正不抹去歷史；能匯出另一套程式可解析的資料。
 

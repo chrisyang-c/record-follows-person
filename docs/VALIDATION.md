@@ -1,5 +1,19 @@
 # 驗證紀錄
 
+## 2026-09-13 — M3–M7 第一版切片
+
+本輪在不使用 OpenAI／Anthropic API、不發送外部通知且不修改正式 records 的前提下，完成並驗證：
+
+- `RecordStore` timeline journal、原子替換、fsync、per-patient 程序內鎖與故障恢復；重送／同時寫入測試通過。
+- `FollowUpTask` 持久化、idempotency、到期 worker queue、JSON outbox、acknowledge／close；目前 delivery 明確為 `displayed_only`。
+- 合成 FHIR Bundle（Patient + Observation）驗證、Health ID identity check、LOINC-like code／單位／時間正規化、去重、pending review 與可解析 collection export。
+- Ask evidence 的常見中文同義詞、近 N 天／週／月時間窗、`found`／`not_found`／`outside_requested_window`／`conflicting` 狀態與逐句來源片段核對。
+- `backup_records.py` 的 SHA-256 manifest、竄改拒絕與隔離目錄還原；`preflight_security.py --production` 的 fail-closed 設定檢查。
+
+`.\scripts\dev.ps1 check`：API 全套、web lint／Vitest、mock eval、唯讀 codegen、Next build／typecheck、Windows tooling 全部通過；另以一次性 PostgreSQL 17 容器執行 `smoke_runtime.py`，session／待審核 interrupt／approved record 跨 API 重啟均保留。測試警告僅為上游 Starlette/AnyIO deprecation 與竄改測試刻意產生的 zip duplicate-name warning。
+
+這些是可驗收骨架，不代表已完成 OIDC／MFA、KMS、不可竄改 audit ledger、跨程序交易、真正通知 provider、完整 FHIR server 或臨床有效性驗證。
+
 ## 2026-09-12 — 本機身分與病人隔離
 
 本輪只使用 mock 與合成資料，未清空主專案 records、未修改使用者 `.env`、未呼叫付費模型或外部通知。個人 session、用途／scope、後端投影及遷移契約見 [SECURITY](SECURITY.md)。下方 9/6 表格保留歷史，不是這輪結果。

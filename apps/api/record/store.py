@@ -19,10 +19,13 @@ Gates enforced here (CLAUDE.md §1, §4, §11):
 from __future__ import annotations
 
 import json
+import os
+import threading
 from datetime import UTC, date, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from pydantic import TypeAdapter, ValidationError
 from record_schema import (
@@ -57,13 +60,91 @@ class MissingProvenanceError(ValueError):
     """Raised when a payload lacks provenance on any line."""
 
 
+class RecordRecoveryError(RuntimeError):
+    """Raised when a pending record transaction cannot be safely recovered."""
+
+
 def _dump(model: Any) -> str:
     return json.dumps(model.model_dump(mode="json"), ensure_ascii=False, indent=2)
 
 
 class RecordStore:
+    _locks: dict[str, threading.RLock] = {}
+    _locks_guard = threading.Lock()
+
     def __init__(self, root: Path):
         self.root = Path(root)
+
+    def _lock(self, patient_id: str) -> threading.RLock:
+        key = f"{self.root.resolve()}::{patient_id}"
+        with self._locks_guard:
+            return self._locks.setdefault(key, threading.RLock())
+
+    def _transaction_dir(self, patient_id: str) -> Path:
+        return self.dir(patient_id) / ".transactions"
+
+    @staticmethod
+    def _fsync_write(path: Path, content: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    def _atomic_write(self, path: Path, content: str) -> None:
+        temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+        try:
+            self._fsync_write(temporary, content)
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def _recover_transactions(self, patient_id: str) -> None:
+        """Finish a timeline transaction left after a process or disk failure.
+
+        The journal is intentionally small and contains only the already validated entry and
+        provenance lines. Recovery is idempotent: existing files/ledger refs are preserved.
+        """
+        txdir = self._transaction_dir(patient_id)
+        if not txdir.exists():
+            return
+        with self._lock(patient_id):
+            for journal in sorted(txdir.glob("*.json")):
+                try:
+                    data = json.loads(journal.read_text(encoding="utf-8"))
+                    if data.get("kind") != "timeline" or data.get("patient_id") != patient_id:
+                        continue
+                    entry = _TIMELINE.validate_python(data["entry"])
+                    relative_target = Path(data["target"])
+                    if (
+                        relative_target.parent != Path("timeline")
+                        or len(relative_target.parts) != 2
+                    ):
+                        raise RecordRecoveryError(
+                            f"unsafe timeline recovery target: {relative_target}"
+                        )
+                    target = self.dir(patient_id) / relative_target
+                    if not target.exists():
+                        self._atomic_write(target, _dump(entry))
+                    ledger = self.dir(patient_id) / "provenance.jsonl"
+                    existing = set()
+                    if ledger.exists():
+                        for line in ledger.read_text(encoding="utf-8").splitlines():
+                            if line.strip():
+                                parsed = json.loads(line)
+                                existing.add((parsed.get("ref"), parsed.get("field", "")))
+                    with ledger.open("a", encoding="utf-8", newline="\n") as handle:
+                        for record in data.get("provenance", []):
+                            key = (record.get("ref"), record.get("field", ""))
+                            if key in existing:
+                                continue
+                            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                            existing.add(key)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    journal.unlink()
+                except (OSError, ValueError, TypeError, KeyError) as exc:
+                    raise RecordRecoveryError(f"cannot recover {journal}") from exc
 
     # -- paths ---------------------------------------------------------------
     def dir(self, patient_id: str) -> Path:
@@ -107,6 +188,7 @@ class RecordStore:
         since: datetime | date | None = None,
         kinds: set[str] | None = None,
     ) -> list[TimelineEntry]:
+        self._recover_transactions(patient_id)
         tdir = self.dir(patient_id) / "timeline"
         if not tdir.exists():
             return []
@@ -145,6 +227,7 @@ class RecordStore:
         return None
 
     def read_provenance(self, patient_id: str) -> list[ProvenanceLine]:
+        self._recover_transactions(patient_id)
         f = self.dir(patient_id) / "provenance.jsonl"
         if not f.exists():
             return []
@@ -170,17 +253,41 @@ class RecordStore:
         assert entry.status == "approved" and entry.confirmed_by, "timeline_write requires approval"
         if entry.patient_id != patient_id:
             raise ValueError("payload.patient_id does not match record")
-        tdir = self.dir(patient_id) / "timeline"
-        tdir.mkdir(parents=True, exist_ok=True)
-        if any(f.name.endswith(f"_{entry.id}.json") for f in tdir.glob("*.json")):
-            raise ImmutableTimelineError(f"timeline entry {entry.id} already exists (append-only)")
-        fname = f"{entry.ts.strftime('%Y%m%dT%H%M%S')}_{entry.kind}_{entry.id}.json"
-        (tdir / fname).write_text(_dump(entry), encoding="utf-8")
-        self._append_provenance(patient_id, ref=entry.id, field="", prov=entry.provenance)
-        if isinstance(entry, Observation):
-            for dim, dv in entry.observation.domains.items():
-                self._append_provenance(patient_id, ref=entry.id, field=dim, prov=dv.provenance)
-        return entry.id
+        with self._lock(patient_id):
+            self._recover_transactions(patient_id)
+            tdir = self.dir(patient_id) / "timeline"
+            tdir.mkdir(parents=True, exist_ok=True)
+            if any(f.name.endswith(f"_{entry.id}.json") for f in tdir.glob("*.json")):
+                raise ImmutableTimelineError(
+                    f"timeline entry {entry.id} already exists (append-only)"
+                )
+            fname = f"{entry.ts.strftime('%Y%m%dT%H%M%S')}_{entry.kind}_{entry.id}.json"
+            records = self._provenance_records(entry)
+            txdir = self._transaction_dir(patient_id)
+            txdir.mkdir(parents=True, exist_ok=True)
+            journal = txdir / f"timeline-{entry.id}-{uuid4().hex}.json"
+            self._fsync_write(
+                journal,
+                json.dumps(
+                    {
+                        "kind": "timeline",
+                        "patient_id": patient_id,
+                        "target": str(Path("timeline") / fname),
+                        "entry": entry.model_dump(mode="json"),
+                        "provenance": records,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+            self._atomic_write(tdir / fname, _dump(entry))
+            try:
+                for record in records:
+                    self._append_provenance_record(patient_id, record)
+            except Exception:
+                # Keep the journal. The next read/write can complete the ledger atomically.
+                raise
+            journal.unlink()
+            return entry.id
 
     def write_document(self, patient_id: str, payload: Any) -> str:
         doc = self._coerce_document(payload)
@@ -279,18 +386,47 @@ class RecordStore:
     def _append_provenance(
         self, patient_id: str, *, ref: str, field: str, prov: Provenance
     ) -> None:
-        line = ProvenanceLine(
-            line_id=new_id("prov"),
-            ref=ref,
-            field=field,
-            source=prov.source,
-            author=prov.author,
-            confirmed_by=prov.confirmed_by,
-            ts=prov.ts,
-            language_original=prov.language_original,
+        self._append_provenance_record(
+            patient_id,
+            ProvenanceLine(
+                line_id=new_id("prov"),
+                ref=ref,
+                field=field,
+                source=prov.source,
+                author=prov.author,
+                confirmed_by=prov.confirmed_by,
+                ts=prov.ts,
+                language_original=prov.language_original,
+            ).model_dump(mode="json"),
         )
+
+    def _append_provenance_record(self, patient_id: str, record: dict[str, Any]) -> None:
         with (self.dir(patient_id) / "provenance.jsonl").open("a", encoding="utf-8") as f:
-            f.write(json.dumps(line.model_dump(mode="json"), ensure_ascii=False) + "\n")
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+
+    @staticmethod
+    def _provenance_records(entry: TimelineEntry) -> list[dict[str, Any]]:
+        values = [entry.provenance]
+        fields = [""]
+        if isinstance(entry, Observation):
+            for dimension, value in entry.observation.domains.items():
+                fields.append(dimension)
+                values.append(value.provenance)
+        return [
+            ProvenanceLine(
+                line_id=new_id("prov"),
+                ref=entry.id,
+                field=field,
+                source=prov.source,
+                author=prov.author,
+                confirmed_by=prov.confirmed_by,
+                ts=prov.ts,
+                language_original=prov.language_original,
+            ).model_dump(mode="json")
+            for field, prov in zip(fields, values, strict=True)
+        ]
 
 
 @lru_cache

@@ -1,6 +1,6 @@
 # HANDOFF — 目前狀態與下一步
 
-更新：2026-09-12。唯一正式工作目錄：`D:\Health AI Bridge\record-follows-person`。
+更新：2026-09-13。唯一正式工作目錄：`D:\Health AI Bridge\record-follows-person`。
 Repo：https://github.com/chrisyang-c/record-follows-person
 
 ## 接手順序
@@ -22,6 +22,12 @@ Repo：https://github.com/chrisyang-c/record-follows-person
 - codegen `--check` 唯讀；`check` 的 mock eval 使用暫存輸出，不覆寫已保存的真模型評測。
 - 測試／runtime smoke 可明確指定合成資料的近期 14 天視窗，另測過期 wearable 不被當成 current；預設 seed 原始歷史日期不改。
 - 公開 [OPTIMIZATION_PLAN](OPTIMIZATION_PLAN.md) 補上來源品質、TW Core 切片、規則治理及通知／追蹤驗收；是設計備忘，不代表已實作。
+- M3 第一版：timeline 寫入使用 transaction journal、原子替換、fsync、程序內 per-patient lock；下次讀／寫會恢復 provenance，並有途中失敗、重送、併發測試。
+- M3 備份第一版：`scripts/backup_records.py` 產生 SHA-256 manifest、可驗證並預設還原到空隔離目錄；不取代加密異地 DR。
+- M6 第一版：Path A 的 follow-up 同時建立去重的 `FollowUpTask`；`graphs.worker.scan_once()` 會將到期項目持久化為 `queued` 並寫 JSON outbox，保留 attempts 與 acknowledged 狀態。現在仍是 `displayed_only`，沒有假裝已送出 LINE。
+- M4 第一版：`ingest/fhir_bundle.py` 支援合成 Patient + Observation Bundle 的 identity check、代碼／單位／時間正規化、bundle id 去重與可解析 export；不確定身份一律 `identity_unresolved`／`pending_review`，不直接寫 timeline。
+- M5 第一版：Ask retrieval 加入常見中文同義詞、近 N 天／週／月時間窗與 `evidence_status`，回答仍逐句綁定 retrieve source id。
+- M7 第一版：`scripts/preflight_security.py --production` 會在部署前阻擋 mock provider、缺 DB、非 Secure cookie、非 HTTPS origins、demo simulation 或 memory checkpoint fallback。
 
 ## 驗證入口
 
@@ -40,9 +46,9 @@ Repo：https://github.com/chrisyang-c/record-follows-person
 
 ## 下一個工程里程碑
 
-接續 ROADMAP M3：列出所有直接檔案存取點，定義來源、有效／收到時間、單位、版本、更正與冪等寫入契約；建立途中失敗／重送／還原測試，再接一條合成匯入切片。
+接續 ROADMAP 的 M3–M7 第二階段：跨程序／Postgres 寫入與備份還原、真正通知 provider 與 retry、HealthEvent 泛化、claim-level contradiction evaluation、OIDC／MFA／KMS／staging E2E。上述第一版切片只建立可驗收骨架，不把本機檔案、`displayed_only` 或 synthetic FHIR 說成 production。
 
-追蹤任務的到期派送仍未完成；不要把 Path A 保存 due_at 說成已執行。後續工程要保留護理師設定與確認邊界，不擅自決定臨床追蹤次數。M1/M2 的 OIDC／MFA、組織身分、不可竄改稽核及多程序授權／寫入交易仍是部署前缺口，不因本輪通過而消失。
+後續工程要保留護理師設定與確認邊界，不擅自決定臨床追蹤次數。M1/M2 的 OIDC／MFA、組織身分、不可竄改稽核及多程序授權／寫入交易仍是部署前缺口，不因本輪通過而消失。
 護理使用者的合成案例回饋並行，不作所有工程的前置。
 
 ## 已知限制與來源
