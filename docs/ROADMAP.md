@@ -2,6 +2,10 @@
 
 更新：2026-09-13。長期方向以 [VISION](VISION_personal_health_twin.md) 為準；已採納的介面、資料規則與流程見 [ARCHITECTURE](ARCHITECTURE.md)。當前工作只在 [HANDOFF](HANDOFF.md) 維護；實碼 review 見 [PROJECT_REVIEW](PROJECT_REVIEW.md)。M3–M7 第一版完成狀態與剩餘缺口以 HANDOFF／VALIDATION 為準。
 
+## 給初學者的讀法
+
+Roadmap（分期計畫）不是「完成百分比」，而是一張施工順序表：先處理會影響安全與資料正確性的地基，再增加平台能力。`M0` 到 `M7` 是里程碑名稱；每一列的「完成條件」才是判斷是否做完的標準。第一次接觸專案，先看 [入門指南](BEGINNER_GUIDE.md) 和 [目前狀態](HANDOFF.md)。
+
 ## 1. 目標與排序
 
 目標是以人為中心的終身健康資料、個人 AI 與照護協調平台。現有長照流程是第一個完整應用場景；平台能力與使用者價值都需要各自驗收。

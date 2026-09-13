@@ -2,6 +2,8 @@
 
 > 每個人有一份屬於自己、跟著他一輩子的健康紀錄（Personal Health ID），和一個替這份紀錄說話的 agent。**今天先做通道 1**：它先學會聽照顧他的人說話。
 
+> **第一次接觸？** 不需要先懂 AI、FHIR 或資料庫。請先讀 [Personal Health Twin 入門指南](docs/BEGINNER_GUIDE.md)；本頁保留完整的產品、工程與驗證資訊，適合看完入門後再回來查細節。
+
 BUILDMODE 2026 × SITCON ・ Healthcare AI 賽道。紀錄屬於本人，誰能看由本人在 Care Circle 決定；家與機構都是場域：住宿式長照機構是這份紀錄今天接上的第一個場域，同一份紀錄回到家裡、進到醫院都跟著人走。照服員講一句話 → AI 只抽取成八個觀察維度、不判斷 → 護理師按一下 → 醫師巡診看一頁；穿戴訊號進來時先問人「可能跌倒了嗎」，再由護理師看事件資訊包。AI 只起草，人才定稿；每一行都有來源；任何信心值、機率、分數不出現在照護者與醫師介面。
 
 四扇門：本人（`/me`：今天、終身時間軸、問我的紀錄、Care Circle）・家屬／照護者（`/caregiver`：對話、四鍵驗證）・護理師（`/nurse`：Clinical Queue）・醫師（`/doctor`：一人一頁）。願景全文：[docs/VISION_personal_health_twin.md](docs/VISION_personal_health_twin.md)（實作範圍以 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 與 [docs/HANDOFF.md](docs/HANDOFF.md) 為準）。
@@ -201,6 +203,7 @@ Schema 單一來源：[packages/schema/record_schema/models.py](packages/schema/
 
 | 文件 | 管什麼 |
 |---|---|
+| [docs/BEGINNER_GUIDE.md](docs/BEGINNER_GUIDE.md) | 白話版入門、名詞解釋、第一次啟動與安全底線 |
 | [docs/DIRECTORY_GUIDE.md](docs/DIRECTORY_GUIDE.md) | 每個資料夾、文件用途、文件權威順序與接手檢查清單 |
 | [docs/OVERVIEW.md](docs/OVERVIEW.md) | 全貌，給第一次接觸的人 |
 | [CLAUDE.md](CLAUDE.md) | 開發規則、紅線、不可做的事 |

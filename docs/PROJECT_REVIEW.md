@@ -1,5 +1,9 @@
 # 專案 review — 整併後的優先補強
 
+## 給初學者的讀法
+
+Review（檢查報告）是在回答「現在已經做到什麼、還有哪些風險、下一步先補哪裡」，不是在列出所有可能的新功能。文中的 `M3`、`M4` 等是分期名稱；「第一版完成」只表示這一小段骨架已經有測試，不表示整個醫療平台完成。需要先看產品流程的人，請從 [入門指南](BEGINNER_GUIDE.md) 開始。
+
 ## 2026-09-13 複核：接下來最值得補的內容
 
 本次複核後已完成下列第一版切片：`RecordStore` timeline 交易 journal／恢復與程序內併發鎖、可持久化 follow-up task/outbox、帶時間窗與同義詞的 evidence retrieval、合成 FHIR Bundle 匯入／匯出，以及 production preflight。這些是可驗收的骨架，不代表已完成機構 IdP、真正通知或完整 FHIR server；正式部署缺口仍見 SECURITY。

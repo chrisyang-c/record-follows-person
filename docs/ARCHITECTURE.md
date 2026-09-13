@@ -6,6 +6,10 @@
 
 2026-09-13 現況補記：本文保留最初的層級與節點設計，不能把所有示例 state 或 demo 範圍當成最新程式快照。現在已有 `/login`、`/me`、`/twin`、Care Circle、模擬 sensor／wearable、3D 分身，以及 M1/M2 本機 session／HTTP policy、M3–M7 第一版資料切片；型別以 `packages/schema/record_schema/models.py`、節點以 Mermaid 與同步測試為準。當前進度見 HANDOFF，驗證見 VALIDATION，分期見 ROADMAP，正式部署缺口見 SECURITY／PROJECT_REVIEW。長照是第一個場景，不是縮減 Personal Health Twin 願景。
 
+## 給初學者的讀法
+
+這份文件回答「系統裡的資料怎麼走、哪些步驟一定要人工確認」。如果你還不熟悉專案，先看 [入門指南](BEGINNER_GUIDE.md) 的事件流程與名詞，再回來看本頁；本頁的 `PersonRecord`、`agent`、`LangGraph`、`baseline` 都是技術名稱，不是另外四個產品。
+
 ---
 
 ## 0. 層級

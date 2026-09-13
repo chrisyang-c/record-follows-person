@@ -3,6 +3,10 @@
 更新：2026-09-13。唯一正式工作目錄：`D:\Health AI Bridge\record-follows-person`。
 Repo：https://github.com/chrisyang-c/record-follows-person
 
+## 如果你只想先知道答案
+
+目前 repo 可以獨立安裝、測試與啟動合成資料 demo；已完成的是「照護觀察 → AI 草稿 → 人工確認 → 健康時間軸」這條主線，以及第一版登入、授權、資料匯入、證據查詢與追蹤任務。它仍不是正式醫療產品，真實身分、真實通知、跨院 FHIR、正式部署安全都還在後續工作。想先理解名詞與操作，請看 [入門指南](BEGINNER_GUIDE.md)；想接手開發，再依下面的順序讀。
+
 ## 接手順序
 
 1. 閱讀 `CLAUDE.md`、本頁、[PROJECT_REVIEW](PROJECT_REVIEW.md)。

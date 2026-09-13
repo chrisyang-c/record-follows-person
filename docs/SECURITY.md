@@ -2,6 +2,10 @@
 
 更新：2026-09-13。這是 M1/M2 的本機第一版帳號／用途授權實作，不是 OIDC、正式醫療部署或安全認證。只使用合成資料；不要公開暴露服務。最新驗證數據見 [VALIDATION](VALIDATION.md)，剩餘工程缺口見 [HANDOFF](HANDOFF.md)／[PROJECT_REVIEW](PROJECT_REVIEW.md)。
 
+## 先用白話理解
+
+這份文件在說「誰可以看哪位病人的哪一部分資料，以及系統如何留下紀錄」。目前是本機 demo 的安全邊界：登入、病人授權、用途與資料範圍已經有第一版，但還不是醫院可直接採用的正式身分系統。第一次閱讀請先看 [入門指南](BEGINNER_GUIDE.md) 的「安全底線」，再把本頁當成工程規則查閱。
+
 ## 已實作邊界
 
 - 每個既有 identity 使用自己的密碼；PBKDF2-HMAC-SHA256、獨立隨機 salt、600,000 次。伺服器簽發 8 小時 opaque session；SQLite 只存 token 雜湊，瀏覽器以 HttpOnly cookie 傳送。改密碼撤銷所有舊 session，登出撤銷當前 session。

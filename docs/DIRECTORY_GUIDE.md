@@ -14,17 +14,18 @@
 
 | 順序 | 文件 | 主要用途 | 性質 |
 |---:|---|---|---|
-| 1 | [`CLAUDE.md`](../CLAUDE.md)；`apps/web/AGENTS.md` | coding agent 規則、不可違反的安全與 UI 邊界 | 開工必讀的規則 |
-| 2 | [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) | 已採納的層級、資料流、Path A/B、人工閘門與 demo 範圍 | 架構契約 |
-| 3 | [`docs/SECURITY.md`](SECURITY.md) | 本機帳號、session、病人／purpose／scope 授權、資料升級與安全限制 | 目前安全契約 |
-| 4 | [`docs/HANDOFF.md`](HANDOFF.md) | 已完成主線、下一個里程碑、目前限制與接手方式 | 最新交接狀態 |
-| 5 | [`docs/VALIDATION.md`](VALIDATION.md) | 可重現指令、實測結果、CI、runtime smoke 與未涵蓋項目 | 驗證證據 |
-| 6 | [`docs/ROADMAP.md`](ROADMAP.md) | 分期、完成條件、暫緩項目與使用者驗證 | 下一步計畫 |
-| 7 | [`docs/PROJECT_REVIEW.md`](PROJECT_REVIEW.md)；[`docs/KNOWN_ISSUES.md`](KNOWN_ISSUES.md) | 有程式證據的風險、剩餘缺口、繞法與優先序 | review／限制 |
-| 8 | [`docs/OVERVIEW.md`](OVERVIEW.md)；[`docs/一份能跟著人走的紀錄_摘要與願景.md`](一份能跟著人走的紀錄_摘要與願景.md) | 給第一次接觸者的產品故事、角色與長照情境 | 敘事說明 |
-| 9 | [`docs/VISION_personal_health_twin.md`](VISION_personal_health_twin.md) | Personal Health Twin 長期願景與未來平台方向 | 願景，不是完成清單 |
-| 10 | [`docs/ACCEPTANCE.md`](ACCEPTANCE.md)、`docs/TRACE_*.md`、[`docs/UI_AUDIT.md`](UI_AUDIT.md) | 2026-09-05～09-12 的 demo、trace 與 UI 審查證據 | 歷史／補充證據 |
-| 11 | [`docs/OPTIMIZATION_PLAN.md`](OPTIMIZATION_PLAN.md)；[`docs/proposals/00-architecture.md`](proposals/00-architecture.md) | 優化候選與外部提案 | 設計備忘；提案未採納 |
+| 1 | [`docs/BEGINNER_GUIDE.md`](BEGINNER_GUIDE.md) | 白話版產品介紹、名詞、啟動方式與安全底線 | 初學者入口 |
+| 2 | [`CLAUDE.md`](../CLAUDE.md)；`apps/web/AGENTS.md` | coding agent 規則、不可違反的安全與 UI 邊界 | 開工必讀的規則 |
+| 3 | [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) | 已採納的層級、資料流、Path A/B、人工閘門與 demo 範圍 | 架構契約 |
+| 4 | [`docs/SECURITY.md`](SECURITY.md) | 本機帳號、session、病人／purpose／scope 授權、資料升級與安全限制 | 目前安全契約 |
+| 5 | [`docs/HANDOFF.md`](HANDOFF.md) | 已完成主線、下一個里程碑、目前限制與接手方式 | 最新交接狀態 |
+| 6 | [`docs/VALIDATION.md`](VALIDATION.md) | 可重現指令、實測結果、CI、runtime smoke 與未涵蓋項目 | 驗證證據 |
+| 7 | [`docs/ROADMAP.md`](ROADMAP.md) | 分期、完成條件、暫緩項目與使用者驗證 | 下一步計畫 |
+| 8 | [`docs/PROJECT_REVIEW.md`](PROJECT_REVIEW.md)；[`docs/KNOWN_ISSUES.md`](KNOWN_ISSUES.md) | 有程式證據的風險、剩餘缺口、繞法與優先序 | review／限制 |
+| 9 | [`docs/OVERVIEW.md`](OVERVIEW.md)；[`docs/一份能跟著人走的紀錄_摘要與願景.md`](一份能跟著人走的紀錄_摘要與願景.md) | 給第一次接觸者的產品故事、角色與長照情境 | 敘事說明 |
+| 10 | [`docs/VISION_personal_health_twin.md`](VISION_personal_health_twin.md) | Personal Health Twin 長期願景與未來平台方向 | 願景，不是完成清單 |
+| 11 | [`docs/ACCEPTANCE.md`](ACCEPTANCE.md)、`docs/TRACE_*.md`、[`docs/UI_AUDIT.md`](UI_AUDIT.md) | 2026-09-05～09-12 的 demo、trace 與 UI 審查證據 | 歷史／補充證據 |
+| 12 | [`docs/OPTIMIZATION_PLAN.md`](OPTIMIZATION_PLAN.md)；[`docs/proposals/00-architecture.md`](proposals/00-architecture.md) | 優化候選與外部提案 | 設計備忘；提案未採納 |
 
 遇到文件互相矛盾時，不把舊數字或舊截圖當成現況；先回到 `HANDOFF`、`VALIDATION`、程式與 CI。`VISION` 和 `proposals` 不能直接當成已實作功能。
 
@@ -153,6 +154,7 @@
 
 | 文件 | 讀者與用途 | 目前應如何理解 |
 |---|---|---|
+| `BEGINNER_GUIDE.md` | 完全第一次接觸專案的人：產品、角色、資料流程、啟動與名詞 | 白話入口；先讀這份再看技術文件 |
 | `OVERVIEW.md` | 第一次理解產品、四種角色、一次事件與安全紅線 | 敘事全貌；部分例子沿用 2026-09-05，現況回看 HANDOFF／VALIDATION |
 | `ARCHITECTURE.md` | 產品架構、PersonRecord、Path A/B、agent、人工閘門與 demo 範圍 | 已採納架構；內文的日期狀態註記要一起看 |
 | `CONSOLIDATION.md` | 外層資料夾整併、來源去向、封存驗證與獨立 clone 邊界 | 2026-09-13 的目錄整併證據 |
